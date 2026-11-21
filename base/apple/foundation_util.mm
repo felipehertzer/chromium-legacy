@@ -101,7 +101,7 @@ bool IsBackgroundOnlyProcess() {
   // Info.plist to access its LSUIElement property.
   @autoreleasepool {
     NSDictionary* info_dictionary = [apple::MainBundle() infoDictionary];
-    return [info_dictionary[@"LSUIElement"] boolValue] != NO;
+    return [[info_dictionary objectForKey:@"LSUIElement"] boolValue] != NO;
   }
 }
 
@@ -136,7 +136,7 @@ bool GetSearchPathDirectory(NSSearchPathDirectory directory,
   if (dirs.count < 1) {
     return false;
   }
-  *result = NSStringToFilePath(dirs[0]);
+  *result = NSStringToFilePath([dirs objectAtIndex:0]);
   return true;
 }
 
@@ -360,7 +360,21 @@ CF_CAST_DEFN(SecCertificate)
 CF_CAST_DEFN(SecKey)
 
 #if !BUILDFLAG(IS_IOS)
-CF_CAST_DEFN(SecAccessControl)
+template <>
+SecAccessControlRef CFCast<SecAccessControlRef>(const CFTypeRef& value) {
+  if (__builtin_available(macOS 10.10, *)) {
+    if (value && CFGetTypeID(value) == SecAccessControlGetTypeID()) {
+      return (SecAccessControlRef)value;
+    }
+  }
+  return nullptr;
+}
+template <>
+SecAccessControlRef CFCastStrict<SecAccessControlRef>(const CFTypeRef& value) {
+  SecAccessControlRef result = CFCast<SecAccessControlRef>(value);
+  CHECK(!value || result);
+  return result;
+}
 CF_CAST_DEFN(SecPolicy)
 #endif
 

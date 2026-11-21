@@ -31,6 +31,7 @@ namespace base {
 
 namespace {
 
+__attribute__((availability(macos, introduced = 10.10.3)))
 PowerThermalObserver::DeviceThermalState
 NSProcessInfoThermalStateToDeviceThermalState(
     NSProcessInfoThermalState nsinfo_state) {
@@ -89,9 +90,10 @@ ThermalStateObserverMac::ThermalStateObserverMac(
     // |thermalState| is basically a scale of power usage and its associated
     // thermal dissipation increase, from Nominal upwards, see:
     // https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/RespondToThermalStateChanges.html
-    NSProcessInfoThermalState nsinfo_state =
-        NSProcessInfo.processInfo.thermalState;
-    state = NSProcessInfoThermalStateToDeviceThermalState(nsinfo_state);
+    if (@available(macOS 10.10.3, *)) {
+      state = NSProcessInfoThermalStateToDeviceThermalState(
+          NSProcessInfo.processInfo.thermalState);
+    }
     if (state_for_testing_ !=
         PowerThermalObserver::DeviceThermalState::kUnknown) {
       state = state_for_testing_;
@@ -101,12 +103,14 @@ ThermalStateObserverMac::ThermalStateObserverMac(
     state_update_callback.Run(state);
   };
 
-  objc_storage_->thermal_state_update_observer =
-      [NSNotificationCenter.defaultCenter
-          addObserverForName:NSProcessInfoThermalStateDidChangeNotification
-                      object:nil
-                       queue:nil
-                  usingBlock:on_state_change_block];
+  if (@available(macOS 10.10.3, *)) {
+    objc_storage_->thermal_state_update_observer =
+        [NSNotificationCenter.defaultCenter
+            addObserverForName:NSProcessInfoThermalStateDidChangeNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:on_state_change_block];
+  }
 
   auto on_speed_change_block = ^() {
     ThreadPool::PostTaskAndReplyWithResult(
@@ -140,9 +144,11 @@ ThermalStateObserverMac::GetCurrentThermalState() {
       PowerThermalObserver::DeviceThermalState::kUnknown) {
     return state_for_testing_;
   }
-  NSProcessInfoThermalState nsinfo_state =
-      NSProcessInfo.processInfo.thermalState;
-  return NSProcessInfoThermalStateToDeviceThermalState(nsinfo_state);
+  if (@available(macOS 10.10.3, *)) {
+    return NSProcessInfoThermalStateToDeviceThermalState(
+        NSProcessInfo.processInfo.thermalState);
+  }
+  return PowerThermalObserver::DeviceThermalState::kUnknown;
 }
 
 }  // namespace base

@@ -33,8 +33,8 @@ std::vector<uint8_t> OuterBundleCachedInfoPlistData() {
   // dictionary despite it not being present on disk. Remove it so that the
   // serialized dictionary matches the Info.plist that was present at signing
   // time.
-  info_plist_dictionary[base::apple::CFToNSPtrCast(
-      _kCFBundleNumericVersionKey)] = nil;
+  [info_plist_dictionary removeObjectForKey:base::apple::CFToNSPtrCast(
+                                                _kCFBundleNumericVersionKey)];
 
   NSData* data = [NSPropertyListSerialization
       dataWithPropertyList:info_plist_dictionary

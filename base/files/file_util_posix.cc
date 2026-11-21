@@ -55,6 +55,10 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "legacy/apple/fd_io.h"
+#endif
+
 #if BUILDFLAG(IS_APPLE)
 #include <AvailabilityMacros.h>
 
@@ -83,6 +87,18 @@ extern "C" char* mkdtemp(char* path);
 
 namespace base {
 namespace {
+
+#if BUILDFLAG(IS_MAC)
+namespace file_at = ::chromium_legacy;
+#else
+namespace file_at {
+using ::fdopendir;
+using ::fstatat;
+using ::mkdirat;
+using ::openat;
+using ::unlinkat;
+}  // namespace file_at
+#endif
 
 // mkstemp() requires a template ending in exactly six trailing 'X' characters,
 // which it replaces in place with a unique suffix.
@@ -180,14 +196,14 @@ ScopedFD OpenDirectoryNoFollow(const FilePath& path) {
 }
 
 ScopedFD OpenSubdirectoryNoFollow(int parent_fd, const char* name) {
-  return ScopedFD(HANDLE_EINTR(openat(
+  return ScopedFD(HANDLE_EINTR(file_at::openat(
       parent_fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)));
 }
 
 ScopedFD CreateOrOpenSubdirectoryNoFollow(int parent_fd,
                                           const char* name,
                                           const stat_wrapper_t& src_stat) {
-  if (mkdirat(parent_fd, name, GetCopyDirMode(src_stat)) != 0 &&
+  if (file_at::mkdirat(parent_fd, name, GetCopyDirMode(src_stat)) != 0 &&
       errno != EEXIST) {
     return ScopedFD();
   }
@@ -198,7 +214,7 @@ bool CopyFileNoFollow(int src_dir_fd,
                       int dst_dir_fd,
                       const char* src_name,
                       const char* dst_name) {
-  ScopedFD src_fd(HANDLE_EINTR(openat(
+  ScopedFD src_fd(HANDLE_EINTR(file_at::openat(
       src_dir_fd, src_name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)));
   stat_wrapper_t src_stat;
   if (!src_fd.is_valid() || File::Fstat(src_fd.get(), &src_stat) != 0 ||
@@ -209,8 +225,8 @@ bool CopyFileNoFollow(int src_dir_fd,
   constexpr int kOpenFlags =
       O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC;
 
-  ScopedFD dst_fd(HANDLE_EINTR(
-      openat(dst_dir_fd, dst_name, kOpenFlags, GetCopyFileMode(src_stat))));
+  ScopedFD dst_fd(HANDLE_EINTR(file_at::openat(dst_dir_fd, dst_name, kOpenFlags,
+                                               GetCopyFileMode(src_stat))));
   stat_wrapper_t dst_stat;
   if (!dst_fd.is_valid() || File::Fstat(dst_fd.get(), &dst_stat) != 0 ||
       !S_ISREG(dst_stat.st_mode)) {
@@ -239,12 +255,13 @@ std::optional<DirStackFrame> CreateDirStackFrame(ScopedFD src_dir,
     return std::nullopt;
   }
   const int src_fd = src_dir.get();
-  std::unique_ptr<DIR, CloseDir> stream(fdopendir(src_dir.release()));
+  std::unique_ptr<DIR, CloseDir> stream(file_at::fdopendir(src_dir.release()));
   if (!stream) {
     IGNORE_EINTR(close(src_fd));
     return std::nullopt;
   }
-  return DirStackFrame{std::move(stream), src_fd, std::move(dst_dir)};
+  const int stream_fd = dirfd(stream.get());
+  return DirStackFrame{std::move(stream), stream_fd, std::move(dst_dir)};
 }
 
 bool CopyDirectoryFdNoFollow(ScopedFD src_dir,
@@ -275,8 +292,8 @@ bool CopyDirectoryFdNoFollow(ScopedFD src_dir,
     }
 
     stat_wrapper_t entry_stat;
-    if (HANDLE_EINTR(fstatat(current.src_dir_fd, entry->d_name, &entry_stat,
-                             AT_SYMLINK_NOFOLLOW)) != 0) {
+    if (HANDLE_EINTR(file_at::fstatat(current.src_dir_fd, entry->d_name,
+                                      &entry_stat, AT_SYMLINK_NOFOLLOW)) != 0) {
       return false;
     }
 
@@ -368,8 +385,8 @@ bool DoCopyDirectoryNoFollow(const FilePath& from_path,
   FilePath stripped_to = to_path.StripTrailingSeparators();
 
   stat_wrapper_t from_stat;
-  if (HANDLE_EINTR(fstatat(AT_FDCWD, stripped_from.value().c_str(), &from_stat,
-                           AT_SYMLINK_NOFOLLOW)) != 0) {
+  if (HANDLE_EINTR(file_at::fstatat(AT_FDCWD, stripped_from.value().c_str(),
+                                    &from_stat, AT_SYMLINK_NOFOLLOW)) != 0) {
     DPLOG(ERROR) << "CopyDirectoryNoFollow() couldn't stat source path: "
                  << stripped_from.value();
     return false;
@@ -381,8 +398,8 @@ bool DoCopyDirectoryNoFollow(const FilePath& from_path,
       return false;
     }
     stat_wrapper_t to_stat;
-    if (HANDLE_EINTR(fstatat(AT_FDCWD, stripped_to.value().c_str(), &to_stat,
-                             AT_SYMLINK_NOFOLLOW)) == 0 &&
+    if (HANDLE_EINTR(file_at::fstatat(AT_FDCWD, stripped_to.value().c_str(),
+                                      &to_stat, AT_SYMLINK_NOFOLLOW)) == 0 &&
         S_ISDIR(to_stat.st_mode)) {
       ScopedFD dst_dir_fd = OpenDirectoryNoFollow(stripped_to);
       if (!dst_dir_fd.is_valid()) {
@@ -418,8 +435,8 @@ bool DoCopyDirectoryNoFollow(const FilePath& from_path,
   const std::string to_base = stripped_to.BaseName().value();
   stat_wrapper_t to_stat;
   const bool to_exists =
-      HANDLE_EINTR(fstatat(parent_dst_fd.get(), to_base.c_str(), &to_stat,
-                           AT_SYMLINK_NOFOLLOW)) == 0;
+      HANDLE_EINTR(file_at::fstatat(parent_dst_fd.get(), to_base.c_str(),
+                                    &to_stat, AT_SYMLINK_NOFOLLOW)) == 0;
   if (to_exists && !S_ISDIR(to_stat.st_mode)) {
     return false;
   }
@@ -556,7 +573,8 @@ bool DoDeleteFile(const PlatformFile at_fd,
                   const bool recursive) {
   // Get info about item to remove.
   stat_wrapper_t st;
-  if (HANDLE_EINTR(fstatat(at_fd, path, &st, AT_SYMLINK_NOFOLLOW)) < 0) {
+  if (HANDLE_EINTR(file_at::fstatat(at_fd, path, &st, AT_SYMLINK_NOFOLLOW)) <
+      0) {
     VPLOG(1) << "Cannot stat " << std::quoted(path);
     return errno == ENOENT;
   }
@@ -564,7 +582,7 @@ bool DoDeleteFile(const PlatformFile at_fd,
   // Check if it is a directory or a file.
   if (!S_ISDIR(st.st_mode)) {
     // It is a file or a symlink. Delete it.
-    const bool deleted = unlinkat(at_fd, path, 0) == 0;
+    const bool deleted = file_at::unlinkat(at_fd, path, 0) == 0;
     VPLOG_IF(1, !deleted) << "Cannot delete " << std::quoted(path);
     return deleted || errno == ENOENT;
   }
@@ -573,8 +591,8 @@ bool DoDeleteFile(const PlatformFile at_fd,
   if (recursive) {
     // Recursively empty the directory.
     // Open the directory.
-    const PlatformFile fd = HANDLE_EINTR(
-        openat(at_fd, path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    const PlatformFile fd = HANDLE_EINTR(file_at::openat(
+        at_fd, path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
     if (fd < 0) {
       VPLOG(1) << "Cannot open dir " << std::quoted(path);
       return false;
@@ -582,7 +600,7 @@ bool DoDeleteFile(const PlatformFile at_fd,
 
     // Create a DIR object from the directory file descriptor.
     // This transfers the ownership of `fd` to `dir` in case of success.
-    const std::unique_ptr<DIR, CloseDir> dir(fdopendir(fd));
+    const std::unique_ptr<DIR, CloseDir> dir(file_at::fdopendir(fd));
     if (!dir) {
       VPLOG(1) << "Cannot start reading dir " << std::quoted(path);
       IGNORE_EINTR(close(fd));
@@ -599,7 +617,8 @@ bool DoDeleteFile(const PlatformFile at_fd,
 
       // Recursively delete the found item.
       if (const std::string_view s = entry->d_name;
-          s != "." && s != ".." && !DoDeleteFile(fd, entry->d_name, true)) {
+          s != "." && s != ".." &&
+          !DoDeleteFile(dirfd(dir.get()), entry->d_name, true)) {
         return false;
       }
     }
@@ -612,7 +631,7 @@ bool DoDeleteFile(const PlatformFile at_fd,
   }
 
   // Remove the (now possibly empty) directory.
-  const bool removed = unlinkat(at_fd, path, AT_REMOVEDIR) == 0;
+  const bool removed = file_at::unlinkat(at_fd, path, AT_REMOVEDIR) == 0;
   VPLOG_IF(1, !removed) << "Cannot remove " << std::quoted(path);
   return removed || errno == ENOENT;
 }

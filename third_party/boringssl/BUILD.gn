@@ -17,6 +17,9 @@ if (enable_rust) {
 # Config for us and everybody else depending on BoringSSL.
 config("external_config") {
   include_dirs = [ "src/include" ]
+  if (is_mac) {
+    frameworks = [ "Security.framework" ]
+  }
   if (is_component_build) {
     defines = [ "BORINGSSL_SHARED_LIBRARY" ]
   }

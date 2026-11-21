@@ -83,6 +83,7 @@ typedef HANDLE FileHandle;
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <os/log.h>
+#include <syslog.h>
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
@@ -766,50 +767,59 @@ void LogMessage::Flush() {
 #if BUILDFLAG(IS_WIN)
     OutputDebugStringA(str_newline.c_str());
 #elif BUILDFLAG(IS_APPLE)
-    // Log roughly the same way that CFLog() and NSLog() would. See 10.10.5
-    // CF-1153.18/CFUtilities.c __CFLogCString().
-    CFBundleRef main_bundle = CFBundleGetMainBundle();
-    CFStringRef main_bundle_id_cf =
-        main_bundle ? CFBundleGetIdentifier(main_bundle) : nullptr;
-    std::string main_bundle_id =
-        main_bundle_id_cf ? base::SysCFStringRefToUTF8(main_bundle_id_cf)
-                          : std::string("");
+    if (__builtin_available(macOS 10.12, iOS 10.0, *)) {
+      // Log roughly the same way that CFLog() and NSLog() would. See 10.10.5
+      // CF-1153.18/CFUtilities.c __CFLogCString().
+      CFBundleRef main_bundle = CFBundleGetMainBundle();
+      CFStringRef main_bundle_id_cf =
+          main_bundle ? CFBundleGetIdentifier(main_bundle) : nullptr;
+      std::string main_bundle_id =
+          main_bundle_id_cf ? base::SysCFStringRefToUTF8(main_bundle_id_cf)
+                            : std::string("");
 
-    const class OSLog {
-     public:
-      explicit OSLog(const char* subsystem)
-          : os_log_(subsystem ? os_log_create(subsystem, "chromium_logging")
-                              : OS_LOG_DEFAULT) {}
-      OSLog(const OSLog&) = delete;
-      OSLog& operator=(const OSLog&) = delete;
-      ~OSLog() {
-        if (os_log_ != OS_LOG_DEFAULT) {
-          os_release(os_log_);
+      const class __attribute__((availability(macos, introduced = 10.12)))
+      OSLog {
+       public:
+        explicit OSLog(const char* subsystem)
+            : os_log_(subsystem ? os_log_create(subsystem, "chromium_logging")
+                                : OS_LOG_DEFAULT) {}
+        OSLog(const OSLog&) = delete;
+        OSLog& operator=(const OSLog&) = delete;
+        ~OSLog() {
+          if (os_log_ != OS_LOG_DEFAULT) {
+            os_release(os_log_);
+          }
         }
-      }
-      os_log_t get() const { return os_log_; }
+        os_log_t get() const { return os_log_; }
 
-     private:
-      os_log_t os_log_;
-    } log(main_bundle_id.empty() ? nullptr : main_bundle_id.c_str());
-    const os_log_type_t os_log_type = [](LogSeverity severity) {
-      switch (severity) {
-        case LOGGING_INFO:
-          return OS_LOG_TYPE_INFO;
-        case LOGGING_WARNING:
-          return OS_LOG_TYPE_DEFAULT;
-        case LOGGING_ERROR:
-          return OS_LOG_TYPE_ERROR;
-        case LOGGING_FATAL:
-          return OS_LOG_TYPE_FAULT;
-        case LOGGING_VERBOSE:
-          return OS_LOG_TYPE_DEBUG;
-        default:
-          return OS_LOG_TYPE_DEFAULT;
-      }
-    }(severity_);
-    UNSAFE_TODO(os_log_with_type(log.get(), os_log_type, "%{public}s",
-                                 str_newline.c_str()));
+       private:
+        os_log_t os_log_;
+      } log(main_bundle_id.empty() ? nullptr : main_bundle_id.c_str());
+      const os_log_type_t os_log_type = [](LogSeverity severity) {
+        switch (severity) {
+          case LOGGING_INFO:
+            return OS_LOG_TYPE_INFO;
+          case LOGGING_WARNING:
+            return OS_LOG_TYPE_DEFAULT;
+          case LOGGING_ERROR:
+            return OS_LOG_TYPE_ERROR;
+          case LOGGING_FATAL:
+            return OS_LOG_TYPE_FAULT;
+          case LOGGING_VERBOSE:
+            return OS_LOG_TYPE_DEBUG;
+          default:
+            return OS_LOG_TYPE_DEFAULT;
+        }
+      }(severity_);
+      UNSAFE_TODO(os_log_with_type(log.get(), os_log_type, "%{public}s",
+                                   str_newline.c_str()));
+    } else {
+      const int priority = severity_ >= LOGGING_ERROR     ? LOG_ERR
+                           : severity_ == LOGGING_WARNING ? LOG_WARNING
+                                                          : LOG_INFO;
+      UNSAFE_TODO(syslog(priority, "%s", str_newline.c_str()));
+    }
+
 #elif BUILDFLAG(IS_ANDROID)
     android_LogPriority priority =
         (severity_ < 0) ? ANDROID_LOG_VERBOSE : ANDROID_LOG_UNKNOWN;

@@ -4,31 +4,12 @@
 
 #include "base/mac/legacy_os_compat.h"
 
+#include "legacy/apple/product_version.h"
+
 namespace base::mac {
 
 NSString* ReadLegacyProductVersion(NSString* plist_path) {
-  if (!plist_path) {
-    return nil;
-  }
-  NSData* data = [NSData dataWithContentsOfFile:plist_path options:0 error:nil];
-  if (!data) {
-    return nil;
-  }
-  id plist =
-      [NSPropertyListSerialization propertyListWithData:data
-                                                options:NSPropertyListImmutable
-                                                 format:nullptr
-                                                  error:nil];
-  if (![plist isKindOfClass:[NSDictionary class]]) {
-    return nil;
-  }
-  // Object subscripting requires 10.8; use the original dictionary selector.
-  id version = [(NSDictionary*)plist objectForKey:@"ProductVersion"];
-  if (![version isKindOfClass:[NSString class]] ||
-      ![(NSString*)version length]) {
-    return nil;
-  }
-  return (NSString*)version;
+  return chromium_legacy::ReadLegacyProductVersion(plist_path);
 }
 
 }  // namespace base::mac

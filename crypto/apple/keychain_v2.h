@@ -44,7 +44,7 @@ class CRYPTO_EXPORT KeychainV2 {
       SecKeyRef key,
       SecKeyAlgorithm algorithm,
       CFDataRef data,
-      CFErrorRef* error);
+      CFErrorRef* error) API_AVAILABLE(macos(10.12));
   // KeyCopyPublicKey wraps the |SecKeyCopyPublicKey| function.
   virtual base::apple::ScopedCFTypeRef<SecKeyRef> KeyCopyPublicKey(
       SecKeyRef key);
@@ -85,7 +85,8 @@ class CRYPTO_EXPORT KeychainV2 {
 
 #if !BUILDFLAG(IS_IOS_TVOS)
   // LAContextCanEvaluatePolicy wraps LAContext's canEvaluatePolicy method.
-  virtual BOOL LAContextCanEvaluatePolicy(LAPolicy policy, NSError** error);
+  virtual BOOL LAContextCanEvaluatePolicy(LAPolicy policy, NSError** error)
+      API_AVAILABLE(macos(10.10));
 #endif  // !BUILDFLAG(IS_IOS_TVOS)
 
  protected:

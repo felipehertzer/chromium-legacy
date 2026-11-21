@@ -49,14 +49,24 @@ KeychainV2::KeychainV2() = default;
 KeychainV2::~KeychainV2() = default;
 
 NSArray* KeychainV2::GetTokenIDs() {
-  return [[TKTokenWatcher alloc] init].tokenIDs;
+  if (@available(macOS 10.12, *)) {
+    return [[TKTokenWatcher alloc] init].tokenIDs;
+  }
+  return @[];
 }
 
 base::apple::ScopedCFTypeRef<SecKeyRef> KeychainV2::KeyCreateRandomKey(
     CFDictionaryRef params,
     CFErrorRef* error) {
-  return base::apple::ScopedCFTypeRef<SecKeyRef>(
-      SecKeyCreateRandomKey(params, error));
+  if (@available(macOS 10.12, *)) {
+    return base::apple::ScopedCFTypeRef<SecKeyRef>(
+        SecKeyCreateRandomKey(params, error));
+  }
+  if (error) {
+    *error = CFErrorCreate(nullptr, kCFErrorDomainOSStatus, errSecUnimplemented,
+                           nullptr);
+  }
+  return base::apple::ScopedCFTypeRef<SecKeyRef>();
 }
 
 base::apple::ScopedCFTypeRef<CFDataRef> KeychainV2::KeyCreateSignature(
@@ -70,19 +80,32 @@ base::apple::ScopedCFTypeRef<CFDataRef> KeychainV2::KeyCreateSignature(
 
 base::apple::ScopedCFTypeRef<SecKeyRef> KeychainV2::KeyCopyPublicKey(
     SecKeyRef key) {
-  return base::apple::ScopedCFTypeRef<SecKeyRef>(SecKeyCopyPublicKey(key));
+  if (@available(macOS 10.12, *)) {
+    return base::apple::ScopedCFTypeRef<SecKeyRef>(SecKeyCopyPublicKey(key));
+  }
+  return base::apple::ScopedCFTypeRef<SecKeyRef>();
 }
 
 base::apple::ScopedCFTypeRef<CFDataRef>
 KeychainV2::KeyCopyExternalRepresentation(SecKeyRef key, CFErrorRef* error) {
-  return base::apple::ScopedCFTypeRef<CFDataRef>(
-      SecKeyCopyExternalRepresentation(key, error));
+  if (@available(macOS 10.12, *)) {
+    return base::apple::ScopedCFTypeRef<CFDataRef>(
+        SecKeyCopyExternalRepresentation(key, error));
+  }
+  if (error) {
+    *error = CFErrorCreate(nullptr, kCFErrorDomainOSStatus, errSecUnimplemented,
+                           nullptr);
+  }
+  return base::apple::ScopedCFTypeRef<CFDataRef>();
 }
 
 base::apple::ScopedCFTypeRef<CFDictionaryRef> KeychainV2::KeyCopyAttributes(
     SecKeyRef key) {
-  return base::apple::ScopedCFTypeRef<CFDictionaryRef>(
-      SecKeyCopyAttributes(key));
+  if (@available(macOS 10.12, *)) {
+    return base::apple::ScopedCFTypeRef<CFDictionaryRef>(
+        SecKeyCopyAttributes(key));
+  }
+  return base::apple::ScopedCFTypeRef<CFDictionaryRef>();
 }
 
 OSStatus KeychainV2::ItemAdd(CFDictionaryRef attributes, CFTypeRef* result) {
@@ -145,24 +168,28 @@ base::apple::ScopedCFTypeRef<CFDictionaryRef> MakeKeychainData(
       CFToNSPtrCast(kSecValueData) : password,
     };
   } else {
-    CFStringRef attr_accessible =
-        crypto::apple::GetKeychainAccessibilityAttribute();
-    keychain_data = @{
-      // Set the password.
-      CFToNSPtrCast(kSecValueData) : password,
+    NSMutableDictionary* creation_data =
+        [NSMutableDictionary dictionaryWithDictionary:@{
+          // Set the password.
+          CFToNSPtrCast(kSecValueData) : password,
 
-      // Set the type of the data.
-      CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassGenericPassword),
+          // Set the type of the data.
+          CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassGenericPassword),
 
-      // Set the accessibility attribute as determined above.
-      CFToNSPtrCast(kSecAttrAccessible) : CFToNSPtrCast(attr_accessible),
+          // Set the service name.
+          CFToNSPtrCast(kSecAttrService) : base::SysUTF8ToNSString(serviceName),
 
-      // Set the service name.
-      CFToNSPtrCast(kSecAttrService) : base::SysUTF8ToNSString(serviceName),
-
-      // Set the account name.
-      CFToNSPtrCast(kSecAttrAccount) : base::SysUTF8ToNSString(accountName),
-    };
+          // Set the account name.
+          CFToNSPtrCast(kSecAttrAccount) : base::SysUTF8ToNSString(accountName),
+        }];
+    if (@available(macOS 10.9, *)) {
+      CFStringRef accessibility = GetKeychainAccessibilityAttribute();
+      if (accessibility) {
+        [creation_data setObject:CFToNSPtrCast(accessibility)
+                          forKey:CFToNSPtrCast(kSecAttrAccessible)];
+      }
+    }
+    keychain_data = creation_data;
   }
 
   return base::apple::ScopedCFTypeRef<CFDictionaryRef>(

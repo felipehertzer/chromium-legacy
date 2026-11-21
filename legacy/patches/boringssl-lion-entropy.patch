@@ -1,0 +1,49 @@
+diff --git a/crypto/rand/getentropy.cc b/crypto/rand/getentropy.cc
+index c39296b18a87db5bc4b05b363dc1977ad2914262..a55fe72fb7cd360873179f11010e3febb8ab52d3 100644
+--- a/crypto/rand/getentropy.cc
++++ b/crypto/rand/getentropy.cc
+@@ -23,6 +23,7 @@
+ 
+ #if defined(OPENSSL_RAND_GETENTROPY)
+ 
++#include <errno.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+@@ -30,6 +31,9 @@
+ #if defined(OPENSSL_MACOS) || defined(OPENSSL_FUCHSIA)
+ #include <sys/random.h>
+ #endif
++#if defined(OPENSSL_MACOS)
++#include <Security/SecRandom.h>
++#endif
+ 
+ using namespace bssl;
+ 
+@@ -40,8 +44,24 @@ void bssl::CRYPTO_sysrand(uint8_t *out, size_t requested) {
+   while (requested > 0) {
+     // `getentropy` can only request 256 bytes at a time.
+     size_t todo = requested <= 256 ? requested : 256;
+-    if (getentropy(out, todo) != 0) {
+-      perror("getentropy() failed");
++    int result;
++#if defined(OPENSSL_MACOS)
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++    if (__builtin_available(macOS 10.12, *)) {
++      result = getentropy(out, todo);
++    } else
++#endif
++    {
++      result = SecRandomCopyBytes(kSecRandomDefault, todo, out);
++      if (result != errSecSuccess) {
++        errno = EIO;
++      }
++    }
++#else
++    result = getentropy(out, todo);
++#endif
++    if (result != 0) {
++      perror("system entropy failed");
+       abort();
+     }
+ 

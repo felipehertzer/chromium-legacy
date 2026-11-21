@@ -22,7 +22,8 @@ class DependencyPatchesTests(unittest.TestCase):
         self.legacy.mkdir()
         self.run_git('init', '-q')
         (self.repo / 'source.txt').write_text('old\n')
-        self.run_git('add', 'source.txt')
+        (self.repo / 'second.txt').write_text('second old\n')
+        self.run_git('add', 'source.txt', 'second.txt')
         self.run_git('-c', 'user.name=Test', '-c', 'user.email=test@example.com',
                      'commit', '-qm', 'base')
         revision = self.run_git('rev-parse', 'HEAD').strip()
@@ -51,6 +52,18 @@ class DependencyPatchesTests(unittest.TestCase):
         PATCHES.apply_patches(self.root, self.manifest)
         self.assertEqual((self.repo / 'source.txt').read_text(), 'new\n')
         self.assertEqual(other.read_text(), 'keep me\n')
+
+    def test_adds_another_disjoint_patch_to_an_already_patched_dependency(self):
+        PATCHES.apply_patches(self.root, self.manifest)
+        (self.repo / 'second.txt').write_text('second new\n')
+        (self.legacy / 'second.patch').write_text(self.run_git('diff', '--', 'second.txt'))
+        self.run_git('checkout', '--', 'second.txt')
+        self.entries.append({**self.entries[0], 'patch': 'second.patch'})
+        self.save_manifest()
+        PATCHES.apply_patches(self.root, self.manifest)
+        PATCHES.apply_patches(self.root, self.manifest)
+        self.assertEqual((self.repo / 'source.txt').read_text(), 'new\n')
+        self.assertEqual((self.repo / 'second.txt').read_text(), 'second new\n')
 
     def test_wrong_revision_refuses_to_modify_source(self):
         self.entries[0]['revision'] = '0' * 40

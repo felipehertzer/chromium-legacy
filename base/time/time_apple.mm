@@ -96,12 +96,32 @@ int64_t ComputeCurrentRealTicks() {
   // transitions. See:
   // https://developer.apple.com/documentation/kernel/1646199-mach_continuous_time
   // https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/clock.c
-  return MachTimeToMicroseconds(mach_continuous_time());
+  if (__builtin_available(macOS 10.12, *)) {
+    return MachTimeToMicroseconds(mach_continuous_time());
+  }
+  // Older kernels do not expose a continuous hardware clock. Their best
+  // monotonic source excludes system sleep, as historical TimeTicks did.
+  return ComputeCurrentTicks();
 }
 
 int64_t ComputeThreadTicks() {
   struct timespec ts = {};
-  CHECK(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0);
+  if (__builtin_available(macOS 10.12, *)) {
+    CHECK(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0);
+  } else {
+    base::apple::ScopedMachSendRight thread(mach_thread_self());
+    thread_basic_info_data_t info{};
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    kern_return_t kr =
+        thread_info(thread.get(), THREAD_BASIC_INFO,
+                    reinterpret_cast<thread_info_t>(&info), &count);
+    MACH_CHECK(kr == KERN_SUCCESS, kr) << "thread_info";
+    ts.tv_sec =
+        static_cast<time_t>(info.user_time.seconds) + info.system_time.seconds;
+    ts.tv_nsec = (static_cast<long>(info.user_time.microseconds) +
+                  info.system_time.microseconds) *
+                 1000;
+  }
   base::CheckedNumeric<int64_t> absolute_micros(ts.tv_sec);
   absolute_micros *= base::Time::kMicrosecondsPerSecond;
   absolute_micros += (ts.tv_nsec / base::Time::kNanosecondsPerMicrosecond);
@@ -180,8 +200,12 @@ TimeTicks TimeTicksNowIgnoringOverride() {
 }
 
 TimeTicks TimeTicksLowResolutionNowIgnoringOverride() {
-  return TimeTicks() + Microseconds(MachTimeToMicroseconds(
-                           clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW_APPROX)));
+  if (__builtin_available(macOS 10.12, *)) {
+    return TimeTicks() +
+           Microseconds(MachTimeToMicroseconds(
+               clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW_APPROX)));
+  }
+  return TimeTicks() + Microseconds(ComputeCurrentTicks());
 }
 
 time_internal::RealTicks RealTicksNowIgnoringOverride() {

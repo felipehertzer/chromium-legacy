@@ -37,7 +37,8 @@ namespace crypto::apple {
 // are responsible for deleting keys when they are no longer needed.
 class UnexportableKeyProviderApple : public StatefulUnexportableKeyProvider {
  public:
-  explicit UnexportableKeyProviderApple(Config config);
+  explicit UnexportableKeyProviderApple(Config config)
+      API_AVAILABLE(macos(10.15));
   ~UnexportableKeyProviderApple() override;
 
 #if defined(__OBJC__)
@@ -46,28 +47,28 @@ class UnexportableKeyProviderApple : public StatefulUnexportableKeyProvider {
   // user verification.
   std::unique_ptr<UnexportableSigningKey> FromWrappedSigningKeySlowly(
       base::span<const uint8_t> wrapped_key,
-      LAContext* lacontext);
+      LAContext* lacontext) API_AVAILABLE(macos(10.15));
 
   // Like UnexportableKeyProvider::GenerateSigningKeySlowly, but lets you pass
   // an authenticated LAContext to avoid having macOS prompt the user for user
   // verification.
   std::unique_ptr<UnexportableSigningKey> GenerateSigningKeySlowly(
       base::span<const sign::SignatureKind> acceptable_algorithms,
-      LAContext* lacontext);
+      LAContext* lacontext) API_AVAILABLE(macos(10.15));
 
   // Like UnexportableKeyProvider::FromWrappedAttestationKeySlowly, but lets you
   // pass an authenticated LAContext to avoid having macOS prompt the user for
   // user verification.
   std::unique_ptr<UnexportableAttestationKey> FromWrappedAttestationKeySlowly(
       base::span<const uint8_t> wrapped_key,
-      LAContext* lacontext);
+      LAContext* lacontext) API_AVAILABLE(macos(10.15));
 
   // Like UnexportableKeyProvider::GenerateAttestationKeySlowly, but lets you
   // pass an authenticated LAContext to avoid having macOS prompt the user for
   // user verification.
   std::unique_ptr<UnexportableAttestationKey> GenerateAttestationKeySlowly(
       base::span<const sign::SignatureKind> acceptable_algorithms,
-      LAContext* lacontext);
+      LAContext* lacontext) API_AVAILABLE(macos(10.15));
 #endif  // defined(__OBJC__)
 
   // UnexportableKeyProvider:

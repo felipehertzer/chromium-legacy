@@ -18,6 +18,9 @@
 #include <chrono>  // NOLINT(build/c++11)
 #include <cstdint>
 #include <ctime>
+#if defined(__APPLE__)
+#include "legacy/apple/clock.h"
+#endif
 #include <limits>
 
 #include "absl/base/config.h"
@@ -155,7 +158,11 @@ struct timespec KernelTimeout::MakeClockAbsoluteTimespec(clockid_t c) const {
   }
 
   struct timespec now;
+#if defined(__APPLE__)
+  ABSL_RAW_CHECK(chromium_legacy::ClockGettime(c, &now) == 0, "clock_gettime() failed");
+#else
   ABSL_RAW_CHECK(clock_gettime(c, &now) == 0, "clock_gettime() failed");
+#endif
   absl::Duration from_clock_epoch =
       absl::DurationFromTimespec(now) + absl::Nanoseconds(nanos);
   if (from_clock_epoch <= absl::ZeroDuration()) {

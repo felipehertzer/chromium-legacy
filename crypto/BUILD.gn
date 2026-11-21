@@ -144,13 +144,14 @@ component("crypto") {
 
     frameworks = [
       "CoreFoundation.framework",
-      "CryptoTokenKit.framework",
       "Foundation.framework",
       "Security.framework",
     ]
 
+    # These frameworks do not exist on Lion; entry points check availability.
+    weak_frameworks = [ "CryptoTokenKit.framework" ]
     if (is_mac || (is_ios && target_platform != "tvos")) {
-      frameworks += [ "LocalAuthentication.framework" ]
+      weak_frameworks += [ "LocalAuthentication.framework" ]
     }
   }
 

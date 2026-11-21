@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/mac/legacy_os_compat.h"
-
 #include <stdio.h>
+
+#include "base/mac/legacy_os_compat.h"
+#include "legacy/apple/product_version.h"
 
 namespace {
 int failures = 0;
@@ -60,6 +61,37 @@ int main() {
           return 2;
         }
         Check(path, expected, format ? "binary plist" : "XML plist");
+      }
+    }
+    NSArray<NSString*>* versions = @[
+      @"10.7.5", @"10.15.7", @"27.3", @"10.x", @"-1.7", @"999999999999.0",
+      @"10..7"
+    ];
+    for (NSUInteger index = 0; index < versions.count; ++index) {
+      NSDictionary* plist =
+          @{@"ProductVersion" : [versions objectAtIndex:index]};
+      NSData* data = [NSPropertyListSerialization
+          dataWithPropertyList:plist
+                        format:NSPropertyListBinaryFormat_v1_0
+                       options:0
+                         error:nil];
+      if (![data writeToFile:path atomically:YES]) {
+        return 2;
+      }
+      auto version = chromium_legacy::LegacySystemVersion(path);
+      bool valid = index < 3 ? version.majorVersion == (index == 2 ? 27 : 10) &&
+                                   version.minorVersion == (index == 0   ? 7
+                                                            : index == 1 ? 15
+                                                                         : 3) &&
+                                   version.patchVersion == (index == 0   ? 5
+                                                            : index == 1 ? 7
+                                                                         : 0)
+                             : version.majorVersion == 0 &&
+                                   version.minorVersion == 0 &&
+                                   version.patchVersion == 0;
+      ++checks;
+      if (!valid) {
+        ++failures;
       }
     }
     [[NSFileManager defaultManager] removeItemAtPath:directory error:nil];

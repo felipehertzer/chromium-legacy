@@ -88,6 +88,7 @@ int posix_spawnattr_set_csm_np(const posix_spawnattr_t*, uint32_t)
 
 #if BUILDFLAG(IS_MAC)
 #include "base/apple/mach_port_rendezvous_mac.h"
+#include "legacy/apple/fd_io.h"
 #endif
 
 extern "C" {
@@ -162,7 +163,7 @@ class PosixSpawnFileActions {
   void Chdir(const char* path) {
     if (__builtin_available(macOS 26, *)) {
       DPSXCHECK(posix_spawn_file_actions_addchdir(&file_actions_, path));
-    } else {
+    } else if (__builtin_available(macOS 10.15, *)) {
       DPSXCHECK(posix_spawn_file_actions_addchdir_np(&file_actions_, path));
     }
   }
@@ -346,8 +347,10 @@ Process LaunchProcess(const std::vector<std::string>& argv,
                                     ? options.real_path.value().c_str()
                                     : argv_cstr[0];
 
-  if (options.enable_cpu_security_mitigations) {
-    DPSXCHECK(posix_spawnattr_set_csm_np(attr.get(), POSIX_SPAWN_NP_CSM_ALL));
+  if (__builtin_available(macOS 11.0, *)) {
+    if (options.enable_cpu_security_mitigations) {
+      DPSXCHECK(posix_spawnattr_set_csm_np(attr.get(), POSIX_SPAWN_NP_CSM_ALL));
+    }
   }
 
   if (!options.current_directory.empty()) {
@@ -402,10 +405,33 @@ Process LaunchProcess(const std::vector<std::string>& argv,
     // which is actually mutable (`char**`). `posix_spawnp` does not modify
     // the envp array or the strings it points to, so casting away constness
     // to match the posix_spawnp signature is safe.
-    rv = posix_spawnp(
-        &pid, executable_path, file_actions.get(), attr.get(), &argv_cstr[0],
-        owned_environ.empty() ? const_cast<char**>(new_environ.data())
-                              : owned_environ.data());
+    auto spawn = [&]() {
+      return posix_spawnp(
+          &pid, executable_path, file_actions.get(), attr.get(), &argv_cstr[0],
+          owned_environ.empty() ? const_cast<char**>(new_environ.data())
+                                : owned_environ.data());
+    };
+#if BUILDFLAG(IS_MAC)
+    if (__builtin_available(macOS 10.15, *)) {
+      rv = spawn();
+    } else if (!options.current_directory.empty()) {
+      ScopedFD directory(HANDLE_EINTR(open(
+          options.current_directory.value().c_str(), O_RDONLY | O_DIRECTORY)));
+      if (!directory.is_valid()) {
+        rv = errno;
+      } else {
+        // Lion's forkproc() copies the spawning thread's cwd to the child.
+        // A fresh worker avoids changing the caller or process-wide cwd.
+        int result = chromium_legacy::internal::RelativeFileOperation(
+            directory.get(), ".", [&](const char*) { return spawn(); }, -1);
+        rv = result < 0 ? errno : result;
+      }
+    } else {
+      rv = spawn();
+    }
+#else
+    rv = spawn();
+#endif
 
 #if !BUILDFLAG(IS_IOS)
     if (needs_rendezvous_lock) {

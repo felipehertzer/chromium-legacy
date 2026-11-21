@@ -101,6 +101,7 @@ void LogKeychainOperationError(
                                              : errSecCoreFoundationUnknown);
 }
 
+API_AVAILABLE(macos(10.15))
 std::optional<std::vector<uint8_t>> SignSlowlyImpl(
     SecKeyRef key,
     base::span<const uint8_t> data,
@@ -169,7 +170,7 @@ absl::flat_hash_set<T> ToFlatHashSet(R&& range, Proj proj = {}) {
 }
 
 // Options struct for `FindUnexportableKeys`.
-struct FindUnexportableKeysOptions {
+struct API_AVAILABLE(macos(10.15)) FindUnexportableKeysOptions {
   NSString* access_group = nullptr;
   std::string_view application_tag_prefix;
   base::raw_span<const uint8_t> wrapped_key;
@@ -178,6 +179,7 @@ struct FindUnexportableKeysOptions {
 
 // Returns a vector of keychain items matching the given attributes or an
 // OSStatus error code in case of failure.
+API_AVAILABLE(macos(10.15))
 base::expected<std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>>,
                OSStatus>
 FindUnexportableKeys(FindUnexportableKeysOptions options) {
@@ -242,6 +244,7 @@ FindUnexportableKeys(FindUnexportableKeysOptions options) {
 
 // Deletes a key from the key chain specified by `key_attributes`. Returns
 // whether the operation succeeded.
+API_AVAILABLE(macos(10.15))
 bool DeleteKey(CFDictionaryRef key_attributes) {
   NSMutableDictionary* delete_query =
       [NSMutableDictionary dictionaryWithDictionary:@{
@@ -290,7 +293,8 @@ std::optional<std::vector<uint8_t>> ConvertX962ToDerSpki(
 }
 
 template <typename BaseInterface>
-class AppleKeyImpl : public BaseInterface, public StatefulKey {
+class API_AVAILABLE(macos(10.15)) AppleKeyImpl : public BaseInterface,
+                                                 public StatefulKey {
  public:
   explicit AppleKeyImpl(CFDictionaryRef key_attributes)
       : AppleKeyImpl(
@@ -364,13 +368,13 @@ class AppleKeyImpl : public BaseInterface, public StatefulKey {
   std::vector<uint8_t> public_key_spki_;
 };
 
-class UnexportableSigningKeyApple
+class API_AVAILABLE(macos(10.15)) UnexportableSigningKeyApple
     : public AppleKeyImpl<UnexportableSigningKey> {
  public:
   using AppleKeyImpl<UnexportableSigningKey>::AppleKeyImpl;
 };
 
-class UnexportableAttestationKeyApple
+class API_AVAILABLE(macos(10.15)) UnexportableAttestationKeyApple
     : public AppleKeyImpl<UnexportableAttestationKey> {
  public:
   using AppleKeyImpl<UnexportableAttestationKey>::AppleKeyImpl;
@@ -406,6 +410,7 @@ class UnexportableAttestationKeyApple
 };
 
 template <typename KeyClass>
+API_AVAILABLE(macos(10.15))
 std::unique_ptr<KeyClass> GenerateKeySlowlyImpl(
     UnexportableKeyProvider::Config::AccessControl access_control,
     NSString* keychain_access_group,
@@ -490,6 +495,7 @@ std::unique_ptr<KeyClass> GenerateKeySlowlyImpl(
 }
 
 template <typename KeyClass>
+API_AVAILABLE(macos(10.15))
 std::unique_ptr<KeyClass> FromWrappedKeySlowlyImpl(
     NSString* keychain_access_group,
     NSString* application_tag,
@@ -580,7 +586,10 @@ UnexportableKeyProviderApple::SelectAlgorithm(
 std::unique_ptr<UnexportableSigningKey>
 UnexportableKeyProviderApple::GenerateSigningKeySlowly(
     base::span<const sign::SignatureKind> acceptable_algorithms) {
-  return GenerateSigningKeySlowly(acceptable_algorithms, /*lacontext=*/nil);
+  if (@available(macOS 10.15, *)) {
+    return GenerateSigningKeySlowly(acceptable_algorithms, /*lacontext=*/nil);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<UnexportableSigningKey>
@@ -595,7 +604,10 @@ UnexportableKeyProviderApple::GenerateSigningKeySlowly(
 std::unique_ptr<UnexportableSigningKey>
 UnexportableKeyProviderApple::FromWrappedSigningKeySlowly(
     base::span<const uint8_t> wrapped_key) {
-  return FromWrappedSigningKeySlowly(wrapped_key, /*lacontext=*/nil);
+  if (@available(macOS 10.15, *)) {
+    return FromWrappedSigningKeySlowly(wrapped_key, /*lacontext=*/nil);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<UnexportableSigningKey>
@@ -610,7 +622,11 @@ UnexportableKeyProviderApple::FromWrappedSigningKeySlowly(
 std::unique_ptr<UnexportableAttestationKey>
 UnexportableKeyProviderApple::GenerateAttestationKeySlowly(
     base::span<const sign::SignatureKind> acceptable_algorithms) {
-  return GenerateAttestationKeySlowly(acceptable_algorithms, /*lacontext=*/nil);
+  if (@available(macOS 10.15, *)) {
+    return GenerateAttestationKeySlowly(acceptable_algorithms,
+                                        /*lacontext=*/nil);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<UnexportableAttestationKey>
@@ -625,7 +641,10 @@ UnexportableKeyProviderApple::GenerateAttestationKeySlowly(
 std::unique_ptr<UnexportableAttestationKey>
 UnexportableKeyProviderApple::FromWrappedAttestationKeySlowly(
     base::span<const uint8_t> wrapped_key) {
-  return FromWrappedAttestationKeySlowly(wrapped_key, /*lacontext=*/nil);
+  if (@available(macOS 10.15, *)) {
+    return FromWrappedAttestationKeySlowly(wrapped_key, /*lacontext=*/nil);
+  }
+  return nullptr;
 }
 
 std::unique_ptr<UnexportableAttestationKey>
@@ -644,152 +663,173 @@ UnexportableKeyProviderApple::AsStatefulUnexportableKeyProvider() {
 
 std::optional<std::vector<std::unique_ptr<UnexportableSigningKey>>>
 UnexportableKeyProviderApple::GetAllKeysSlowly() {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::WILL_BLOCK);
+  if (@available(macOS 10.15, *)) {
+    base::ScopedBlockingCall scoped_blocking_call(
+        FROM_HERE, base::BlockingType::WILL_BLOCK);
 
-  ASSIGN_OR_RETURN(
-      std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
-      FindUnexportableKeys({
-          .access_group = objc_storage_->keychain_access_group_,
-          .application_tag_prefix =
-              base::SysNSStringToUTF8(objc_storage_->application_tag_),
-      }),
-      [](OSStatus) { return std::nullopt; });
+    ASSIGN_OR_RETURN(
+        std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
+        FindUnexportableKeys({
+            .access_group = objc_storage_->keychain_access_group_,
+            .application_tag_prefix =
+                base::SysNSStringToUTF8(objc_storage_->application_tag_),
+        }),
+        [](OSStatus) { return std::nullopt; });
 
-  return base::ToVector(
-      keys, [](const auto& key) -> std::unique_ptr<UnexportableSigningKey> {
-        return std::make_unique<UnexportableSigningKeyApple>(key.get());
-      });
+    return base::ToVector(
+        keys, [](const auto& key) -> std::unique_ptr<UnexportableSigningKey> {
+          return std::make_unique<UnexportableSigningKeyApple>(key.get());
+        });
+  }
+  return std::nullopt;
 }
 
 std::optional<size_t> UnexportableKeyProviderApple::DeleteWrappedKeysSlowly(
     base::span<const base::span<const uint8_t>> wrapped_keys) {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::WILL_BLOCK);
+  if (@available(macOS 10.15, *)) {
+    base::ScopedBlockingCall scoped_blocking_call(
+        FROM_HERE, base::BlockingType::WILL_BLOCK);
 
-  if (wrapped_keys.empty()) {
-    return 0;
+    if (wrapped_keys.empty()) {
+      return 0;
+    }
+
+    ASSIGN_OR_RETURN(
+        std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
+        FindUnexportableKeys({
+            .access_group = objc_storage_->keychain_access_group_,
+            .application_tag_prefix =
+                base::SysNSStringToUTF8(objc_storage_->application_tag_),
+        }),
+        [](OSStatus status) {
+          LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
+          return std::nullopt;
+        });
+
+    const auto keys_to_delete = ToFlatHashSet(wrapped_keys);
+    std::erase_if(keys, [&](const auto& key) {
+      return !keys_to_delete.contains(GetApplicationLabel(key.get()));
+    });
+
+    return std::ranges::count_if(
+        keys, [&](const auto& key) { return DeleteKey(key.get()); });
   }
-
-  ASSIGN_OR_RETURN(
-      std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
-      FindUnexportableKeys({
-          .access_group = objc_storage_->keychain_access_group_,
-          .application_tag_prefix =
-              base::SysNSStringToUTF8(objc_storage_->application_tag_),
-      }),
-      [](OSStatus status) {
-        LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
-        return std::nullopt;
-      });
-
-  const auto keys_to_delete = ToFlatHashSet(wrapped_keys);
-  std::erase_if(keys, [&](const auto& key) {
-    return !keys_to_delete.contains(GetApplicationLabel(key.get()));
-  });
-
-  return std::ranges::count_if(
-      keys, [&](const auto& key) { return DeleteKey(key.get()); });
+  return std::nullopt;
 }
 
 std::optional<size_t> UnexportableKeyProviderApple::DeleteKeysSlowly(
     base::span<const UnexportableSigningKey* const> keys) {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::WILL_BLOCK);
+  if (@available(macOS 10.15, *)) {
+    base::ScopedBlockingCall scoped_blocking_call(
+        FROM_HERE, base::BlockingType::WILL_BLOCK);
 
-  if (keys.empty()) {
-    return 0;
-  }
+    if (keys.empty()) {
+      return 0;
+    }
 
-  ASSIGN_OR_RETURN(
-      std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keychain_keys,
-      FindUnexportableKeys({
-          .access_group = objc_storage_->keychain_access_group_,
-          .application_tag_prefix =
-              base::SysNSStringToUTF8(objc_storage_->application_tag_),
-      }),
-      [](OSStatus status) {
-        LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
-        return std::nullopt;
+    ASSIGN_OR_RETURN(
+        std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>>
+            keychain_keys,
+        FindUnexportableKeys({
+            .access_group = objc_storage_->keychain_access_group_,
+            .application_tag_prefix =
+                base::SysNSStringToUTF8(objc_storage_->application_tag_),
+        }),
+        [](OSStatus status) {
+          LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
+          return std::nullopt;
+        });
+
+    const auto keys_and_tags_to_delete =
+        ToFlatHashSet(keys, [](const auto* key) {
+          // NOTE: The keys passed to this method should always be instances of
+          // `UnexportableSigningKeyApple`, which are guaranteed to be stateful.
+          // Thus we can confidently `CHECK` here.
+          return std::pair{key->GetWrappedKey(),
+                           CHECK_DEREF(key->AsStatefulKey()).GetKeyTag()};
+        });
+
+    std::erase_if(keychain_keys, [&](const auto& key) {
+      return !keys_and_tags_to_delete.contains({
+          base::ToVector(GetApplicationLabel(key.get())),
+          GetApplicationTag(key.get()),
       });
-
-  const auto keys_and_tags_to_delete = ToFlatHashSet(keys, [](const auto* key) {
-    // NOTE: The keys passed to this method should always be instances of
-    // `UnexportableSigningKeyApple`, which are guaranteed to be stateful.
-    // Thus we can confidently `CHECK` here.
-    return std::pair{key->GetWrappedKey(),
-                     CHECK_DEREF(key->AsStatefulKey()).GetKeyTag()};
-  });
-
-  std::erase_if(keychain_keys, [&](const auto& key) {
-    return !keys_and_tags_to_delete.contains({
-        base::ToVector(GetApplicationLabel(key.get())),
-        GetApplicationTag(key.get()),
     });
-  });
 
-  return std::ranges::count_if(
-      keychain_keys, [&](const auto& key) { return DeleteKey(key.get()); });
+    return std::ranges::count_if(
+        keychain_keys, [&](const auto& key) { return DeleteKey(key.get()); });
+  }
+  return std::nullopt;
 }
 
 std::optional<size_t> UnexportableKeyProviderApple::DeleteAllKeysSlowly() {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::WILL_BLOCK);
+  if (@available(macOS 10.15, *)) {
+    base::ScopedBlockingCall scoped_blocking_call(
+        FROM_HERE, base::BlockingType::WILL_BLOCK);
 
-  const std::string application_tag_prefix =
-      base::SysNSStringToUTF8(objc_storage_->application_tag_);
-  ASSIGN_OR_RETURN(
-      std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
-      FindUnexportableKeys({
-          .access_group = objc_storage_->keychain_access_group_,
-          .application_tag_prefix = application_tag_prefix,
-      }),
-      [](OSStatus status) {
-        LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
-        return std::nullopt;
+    const std::string application_tag_prefix =
+        base::SysNSStringToUTF8(objc_storage_->application_tag_);
+    ASSIGN_OR_RETURN(
+        std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> keys,
+        FindUnexportableKeys({
+            .access_group = objc_storage_->keychain_access_group_,
+            .application_tag_prefix = application_tag_prefix,
+        }),
+        [](OSStatus status) {
+          LogKeychainOperationError(TPMOperation::kKeyDeletion, status);
+          return std::nullopt;
+        });
+
+    // As a safeguard, don't perform prefix matching if the
+    // application_tag_prefix used in the query was empty.
+    if (application_tag_prefix.empty()) {
+      std::erase_if(keys, [](const auto& key) {
+        return !GetApplicationTag(key.get()).empty();
       });
+    }
 
-  // As a safeguard, don't perform prefix matching if the application_tag_prefix
-  // used in the query was empty.
-  if (application_tag_prefix.empty()) {
-    std::erase_if(keys, [](const auto& key) {
-      return !GetApplicationTag(key.get()).empty();
-    });
+    return std::ranges::count_if(
+        keys, [&](const auto& key) { return DeleteKey(key.get()); });
   }
-
-  return std::ranges::count_if(
-      keys, [&](const auto& key) { return DeleteKey(key.get()); });
+  return std::nullopt;
 }
 
 std::unique_ptr<UnexportableKeyProviderApple> GetUnexportableKeyProviderApple(
     UnexportableKeyProvider::Config config) {
-  CHECK(!config.keychain_access_group.empty())
-      << "A keychain access group must be set when using unexportable keys on "
-         "Apple platforms";
+  if (@available(macOS 10.15, *)) {
+    CHECK(!config.keychain_access_group.empty())
+        << "A keychain access group must be set when using unexportable keys "
+           "on "
+           "Apple platforms";
 #if !BUILDFLAG(IS_IOS)
-  // Secure Enclave on iOS is available since the iPhone 5s (A7 chip). This
-  // redundant check causes crashes because of the synchronous initialization of
-  // `TKTokenWatcher` on every call. Inspecting the binary for the entitlement
-  // is not available on iOS either, so assume both are available.
-  if (GetKeyHardwareSupportMac(config.keychain_access_group) !=
-      internal::MacKeyHardwareSupport::kSecureEnclave) {
-    return nullptr;
-  }
+    // Secure Enclave on iOS is available since the iPhone 5s (A7 chip). This
+    // redundant check causes crashes because of the synchronous initialization
+    // of `TKTokenWatcher` on every call. Inspecting the binary for the
+    // entitlement is not available on iOS either, so assume both are available.
+    if (GetKeyHardwareSupportMac(config.keychain_access_group) !=
+        internal::MacKeyHardwareSupport::kSecureEnclave) {
+      return nullptr;
+    }
 #endif  // !BUILDFLAG(IS_IOS)
-  return std::make_unique<UnexportableKeyProviderApple>(std::move(config));
+    return std::make_unique<UnexportableKeyProviderApple>(std::move(config));
+  }
+  return nullptr;
 }
 
 #if BUILDFLAG(IS_MAC)
 internal::MacKeyHardwareSupport GetKeyHardwareSupportMac(
     const std::string& keychain_access_group) {
-  if (![KeychainV2::GetInstance().GetTokenIDs()
-          containsObject:CFToNSPtrCast(kSecAttrTokenIDSecureEnclave)]) {
-    return internal::MacKeyHardwareSupport::kNoSecureEnclave;
+  if (@available(macOS 10.12, *)) {
+    if (![KeychainV2::GetInstance().GetTokenIDs()
+            containsObject:CFToNSPtrCast(kSecAttrTokenIDSecureEnclave)]) {
+      return internal::MacKeyHardwareSupport::kNoSecureEnclave;
+    }
+    if (!ExecutableHasKeychainAccessGroupEntitlement(keychain_access_group)) {
+      return internal::MacKeyHardwareSupport::kMissingEntitlement;
+    }
+    return internal::MacKeyHardwareSupport::kSecureEnclave;
   }
-  if (!ExecutableHasKeychainAccessGroupEntitlement(keychain_access_group)) {
-    return internal::MacKeyHardwareSupport::kMissingEntitlement;
-  }
-  return internal::MacKeyHardwareSupport::kSecureEnclave;
+  return internal::MacKeyHardwareSupport::kNoSecureEnclave;
 }
 #endif  // BUILDFLAG(IS_MAC)
 

@@ -13,7 +13,7 @@
 namespace crypto::apple {
 
 struct ScopedLAContext::ObjCStorage {
-  LAContext* __strong context;
+  id __strong context;
 };
 
 ScopedLAContext::ScopedLAContext(LAContext* lacontext)

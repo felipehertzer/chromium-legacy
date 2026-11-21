@@ -108,6 +108,7 @@ class UserVerifyingSigningKeyMac : public UserVerifyingSigningKey {
   const scoped_refptr<RefCountedUnexportableSigningKey> key_;
 };
 
+API_AVAILABLE(macos(10.15))
 base::expected<std::unique_ptr<UserVerifyingSigningKey>,
                UserVerifyingKeyCreationError>
 DoGenerateKey(base::span<const sign::SignatureKind> acceptable_algorithms,
@@ -127,6 +128,7 @@ DoGenerateKey(base::span<const sign::SignatureKind> acceptable_algorithms,
   return base::ok(std::make_unique<UserVerifyingSigningKeyMac>(std::move(key)));
 }
 
+API_AVAILABLE(macos(10.15))
 base::expected<std::unique_ptr<UserVerifyingSigningKey>,
                UserVerifyingKeyCreationError>
 DoGetKey(std::vector<uint8_t> wrapped_key,
@@ -159,7 +161,8 @@ bool DoDeleteKey(std::vector<uint8_t> wrapped_key,
              .value_or(0);
 }
 
-class UserVerifyingKeyProviderMac : public UserVerifyingKeyProvider {
+class API_AVAILABLE(macos(10.15)) UserVerifyingKeyProviderMac
+    : public UserVerifyingKeyProvider {
  public:
   explicit UserVerifyingKeyProviderMac(UserVerifyingKeyProvider::Config config)
       : lacontext_(config.lacontext ? config.lacontext->release() : nil),
@@ -231,19 +234,26 @@ class UserVerifyingKeyProviderMac : public UserVerifyingKeyProvider {
 
 std::unique_ptr<UserVerifyingKeyProvider> GetUserVerifyingKeyProviderMac(
     UserVerifyingKeyProvider::Config config) {
-  return std::make_unique<UserVerifyingKeyProviderMac>(std::move(config));
+  if (@available(macOS 10.15, *)) {
+    return std::make_unique<UserVerifyingKeyProviderMac>(std::move(config));
+  }
+  return nullptr;
 }
 
 void AreMacUnexportableKeysAvailable(UserVerifyingKeyProvider::Config config,
                                      base::OnceCallback<void(bool)> callback) {
-  if (!GetUnexportableKeyProvider(
-          {.keychain_access_group = std::move(config.keychain_access_group)})) {
+  if (@available(macOS 10.15, *)) {
+    if (!GetUnexportableKeyProvider({.keychain_access_group = std::move(
+                                         config.keychain_access_group)})) {
+      std::move(callback).Run(false);
+      return;
+    }
+    std::move(callback).Run(
+        crypto::apple::KeychainV2::GetInstance().LAContextCanEvaluatePolicy(
+            LAPolicyDeviceOwnerAuthentication, /*error=*/nil));
+  } else {
     std::move(callback).Run(false);
-    return;
   }
-  std::move(callback).Run(
-      crypto::apple::KeychainV2::GetInstance().LAContextCanEvaluatePolicy(
-          LAPolicyDeviceOwnerAuthentication, /*error=*/nil));
 }
 
 }  // namespace crypto

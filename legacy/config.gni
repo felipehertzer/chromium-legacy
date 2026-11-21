@@ -1,0 +1,9 @@
+# Copyright 2026 The Chromium Legacy Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+declare_args() {
+  # Exercise legacy backends on a newer test machine. Never use in releases.
+  legacy_force_fallbacks_for_tests = false
+}
+assert(!legacy_force_fallbacks_for_tests || !is_official_build,
+       "Legacy fallback forcing is only for test builds.")

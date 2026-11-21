@@ -1,0 +1,83 @@
+diff --git a/src/dawn/common/AlignedAlloc.cpp b/src/dawn/common/AlignedAlloc.cpp
+index 7bbadce39144875620508fc513bd05da450fb9e3..4c354315b634d1bba82573a2ea2f30baf96ec562 100644
+--- a/src/dawn/common/AlignedAlloc.cpp
++++ b/src/dawn/common/AlignedAlloc.cpp
+@@ -49,6 +49,18 @@ void* AlignedAlloc(size_t size, size_t alignment) {
+     // instead.
+     return memalign(alignment, size);
+ 
++#elif DAWN_PLATFORM_IS(MACOS)
++    if (__builtin_available(macOS 10.15, *)) {
++        return aligned_alloc(alignment, size);
++    }
++    if (alignment < sizeof(void*)) {
++        alignment = sizeof(void*);
++    }
++    void* result = nullptr;
++    if (posix_memalign(&result, alignment, size) != 0) {
++        return nullptr;
++    }
++    return result;
+ #else
+     return aligned_alloc(alignment, size);
+ 
+diff --git a/src/dawn/common/BUILD.gn b/src/dawn/common/BUILD.gn
+index 6669c9ea2f9caff08b9770657a830e739a431882..5d8992288ac892e20593ca2a6d5b571ae45d3087 100644
+--- a/src/dawn/common/BUILD.gn
++++ b/src/dawn/common/BUILD.gn
+@@ -265,6 +265,9 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
+     # targets, so `internal_config` doesn't leak out of Dawn.
+     public_configs = [ ":internal_config" ]
+     deps = [ "${dawn_root}/include/dawn:cpp_headers" ]
++    if (is_mac) {
++      deps += [ "//legacy:platform_support" ]
++    }
+ 
+     if (is_win) {
+       sources += [
+diff --git a/src/dawn/common/SystemUtils_mac.mm b/src/dawn/common/SystemUtils_mac.mm
+index 5b2a65e800e6cc2b1ca8da871b2cc43cbc7ea31a..d405ccf4dc28e9785514b529e1837d627874833e 100644
+--- a/src/dawn/common/SystemUtils_mac.mm
++++ b/src/dawn/common/SystemUtils_mac.mm
+@@ -27,13 +27,19 @@
+ 
+ #import <Foundation/NSProcessInfo.h>
+ 
++#include "legacy/apple/product_version.h"
+ #include "src/dawn/common/SystemUtils.h"
+ #include "src/utils/assert.h"
+ 
+ namespace dawn {
+ 
+ void GetMacOSVersion(int32_t* majorVersion, int32_t* minorVersion) {
+-    NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
++    NSOperatingSystemVersion version;
++    if (@available(macOS 10.10, *)) {
++        version = [[NSProcessInfo processInfo] operatingSystemVersion];
++    } else {
++        version = chromium_legacy::LegacySystemVersion();
++    }
+     DAWN_ASSERT(majorVersion != nullptr);
+     *majorVersion = static_cast<int32_t>(version.majorVersion);
+     if (minorVersion != nullptr) {
+@@ -42,8 +48,18 @@ void GetMacOSVersion(int32_t* majorVersion, int32_t* minorVersion) {
+ }
+ 
+ bool IsMacOSVersionAtLeast(uint32_t majorVersion, uint32_t minorVersion, uint32_t patchVersion) {
+-    return [NSProcessInfo.processInfo
+-        isOperatingSystemAtLeastVersion:{majorVersion, minorVersion, patchVersion}];
++    if (@available(macOS 10.10, *)) {
++        return [NSProcessInfo.processInfo
++            isOperatingSystemAtLeastVersion:{majorVersion, minorVersion, patchVersion}];
++    }
++    const auto version = chromium_legacy::LegacySystemVersion();
++    if (version.majorVersion != majorVersion) {
++        return version.majorVersion > majorVersion;
++    }
++    if (version.minorVersion != minorVersion) {
++        return version.minorVersion > minorVersion;
++    }
++    return version.patchVersion >= patchVersion;
+ }
+ 
+ }  // namespace dawn

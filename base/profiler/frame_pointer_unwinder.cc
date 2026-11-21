@@ -26,8 +26,11 @@ namespace {
 // `frame_pointer`.
 uintptr_t DecodeFrame(uintptr_t frame_pointer, uintptr_t* return_address) {
 #if BUILDFLAG(IS_APPLE)
-  return pthread_stack_frame_decode_np(frame_pointer, return_address);
-#else
+  if (__builtin_available(macOS 10.14, *)) {
+    return pthread_stack_frame_decode_np(frame_pointer, return_address);
+  }
+#endif
+#if !BUILDFLAG(IS_APPLE) || defined(ARCH_CPU_X86_64)
   const uintptr_t* fp = reinterpret_cast<uintptr_t*>(frame_pointer);
 
   // MSAN does not consider the frame pointers and return addresses to have
@@ -38,6 +41,9 @@ uintptr_t DecodeFrame(uintptr_t frame_pointer, uintptr_t* return_address) {
   uintptr_t next_frame = *fp;
   *return_address = *(UNSAFE_TODO(fp + 1));
   return next_frame;
+#else
+  // All supported Apple ARM platforms have the authenticated decoder above.
+  NOTREACHED();
 #endif
 }
 

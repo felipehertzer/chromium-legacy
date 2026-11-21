@@ -1,0 +1,37 @@
+# Copyright 2026 The Chromium Legacy Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+source_set("platform_support") {
+  sources = [
+    "apple/atomic_wait.h",
+    "apple/audit_token.h",
+    "apple/clock.h",
+    "apple/fd_io.h",
+    "apple/file_times.h",
+    "apple/product_version.h",
+    "apple/remove_all.h",
+  ]
+}
+
+if (is_mac) {
+  executable("base_probe") {
+    testonly = true
+    sources = [ "tests/base_probe.cc" ]
+    deps = [
+      "//base",
+      "//crypto",
+    ]
+  }
+
+  executable("runtime_probe") {
+    testonly = true
+    sources = [ "tests/runtime_probe.cc" ]
+    deps = [
+      ":platform_support",
+      "//third_party/boringssl",
+    ]
+    frameworks = [ "CoreServices.framework" ]
+    libs = [ "bsm" ]
+  }
+}

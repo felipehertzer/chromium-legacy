@@ -29,6 +29,12 @@ template("absl_source_set") {
       not_needed(invoker, "*")
     } else {
       forward_variables_from(invoker, "*")
+      if (is_apple && target_name == "kernel_timeout_internal") {
+        if (!defined(deps)) {
+          deps = []
+        }
+        deps += [ "//legacy:platform_support" ]
+      }
       configs -= [ "//build/config/compiler:chromium_code" ]
       configs += [
         "//build/config/compiler:no_chromium_code",

@@ -140,12 +140,14 @@ void MessagePumpCFRunLoopBase::ScheduleDelayedWork(
       g_timer_slack.load(std::memory_order_relaxed) &&
       !next_work_info.delayed_run_time.is_max() &&
       delayed_work_leeway_ != next_work_info.leeway) {
-    if (!next_work_info.leeway.is_zero()) {
-      // Specify slack based on |next_work_info|.
-      CFRunLoopTimerSetTolerance(delayed_work_timer_.get(),
-                                 next_work_info.leeway.InSecondsF());
-    } else {
-      CFRunLoopTimerSetTolerance(delayed_work_timer_.get(), 0);
+    if (__builtin_available(macOS 10.9, iOS 7.0, *)) {
+      if (!next_work_info.leeway.is_zero()) {
+        // Specify slack based on |next_work_info|.
+        CFRunLoopTimerSetTolerance(delayed_work_timer_.get(),
+                                   next_work_info.leeway.InSecondsF());
+      } else {
+        CFRunLoopTimerSetTolerance(delayed_work_timer_.get(), 0);
+      }
     }
     delayed_work_leeway_ = next_work_info.leeway;
   }

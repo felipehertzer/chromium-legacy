@@ -13,7 +13,7 @@ fi
 COMMON_ARGS=(-std=c++17 -fobjc-arc -Wall -Wextra -Werror -isysroot "$SDK_PATH" -I "$ROOT_DIR")
 # Compile the production fallback for Lion, even on Apple silicon hosts.
 # This Foundation-only helper needs no C++ standard library headers. The full
-# browser still needs a separately ported libc++ for Lion.
+# browser's C++ runtime is checked separately by legacy:runtime_probe.
 "$CXX_PATH" "${COMMON_ARGS[@]}" -nostdinc++ -target x86_64-apple-macosx10.7 -c \
     "$ROOT_DIR/base/mac/legacy_os_compat.mm" -o "$BUILD_DIR/legacy-lion.o"
 # Execute the same implementation natively, without the Chromium dependency tree.

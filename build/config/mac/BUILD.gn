@@ -9,6 +9,7 @@ import("//build/config/mac/mac_sdk.gni")
 import("//build/config/sysroot.gni")
 import("//build/toolchain/rbe.gni")
 import("//build/toolchain/siso.gni")
+import("//legacy/config.gni")
 
 # This is included by reference in the //build/config/compiler config that
 # is applied to all targets. It is here to separate out the logic.
@@ -50,6 +51,10 @@ config("compiler") {
 # that is Mac-only. Please see that target for advice on what should go in
 # :runtime_library vs. :compiler.
 config("runtime_library") {
+  if (legacy_force_fallbacks_for_tests) {
+    defines = [ "CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS=1" ]
+  }
+
   common_flags = [
     "-isysroot",
     rebase_path(sysroot, root_build_dir),

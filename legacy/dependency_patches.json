@@ -5,6 +5,26 @@
       "path": "third_party/libc++/src",
       "revision": "def01bd012f56d2fd8f5e2dc75dc28a846ab9cdb",
       "patch": "patches/libcxx-aligned-allocation.patch"
+    },
+    {
+      "path": "third_party/libc++/src",
+      "revision": "def01bd012f56d2fd8f5e2dc75dc28a846ab9cdb",
+      "patch": "patches/libcxx-lion-platform.patch"
+    },
+    {
+      "path": "third_party/boringssl/src",
+      "revision": "7968531b8f882e3ab4c38fac8d8674231f40442e",
+      "patch": "patches/boringssl-lion-entropy.patch"
+    },
+    {
+      "path": "third_party/perfetto",
+      "revision": "b6533c5df1422eae58d2d3212510d47483d2631c",
+      "patch": "patches/perfetto-legacy-signpost.patch"
+    },
+    {
+      "path": "third_party/dawn",
+      "revision": "69bfa246b5d7369f73c807d37648e25370f4db40",
+      "patch": "patches/dawn-lion-platform.patch"
     }
   ]
 }

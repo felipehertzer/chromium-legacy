@@ -15,6 +15,7 @@
 #include "third_party/boringssl/src/include/openssl/rand.h"
 
 #if BUILDFLAG(IS_MAC)
+#include <stdlib.h>
 #include <sys/random.h>
 #elif BUILDFLAG(IS_APPLE)
 #include <CommonCrypto/CommonRandom.h>
@@ -99,7 +100,11 @@ void RandBytesInternal(span<uint8_t> output, bool avoid_allocation) {
     return;
   }
 #if BUILDFLAG(IS_MAC)
-  CHECK(getentropy(output.data(), output.size()) == 0);
+  if (__builtin_available(macOS 10.12, *)) {
+    CHECK(getentropy(output.data(), output.size()) == 0);
+  } else {
+    arc4random_buf(output.data(), output.size());
+  }
 #elif BUILDFLAG(IS_APPLE)
   CHECK(CCRandomGenerateBytes(output.data(), output.size()) == kCCSuccess);
 #else

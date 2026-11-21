@@ -30,6 +30,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
 #include "base/system/sys_info_internal.h"
+#include "legacy/apple/product_version.h"
 
 namespace base {
 
@@ -81,8 +82,12 @@ std::string SysInfo::OperatingSystemVersion() {
 void SysInfo::OperatingSystemVersionNumbers(int32_t* major_version,
                                             int32_t* minor_version,
                                             int32_t* bugfix_version) {
-  NSOperatingSystemVersion version =
-      NSProcessInfo.processInfo.operatingSystemVersion;
+  NSOperatingSystemVersion version;
+  if (@available(macOS 10.10, *)) {
+    version = NSProcessInfo.processInfo.operatingSystemVersion;
+  } else {
+    version = chromium_legacy::LegacySystemVersion();
+  }
   *major_version = saturated_cast<int32_t>(version.majorVersion);
   *minor_version = saturated_cast<int32_t>(version.minorVersion);
   *bugfix_version = saturated_cast<int32_t>(version.patchVersion);

@@ -269,7 +269,8 @@ bool GetSystemMemoryInfo(SystemMemoryInfo* meminfo) {
 #if !(BUILDFLAG(IS_IOS) && defined(ARCH_CPU_X86_FAMILY))
   // PAGE_SIZE (aka vm_page_size) isn't constexpr, so this check needs to be
   // done at runtime.
-  DCHECK_EQ(PAGE_SIZE % 1024, 0u) << "Invalid page size";
+  DCHECK_EQ(static_cast<size_t>(PAGE_SIZE) % 1024, size_t{0})
+      << "Invalid page size";
 #else
   // On x86/x64, PAGE_SIZE used to be just a signed constant, I386_PGBYTES. When
   // Arm Macs started shipping, PAGE_SIZE was defined from day one to be

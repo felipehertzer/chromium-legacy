@@ -2195,6 +2195,8 @@ component("base") {
 
   # Desktop Mac.
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
+    frameworks += [ "CoreServices.framework" ]
     sources += [
       "apple/mach_port_rendezvous.cc",
       "apple/mach_port_rendezvous.h",
@@ -2222,10 +2224,10 @@ component("base") {
       "mac/launch_services_spi.h",
       "mac/launchd.cc",
       "mac/launchd.h",
-      "mac/login_util.cc",
-      "mac/login_util.h",
       "mac/legacy_os_compat.h",
       "mac/legacy_os_compat.mm",
+      "mac/login_util.cc",
+      "mac/login_util.h",
       "mac/mac_util.h",
       "mac/mac_util.mm",
       "mac/os_crash_dumps.cc",

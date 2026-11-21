@@ -76,7 +76,11 @@ CFStringRef GetKeychainAccessibilityAttribute() {
 #if BUILDFLAG(IS_IOS)
   return kSecAttrAccessibleAfterFirstUnlock;
 #else
-  return kSecAttrAccessibleWhenUnlocked;
+  if (@available(macOS 10.9, *)) {
+    return kSecAttrAccessibleWhenUnlocked;
+  }
+  // The pre-10.9 login keychain controls accessibility through its lock state.
+  return nullptr;
 #endif  // BUILDFLAG(IS_IOS)
 }
 

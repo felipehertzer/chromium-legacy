@@ -91,9 +91,20 @@ class LoginItemsFileList {
       // kLSSharedFileListDoNotMountVolumes is used so that we don't trigger
       // mounting when it's not expected by a user. Just listing the login
       // items should not cause any side-effects.
-      NSURL* item_url =
-          apple::CFToNSOwnershipCast(LSSharedFileListItemCopyResolvedURL(
-              item, kLSSharedFileListDoNotMountVolumes, /*outError=*/nullptr));
+      NSURL* item_url;
+      if (@available(macOS 10.10, *)) {
+        item_url =
+            apple::CFToNSOwnershipCast(LSSharedFileListItemCopyResolvedURL(
+                item, kLSSharedFileListDoNotMountVolumes, nullptr));
+      } else {
+        CFURLRef resolved_url = nullptr;
+        OSStatus status = LSSharedFileListItemResolve(
+            item, kLSSharedFileListDoNotMountVolumes, &resolved_url, nullptr);
+        item_url = apple::CFToNSOwnershipCast(resolved_url);
+        if (status != noErr) {
+          item_url = nil;
+        }
+      }
 #pragma clang diagnostic pop
 
       if (item_url && [item_url isEqual:url]) {
@@ -449,7 +460,7 @@ std::string GetOSDisplayName() {
 
 std::string GetPlatformSerialNumber() {
   base::mac::ScopedIOObject<io_service_t> expert_device(
-      IOServiceGetMatchingService(kIOMainPortDefault,
+      IOServiceGetMatchingService(MACH_PORT_NULL,
                                   IOServiceMatching("IOPlatformExpertDevice")));
   if (!expert_device) {
     DLOG(ERROR) << "Error retrieving the machine serial number.";
@@ -566,10 +577,14 @@ void OpenSystemSettingsPane(SystemSettingsPane pane,
       NOTREACHED();
   }
 
-  [NSWorkspace.sharedWorkspace
-                openURL:[NSURL URLWithString:url]
-          configuration:[NSWorkspaceOpenConfiguration configuration]
-      completionHandler:nil];
+  if (@available(macOS 10.15, *)) {
+    [NSWorkspace.sharedWorkspace
+                  openURL:[NSURL URLWithString:url]
+            configuration:[NSWorkspaceOpenConfiguration configuration]
+        completionHandler:nil];
+  } else {
+    [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:url]];
+  }
 }
 
 }  // namespace base::mac

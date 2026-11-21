@@ -92,6 +92,21 @@ ALLOC_TOKEN_FALLBACK void* __alloc_token_aligned_alloc(size_t alignment,
 #if defined(__ANDROID__) && __ANDROID_API__ < 28
   // aligned_alloc() is only available from API level 28.
   return memalign(alignment, size);
+#elif defined(__APPLE__)
+  if (__builtin_available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)) {
+    return aligned_alloc(alignment, size);
+  }
+  if (!alignment || size % alignment) {
+    errno = EINVAL;
+    return NULL;
+  }
+  void* result = NULL;
+  int error = posix_memalign(&result, alignment, size);
+  if (error) {
+    errno = error;
+    return NULL;
+  }
+  return result;
 #else
   return aligned_alloc(alignment, size);
 #endif

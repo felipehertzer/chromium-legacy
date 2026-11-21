@@ -1,0 +1,247 @@
+diff --git a/src/atomic.cpp b/src/atomic.cpp
+index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f318073590 100644
+--- a/src/atomic.cpp
++++ b/src/atomic.cpp
+@@ -16,6 +16,9 @@
+ #include <new>
+ #include <thread>
+ #include <type_traits>
++#if defined(__APPLE__)
++#  include "legacy/apple/atomic_wait.h"
++#endif
+ 
+ // Determine whether to use the public os_sync API on Apple platforms based on the deployment target.
+ // Otherwise we fall back to the private __ulock API.
+@@ -161,14 +164,29 @@ static void __platform_wake_by_address(void const* __ptr, bool __notify_one) {
+ #  else // !_LIBCPP_USE_OS_SYNC -- fall back to the private __ulock API
+ 
+ extern "C" int __ulock_wait(
+-    uint32_t operation, void* addr, uint64_t value, uint32_t timeout); /* timeout is specified in microseconds */
+-extern "C" int __ulock_wake(uint32_t operation, void* addr, uint64_t wake_value);
++    uint32_t operation, void* addr, uint64_t value, uint32_t timeout) __attribute__((weak_import));
++extern "C" int __ulock_wake(uint32_t operation, void* addr, uint64_t wake_value) __attribute__((weak_import));
+ 
+ // https://github.com/apple/darwin-xnu/blob/2ff845c2e033bd0ff64b5b6aa6063a1f8f65aa32/bsd/sys/ulock.h#L82
+ #    define UL_COMPARE_AND_WAIT 1
+ #    define UL_COMPARE_AND_WAIT64 5
+ #    define ULF_WAKE_ALL 0x00000100
+ 
++template <std::size_t _Size>
++static bool __can_use_ulock() {
++#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  return false;
++#endif
++  if (!__ulock_wait || !__ulock_wake)
++    return false;
++  if constexpr (_Size == 8) {
++    if (__builtin_available(macOS 10.15, *))
++      return true;
++    return false;
++  }
++  return true;
++}
++
+ template <std::size_t _Size, class MaybeTimeout>
+ static void __platform_wait_on_address(void const* __ptr, void const* __val, MaybeTimeout maybe_timeout_ns) {
+   auto __timeout_us = [&] {
+@@ -193,6 +211,13 @@ static void __platform_wait_on_address(void const* __ptr, void const* __val, May
+     }
+   }();
+ 
++  if (!__can_use_ulock<_Size>()) {
++    if constexpr (is_same_v<MaybeTimeout, NoTimeout>)
++      chromium_legacy::LegacyAtomicWait<_Size>(__ptr, __value, 0, false);
++    else
++      chromium_legacy::LegacyAtomicWait<_Size>(__ptr, __value, maybe_timeout_ns, true);
++    return;
++  }
+   __ulock_wait(
+       _Size == 4 ? UL_COMPARE_AND_WAIT : UL_COMPARE_AND_WAIT64, const_cast<void*>(__ptr), __value, __timeout_us);
+ }
+@@ -201,6 +226,10 @@ template <std::size_t _Size>
+ static void __platform_wake_by_address(void const* __ptr, bool __notify_one) {
+   static_assert(_Size == 8 || _Size == 4, "Can only wake up on 8 bytes or 4 bytes value");
+ 
++  if (!__can_use_ulock<_Size>()) {
++    chromium_legacy::LegacyAtomicNotify(__ptr);
++    return;
++  }
+   if constexpr (_Size == 4)
+     __ulock_wake(UL_COMPARE_AND_WAIT | (__notify_one ? 0 : ULF_WAKE_ALL), const_cast<void*>(__ptr), 0);
+   else
+diff --git a/src/chrono.cpp b/src/chrono.cpp
+index 30c1a1f119a923880a7013a3f6f32cad03e40d32..87b6d85873da5eb5bd44a993e1b67b457fb6f6c2 100644
+--- a/src/chrono.cpp
++++ b/src/chrono.cpp
+@@ -20,6 +20,10 @@
+ #  include <__support/ibm/gettod_zos.h> // gettimeofdayMonotonic
+ #endif
+ 
++#if defined(__APPLE__)
++#  include "legacy/apple/clock.h"
++#endif
++
+ #include <time.h> // clock_gettime and CLOCK_{MONOTONIC,REALTIME,MONOTONIC_RAW}
+ 
+ #if __has_include(<unistd.h>)
+@@ -132,7 +136,11 @@ static system_clock::time_point __libcpp_system_clock_now() {
+ 
+ static system_clock::time_point __libcpp_system_clock_now() {
+   struct timespec tp;
++  #if defined(__APPLE__)
++  if (0 != chromium_legacy::Realtime(&tp))
++#else
+   if (0 != clock_gettime(CLOCK_REALTIME, &tp))
++#endif
+     std::__throw_system_error(errno, "clock_gettime(CLOCK_REALTIME) failed");
+   return system_clock::time_point(seconds(tp.tv_sec) + microseconds(tp.tv_nsec / 1000));
+ }
+@@ -179,7 +187,7 @@ system_clock::time_point system_clock::from_time_t(time_t t) noexcept { return s
+ // acceptable implementation of steady_clock.
+ static steady_clock::time_point __libcpp_steady_clock_now() {
+   struct timespec tp;
+-  if (0 != clock_gettime(CLOCK_MONOTONIC_RAW, &tp))
++  if (0 != chromium_legacy::Monotonic(&tp))
+     std::__throw_system_error(errno, "clock_gettime(CLOCK_MONOTONIC_RAW) failed");
+   return steady_clock::time_point(seconds(tp.tv_sec) + nanoseconds(tp.tv_nsec));
+ }
+diff --git a/src/filesystem/filesystem_clock.cpp b/src/filesystem/filesystem_clock.cpp
+index 0d360c51a7a37ea06db33c1e32b5bdaa583d886d..0de392bbf72b8d14f01443d98e4807ada6e5ea18 100644
+--- a/src/filesystem/filesystem_clock.cpp
++++ b/src/filesystem/filesystem_clock.cpp
+@@ -13,6 +13,9 @@
+ #include <filesystem>
+ #include <ratio>
+ #include <time.h>
++#if defined(__APPLE__)
++#  include "legacy/apple/clock.h"
++#endif
+ 
+ #ifdef _WIN32
+ #  include "time_utils.h"
+@@ -66,7 +69,11 @@ _FilesystemClock::time_point _FilesystemClock::now() noexcept {
+ #elif defined(_LIBCPP_HAS_CLOCK_GETTIME)
+   typedef chrono::duration<rep, nano> __nsecs;
+   struct timespec tp;
++  #if defined(__APPLE__)
++  if (0 != chromium_legacy::Realtime(&tp))
++#else
+   if (0 != clock_gettime(CLOCK_REALTIME, &tp))
++#endif
+     std::__throw_system_error(errno, "clock_gettime(CLOCK_REALTIME) failed");
+   return time_point(__secs(tp.tv_sec) + chrono::duration_cast<duration>(__nsecs(tp.tv_nsec)));
+ #else
+diff --git a/src/filesystem/operations.cpp b/src/filesystem/operations.cpp
+index 3ff62c102d0ad0af8a28108d73548cf0ff4daca2..ace8519a532e9d916ba94be558e38f4a64fa182f 100644
+--- a/src/filesystem/operations.cpp
++++ b/src/filesystem/operations.cpp
+@@ -40,6 +40,11 @@
+ #include <fcntl.h> /* values for fchmodat */
+ #include <time.h>
+ 
++#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
++    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101000
++#  include "legacy/apple/remove_all.h"
++#endif
++
+ // since Linux 4.5 and FreeBSD 13, but the Linux libc wrapper is only provided by glibc >= 2.27 and musl
+ #if _LIBCPP_GLIBC_PREREQ(2, 27) || _LIBCPP_HAS_MUSL_LIBC || defined(__FreeBSD__)
+ #  define _LIBCPP_FILESYSTEM_USE_COPY_FILE_RANGE
+@@ -756,10 +761,18 @@ void __permissions(const path& p, perms prms, perm_options opts, error_code* ec)
+   const auto real_perms = static_cast<detail::ModeT>(prms & perms::mask);
+ 
+ #if defined(AT_SYMLINK_NOFOLLOW) && defined(AT_FDCWD)
+-  const int flags = set_sym_perms ? AT_SYMLINK_NOFOLLOW : 0;
+-  if (detail::fchmodat(AT_FDCWD, p.c_str(), real_perms, flags) == -1) {
+-    return err.report(detail::get_last_error());
++#if defined(__APPLE__)
++  if (__builtin_available(macOS 10.10, *)) {
++#endif
++    const int flags = set_sym_perms ? AT_SYMLINK_NOFOLLOW : 0;
++    if (detail::fchmodat(AT_FDCWD, p.c_str(), real_perms, flags) == -1)
++      return err.report(detail::get_last_error());
++#if defined(__APPLE__)
++  } else if ((set_sym_perms ? ::lchmod(p.c_str(), real_perms)
++                           : ::chmod(p.c_str(), real_perms)) == -1) {
++    return err.report(capture_errno());
+   }
++#endif
+ #else
+   if (set_sym_perms)
+     return err.report(errc::operation_not_supported);
+@@ -878,6 +891,9 @@ private:
+ };
+ _LIBCPP_CTAD_SUPPORTED_FOR_TYPE(scope_exit);
+ 
++#if defined(__APPLE__)
++__attribute__((availability(macos, introduced=10.10)))
++#endif
+ uintmax_t remove_all_impl(int parent_directory, const path& p, error_code& ec) {
+   // First, try to open the path as a directory.
+   const int options = O_CLOEXEC | O_RDONLY | O_DIRECTORY | O_NOFOLLOW;
+@@ -951,7 +967,23 @@ uintmax_t remove_all_impl(int parent_directory, const path& p, error_code& ec) {
+ uintmax_t __remove_all(const path& p, error_code* ec) {
+   ErrorHandler<uintmax_t> err("remove_all", ec, &p);
+   error_code mec;
+-  uintmax_t count = remove_all_impl(AT_FDCWD, p, mec);
++  uintmax_t count;
++#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
++    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101000
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.10, *)) {
++    count = remove_all_impl(AT_FDCWD, p, mec);
++  } else
++#endif
++  {
++    uint64_t legacy_count;
++    if (chromium_legacy::LegacyRemoveAll(p.c_str(), &legacy_count))
++      mec = detail::capture_errno();
++    count = legacy_count;
++  }
++#else
++  count = remove_all_impl(AT_FDCWD, p, mec);
++#endif
+   if (mec)
+     return err.report(mec);
+   return count;
+diff --git a/src/filesystem/time_utils.h b/src/filesystem/time_utils.h
+index 2b01ea95425863fdd67280bfd36cfe608b3e20fa..c3b4953c6c91a33795d3210fe6c1108cc7da1b41 100644
+--- a/src/filesystem/time_utils.h
++++ b/src/filesystem/time_utils.h
+@@ -19,6 +19,10 @@
+ #include <type_traits>
+ #include <utility>
+ 
++#if defined(__APPLE__)
++#  include "legacy/apple/file_times.h"
++#endif
++
+ #include "error.h"
+ #include "format_string.h"
+ 
+@@ -313,11 +317,23 @@ inline bool posix_utimes(const path& p, std::array<TimeSpec, 2> const& TS, error
+ 
+ #    if defined(_LIBCPP_USE_UTIMENSAT)
+ inline bool posix_utimensat(const path& p, std::array<TimeSpec, 2> const& TS, error_code& ec) {
+-  if (::utimensat(AT_FDCWD, p.c_str(), TS.data(), 0) == -1) {
++#if defined(__APPLE__)
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.13, *)) {
++    if (::utimensat(AT_FDCWD, p.c_str(), TS.data(), 0) == 0)
++      return false;
+     ec = capture_errno();
+     return true;
+   }
+-  return false;
++#endif
++  if (chromium_legacy::LegacySetFileTimes(p.c_str(), TS[0], TS[1]) == 0)
++    return false;
++#else
++  if (::utimensat(AT_FDCWD, p.c_str(), TS.data(), 0) == 0)
++    return false;
++#endif
++  ec = capture_errno();
++  return true;
+ }
+ #    endif
+ 

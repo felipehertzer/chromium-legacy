@@ -52,16 +52,16 @@ BlockReturningStackTrace MakeBlockReturningStackTrace(
 // near the bottom, because the stack abstraction is mapped to C++ classes, this
 // cannot be allowed.
 NSMutableArray<BlockReturningStackTrace>* GetLevelStackTraces() {
-  NSMutableArray* traces =
-      NSThread.currentThread
-          .threadDictionary[@"CrScopedNSAutoreleasePoolTraces"];
+  NSMutableArray* traces = [NSThread.currentThread.threadDictionary
+      objectForKey:@"CrScopedNSAutoreleasePoolTraces"];
   if (traces) {
     return traces;
   }
 
   traces = [NSMutableArray array];
-  NSThread.currentThread.threadDictionary[@"CrScopedNSAutoreleasePoolTraces"] =
-      traces;
+  [NSThread.currentThread.threadDictionary
+      setObject:traces
+         forKey:@"CrScopedNSAutoreleasePoolTraces"];
   return traces;
 }
 

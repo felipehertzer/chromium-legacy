@@ -61,9 +61,10 @@ NSArray* CommandLineArgsToArgsArray(const CommandLineArgs& command_line_args) {
   return @[];
 }
 
-NSWorkspaceOpenConfiguration* GetOpenConfiguration(
-    LaunchApplicationOptions options,
-    const CommandLineArgs& command_line_args) {
+__attribute__((availability(macos, introduced = 10.15)))
+NSWorkspaceOpenConfiguration*
+GetOpenConfiguration(LaunchApplicationOptions options,
+                     const CommandLineArgs& command_line_args) {
   NSWorkspaceOpenConfiguration* config =
       [NSWorkspaceOpenConfiguration configuration];
 
@@ -83,6 +84,68 @@ NSWorkspaceOpenConfiguration* GetOpenConfiguration(
 
   return config;
 }
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+// Launch Services accepts both argv and URL events on Lion. A synchronous
+// launch on a worker gives us the actual PID before invoking the callback.
+void LaunchLegacyApplication(NSURL* bundle_url,
+                             NSArray* arguments,
+                             NSArray* urls,
+                             LaunchApplicationOptions options,
+                             void (^completion)(NSRunningApplication*,
+                                                NSError*)) {
+  dispatch_async(
+      dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        FSRef application;
+        OSStatus status = noErr;
+        ProcessSerialNumber process{};
+        if (!CFURLGetFSRef(apple::NSToCFPtrCast(bundle_url), &application)) {
+          status = fnfErr;
+        } else {
+          LSApplicationParameters parameters{};
+          parameters.application = &application;
+          parameters.argv = apple::NSToCFPtrCast(arguments);
+          if (!options.activate) {
+            parameters.flags |= kLSLaunchDontSwitch;
+          }
+          if (options.create_new_instance) {
+            parameters.flags |= kLSLaunchNewInstance;
+          }
+          if (options.prompt_user_if_needed) {
+            parameters.flags |= kLSLaunchAndDisplayErrors;
+          }
+          if (options.hidden_in_background) {
+            // The newer invisible-launch SPI is absent on Lion. Keep the app
+            // hidden and inactive using its supported launch flags.
+            parameters.flags |= kLSLaunchAndHide | kLSLaunchDontSwitch |
+                                kLSLaunchDontAddToRecents;
+          }
+          if (urls.count) {
+            status = LSOpenURLsWithRole(apple::NSToCFPtrCast(urls), kLSRolesAll,
+                                        nullptr, &parameters, &process, 1);
+          } else {
+            status = LSOpenApplication(&parameters, &process);
+          }
+        }
+        pid_t pid = -1;
+        if (status == noErr) {
+          status = GetProcessPID(&process, &pid);
+        }
+        NSRunningApplication* app =
+            status == noErr ? [NSRunningApplication
+                                  runningApplicationWithProcessIdentifier:pid]
+                            : nil;
+        if (!app && status == noErr) {
+          status = procNotFound;
+        }
+        completion(app, status == noErr
+                            ? nil
+                            : [NSError errorWithDomain:NSOSStatusErrorDomain
+                                                  code:status
+                                              userInfo:nil]);
+      });
+}
+#endif
 
 void LogResultAndInvokeCallback(const base::FilePath& app_bundle_path,
                                 bool create_new_instance,
@@ -139,18 +202,25 @@ void LaunchApplication(const base::FilePath& app_bundle_path,
         });
       };
 
-  NSWorkspaceOpenConfiguration* configuration =
-      GetOpenConfiguration(options, command_line_args);
-
-  if (ns_urls) {
-    [NSWorkspace.sharedWorkspace openURLs:ns_urls
-                     withApplicationAtURL:bundle_url
-                            configuration:configuration
-                        completionHandler:action_block];
+  if (@available(macOS 10.15, *)) {
+    NSWorkspaceOpenConfiguration* configuration =
+        GetOpenConfiguration(options, command_line_args);
+    if (ns_urls) {
+      [NSWorkspace.sharedWorkspace openURLs:ns_urls
+                       withApplicationAtURL:bundle_url
+                              configuration:configuration
+                          completionHandler:action_block];
+    } else {
+      [NSWorkspace.sharedWorkspace openApplicationAtURL:bundle_url
+                                          configuration:configuration
+                                      completionHandler:action_block];
+    }
   } else {
-    [NSWorkspace.sharedWorkspace openApplicationAtURL:bundle_url
-                                        configuration:configuration
-                                    completionHandler:action_block];
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+    LaunchLegacyApplication(bundle_url,
+                            CommandLineArgsToArgsArray(command_line_args),
+                            ns_urls, options, action_block);
+#endif
   }
 }
 

@@ -553,6 +553,12 @@ target(libcxx_target_type, "libc++") {
   ]
 
   deps = [ "//third_party/llvm-libc:llvm-libc-shared" ]
+  if (is_apple) {
+    deps += [ "//legacy:platform_support" ]
+  }
+  if (is_mac) {
+    frameworks = [ "CoreServices.framework" ]
+  }
 
   if (use_clang_modules) {
     # TODO(https://github.com/llvm/llvm-project/issues/127012): We don't enable

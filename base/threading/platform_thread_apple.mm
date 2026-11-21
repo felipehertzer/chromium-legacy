@@ -156,7 +156,33 @@ struct TimeConstraints {
 // PlatformThread creation.
 constinit std::atomic<bool> g_use_optimized_realtime_threading(
     kOptimizedRealtimeThreadingMacDefaultEnabled);
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1080
+// Lion lacks the generic runtime support for 24-byte atomic operations.
+// This data is updated only during feature initialization; never hold the
+// mutex while calling scheduler or feature APIs.
+class LegacyTimeConstraints {
+ public:
+  void store(TimeConstraints value) {
+    CHECK_EQ(pthread_mutex_lock(&mutex_), 0);
+    value_ = value;
+    CHECK_EQ(pthread_mutex_unlock(&mutex_), 0);
+  }
+  TimeConstraints load() {
+    CHECK_EQ(pthread_mutex_lock(&mutex_), 0);
+    TimeConstraints result = value_;
+    CHECK_EQ(pthread_mutex_unlock(&mutex_), 0);
+    return result;
+  }
+
+ private:
+  pthread_mutex_t mutex_ = PTHREAD_MUTEX_INITIALIZER;
+  TimeConstraints value_{};
+};
+constinit LegacyTimeConstraints g_time_constraints;
+#else
 constinit std::atomic<TimeConstraints> g_time_constraints;
+#endif
 
 }  // namespace
 
@@ -180,16 +206,18 @@ void PlatformThreadApple::InitializeFeatures() {
 void PlatformThreadApple::SetCurrentThreadRealtimePeriodValue(
     TimeDelta realtime_period) {
   if (g_use_optimized_realtime_threading.load()) {
-    NSThread.currentThread.threadDictionary[kRealtimePeriodNsKey] =
-        @(realtime_period.InNanoseconds());
+    [NSThread.currentThread.threadDictionary
+        setObject:@(realtime_period.InNanoseconds())
+           forKey:kRealtimePeriodNsKey];
   }
 }
 
 namespace {
 
 TimeDelta GetCurrentThreadRealtimePeriod() {
-  NSNumber* period = apple::ObjCCast<NSNumber>(
-      NSThread.currentThread.threadDictionary[kRealtimePeriodNsKey]);
+  NSNumber* period =
+      apple::ObjCCast<NSNumber>([NSThread.currentThread.threadDictionary
+          objectForKey:kRealtimePeriodNsKey]);
 
   return period ? Nanoseconds(period.longLongValue) : TimeDelta();
 }
@@ -302,7 +330,9 @@ void SetPriorityRealtimeAudio(TimeDelta realtime_period) {
   return;
 }
 
-std::optional<qos_class_t> ThreadTypeToQoSClass(ThreadType thread_type) {
+__attribute__((availability(macos,
+                            introduced = 10.10))) std::optional<qos_class_t>
+ThreadTypeToQoSClass(ThreadType thread_type) {
   switch (thread_type) {
     case ThreadType::kBackground:
       return QOS_CLASS_BACKGROUND;
@@ -334,24 +364,49 @@ namespace internal {
 
 void SetCurrentThreadTypeImpl(ThreadType thread_type,
                               MessagePumpType pump_type_hint) {
-  std::optional<qos_class_t> qos_class = ThreadTypeToQoSClass(thread_type);
+  if (__builtin_available(macOS 10.10, iOS 8.0, *)) {
+    std::optional<qos_class_t> qos_class = ThreadTypeToQoSClass(thread_type);
 
-  if (qos_class) {
-    pthread_set_qos_class_self_np(*qos_class, 0);
-  } else {
-    CHECK_EQ(thread_type, ThreadType::kRealtimeAudio);
-    SetPriorityRealtimeAudio(GetCurrentThreadRealtimePeriod());
+    if (qos_class) {
+      pthread_set_qos_class_self_np(*qos_class, 0);
+    } else {
+      CHECK_EQ(thread_type, ThreadType::kRealtimeAudio);
+      SetPriorityRealtimeAudio(GetCurrentThreadRealtimePeriod());
+    }
+    return;
   }
+  if (thread_type == ThreadType::kRealtimeAudio) {
+    SetPriorityRealtimeAudio(GetCurrentThreadRealtimePeriod());
+    return;
+  }
+  double priority = 0.5;
+  switch (thread_type) {
+    case ThreadType::kBackground:
+      priority = 0.0;
+      break;
+    case ThreadType::kUtility:
+      priority = 0.25;
+      break;
+    case ThreadType::kPresentation:
+    case ThreadType::kAudioProcessing:
+      priority = 0.75;
+      break;
+    default:
+      break;
+  }
+  [NSThread.currentThread setThreadPriority:priority];
 }
 
 PlatformPriorityOverride SetThreadTypeOverride(
     PlatformThreadHandle thread_handle,
     ThreadType thread_type) {
-  std::optional<qos_class_t> qos_class = ThreadTypeToQoSClass(thread_type);
+  if (__builtin_available(macOS 10.10, iOS 8.0, *)) {
+    std::optional<qos_class_t> qos_class = ThreadTypeToQoSClass(thread_type);
 
-  if (qos_class) {
-    return pthread_override_qos_class_start_np(thread_handle.platform_handle(),
-                                               *qos_class, 0);
+    if (qos_class) {
+      return pthread_override_qos_class_start_np(
+          thread_handle.platform_handle(), *qos_class, 0);
+    }
   }
 
   return PlatformPriorityOverride();
@@ -364,7 +419,9 @@ void RemoveThreadTypeOverride(
   if (priority_override_handle == nullptr) {
     return;
   }
-  pthread_override_qos_class_end_np(priority_override_handle);
+  if (__builtin_available(macOS 10.10, iOS 8.0, *)) {
+    pthread_override_qos_class_end_np(priority_override_handle);
+  }
 }
 
 }  // namespace internal
@@ -376,19 +433,32 @@ ThreadType PlatformThreadBase::GetCurrentEffectiveThreadTypeForTest() {
     return ThreadType::kRealtimeAudio;
   }
 
-  qos_class_t qos_class = qos_class_self();
-  switch (qos_class) {
-    case QOS_CLASS_BACKGROUND:
-      return ThreadType::kBackground;
-    case QOS_CLASS_UTILITY:
-      return ThreadType::kUtility;
-    case QOS_CLASS_USER_INITIATED:
-      return ThreadType::kDefault;
-    case QOS_CLASS_USER_INTERACTIVE:
-      return ThreadType::kPresentation;
-    default:
-      return ThreadType::kDefault;
+  if (__builtin_available(macOS 10.10, iOS 8.0, *)) {
+    qos_class_t qos_class = qos_class_self();
+    switch (qos_class) {
+      case QOS_CLASS_BACKGROUND:
+        return ThreadType::kBackground;
+      case QOS_CLASS_UTILITY:
+        return ThreadType::kUtility;
+      case QOS_CLASS_USER_INITIATED:
+        return ThreadType::kDefault;
+      case QOS_CLASS_USER_INTERACTIVE:
+        return ThreadType::kPresentation;
+      default:
+        return ThreadType::kDefault;
+    }
   }
+  const double priority = NSThread.currentThread.threadPriority;
+  if (priority < 0.125) {
+    return ThreadType::kBackground;
+  }
+  if (priority < 0.375) {
+    return ThreadType::kUtility;
+  }
+  if (priority >= 0.625) {
+    return ThreadType::kPresentation;
+  }
+  return ThreadType::kDefault;
 }
 
 size_t GetDefaultThreadStackSize(const pthread_attr_t& attributes) {

@@ -22,7 +22,7 @@ class CRYPTO_EXPORT ScopedLAContext {
  public:
 #if defined(__OBJC__)
   // Takes ownership of |lacontext|.
-  explicit ScopedLAContext(LAContext* lacontext);
+  explicit ScopedLAContext(LAContext* lacontext) API_AVAILABLE(macos(10.10));
 #endif  // defined(__OBJC__)
   ~ScopedLAContext();
   ScopedLAContext(ScopedLAContext&) = delete;
@@ -33,7 +33,7 @@ class CRYPTO_EXPORT ScopedLAContext {
 #if defined(__OBJC__)
   // release returns the last `LAContext` passed on construction and drops its
   // reference to it. It is invalid to to call release more than once.
-  LAContext* release();
+  LAContext* release() API_AVAILABLE(macos(10.10));
 #endif  // defined(__OBJC__)
 
  private:

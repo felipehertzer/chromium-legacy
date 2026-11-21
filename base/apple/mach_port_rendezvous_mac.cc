@@ -27,6 +27,7 @@
 #include "base/numerics/byte_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "legacy/apple/audit_token.h"
 
 namespace base {
 
@@ -173,7 +174,7 @@ void MachPortRendezvousServerMac::ClearClientDataForTesting() {
 
 std::optional<MachPortsForRendezvous>
 MachPortRendezvousServerMac::PortsForClient(audit_token_t audit_token) {
-  pid_t pid = audit_token_to_pid(audit_token);
+  pid_t pid = chromium_legacy::AuditTokenPid(audit_token);
   std::optional<mac::ProcessRequirement> requirement;
   MachPortsForRendezvous ports_to_send;
 
