@@ -1210,6 +1210,7 @@ void CARendererLayerTree::ClipAndSortingLayer::CommitToCA(
       ClipCALayerToRRectF(rounded_corner_ca_layer_, rounded_corner_bounds_,
                           tree()->scale_factor_);
     } else {
+      rounded_corner_ca_layer_.mask = nil;
       rounded_corner_ca_layer_.masksToBounds = false;
       rounded_corner_ca_layer_.position = CGPointZero;
       rounded_corner_ca_layer_.bounds = CGRectZero;

@@ -47,6 +47,7 @@ AppearanceProperties AppearancePropertiesForKey(const ColorProviderKey& key) {
           key.contrast_mode == ColorProviderKey::ContrastMode::kHigh};
 }
 
+API_AVAILABLE(macos(10.14))
 NSAppearance* AppearanceForKey(const ColorProviderKey& key) {
   AppearanceProperties properties = AppearancePropertiesForKey(key);
 
@@ -68,6 +69,25 @@ NSAppearance* AppearanceForKey(const ColorProviderKey& key) {
   }
 }
 
+void WithAppearanceForKey(const ColorProviderKey& key, void (^load_colors)()) {
+  if (@available(macOS 10.14, *)) {
+    NSAppearance* appearance = AppearanceForKey(key);
+    if (@available(macOS 11.0, *)) {
+      [appearance performAsCurrentDrawingAppearance:load_colors];
+    } else {
+      NSAppearance* previous = NSAppearance.currentAppearance;
+      @try {
+        NSAppearance.currentAppearance = appearance;
+        load_colors();
+      } @finally {
+        NSAppearance.currentAppearance = previous;
+      }
+    }
+  } else {
+    load_colors();
+  }
+}
+
 SkColor NSSystemColorToSkColor(NSColor* color) {
   // It is expected that the colors that will flow through this function will be
   // catalog colors. Being a catalog color means that it doesn't have explicit
@@ -83,22 +103,34 @@ SkColor NSSystemColorToSkColor(NSColor* color) {
   // by going through a CGColorRef. TODO: Is this still the case? What is the
   // situation where converting as an NSColor fails but converting as a
   // CGColorRef succeeds?
-  CGColorRef cg_color = color.CGColor;
-  size_t component_count = CGColorGetNumberOfComponents(cg_color);
+  if (@available(macOS 10.8, *)) {
+    CGColorRef cg_color = color.CGColor;
+    size_t component_count = CGColorGetNumberOfComponents(cg_color);
 
-  // 4 components means RGBA.
-  if (component_count == 4) {
-    return skia::CGColorRefToSkColor(cg_color);
+    // 4 components means RGBA.
+    if (component_count == 4) {
+      return skia::CGColorRefToSkColor(cg_color);
+    }
+
+    // 1-2 components means a grayscale channel and maybe an alpha channel,
+    // which CGColorRefToSkColor will not like. But RGB is additive, so the
+    // conversion is easy (RGB to grayscale is less easy).
+    CHECK(component_count == 1 || component_count == 2);
+    float gray_value = *CGColorGetComponents(cg_color);
+    float alpha_value = CGColorGetAlpha(cg_color);
+
+    return SkColor4f{gray_value, gray_value, gray_value, alpha_value}
+        .toSkColor();
   }
-
-  // 1-2 components means a grayscale channel and maybe an alpha channel, which
-  // CGColorRefToSkColor will not like. But RGB is additive, so the conversion
-  // is easy (RGB to grayscale is less easy).
-  CHECK(component_count == 1 || component_count == 2);
-  float gray_value = *CGColorGetComponents(cg_color);
-  float alpha_value = CGColorGetAlpha(cg_color);
-
-  return SkColor4f{gray_value, gray_value, gray_value, alpha_value}.toSkColor();
+  NSColor* gray_color =
+      [color colorUsingColorSpace:NSColorSpace.genericGrayColorSpace];
+  CHECK(gray_color);
+  CGFloat gray = 0;
+  CGFloat alpha = 0;
+  [gray_color getWhite:&gray alpha:&alpha];
+  return SkColor4f{static_cast<float>(gray), static_cast<float>(gray),
+                   static_cast<float>(gray), static_cast<float>(alpha)}
+      .toSkColor();
 }
 
 }  // namespace
@@ -111,7 +143,7 @@ void AddNativeCoreColorMixer(ColorProvider* provider,
         NSSystemColorToSkColor(NSColor.keyboardFocusIndicatorColor), 0x66)};
   };
 
-  [AppearanceForKey(key) performAsCurrentDrawingAppearance:load_colors];
+  WithAppearanceForKey(key, load_colors);
 }
 
 void AddNativeColorSetInColorMixer(ColorMixer& mixer) {
@@ -131,8 +163,14 @@ void AddNativeUiColorMixer(ColorProvider* provider,
 
     AddNativeColorSetInColorMixer(mixer);
 
+    NSArray<NSColor*>* alternating_colors = nil;
+    if (@available(macOS 10.14, *)) {
+      alternating_colors = NSColor.alternatingContentBackgroundColors;
+    } else {
+      alternating_colors = NSColor.controlAlternatingRowBackgroundColors;
+    }
     mixer[kColorTableBackgroundAlternate] = {
-        NSSystemColorToSkColor(NSColor.alternatingContentBackgroundColors[1])};
+        NSSystemColorToSkColor([alternating_colors objectAtIndex:1])};
     if (!key.user_color.has_value()) {
       mixer[kColorSysStateFocusRing] = PickGoogleColor(
           NSSystemColorToSkColor(NSColor.keyboardFocusIndicatorColor),
@@ -160,7 +198,7 @@ void AddNativeUiColorMixer(ColorProvider* provider,
     mixer[kColorTableRowHighlight] = {kColorSysStateHoverOnSubtle};
   };
 
-  [AppearanceForKey(key) performAsCurrentDrawingAppearance:load_colors];
+  WithAppearanceForKey(key, load_colors);
 }
 
 void AddNativePostprocessingMixer(ColorProvider* provider,

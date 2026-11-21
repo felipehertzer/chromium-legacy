@@ -69,12 +69,15 @@ void RecordVSyncCallbackDelay(base::TimeDelta delay) {
 }
 #endif  // BUILDFLAG(IS_MAC)
 
-id<MTLDevice> GetMTLDevice(scoped_refptr<SharedContextState> context_state) {
+id GetMTLDevice(scoped_refptr<SharedContextState> context_state) {
 #if BUILDFLAG(SKIA_USE_DAWN)
   if (context_state->IsGraphiteDawnMetal()) {
     CHECK(context_state->dawn_context_provider());
-    return dawn::native::metal::GetMTLDevice(
-        context_state->dawn_context_provider()->GetDevice().Get());
+    if (@available(macOS 13.0, iOS 16.0, *)) {
+      return dawn::native::metal::GetMTLDevice(
+          context_state->dawn_context_provider()->GetDevice().Get());
+    }
+    return nil;
   }
 #endif
   if (context_state->GrContextIsGL()) {

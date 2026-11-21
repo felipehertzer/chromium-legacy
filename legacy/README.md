@@ -84,12 +84,17 @@ or replaces a Chromium 159 dependency.
   cannot clip directly. Lion uses ordinary CALayers instead of the 10.8 video
   display layer. Protected video promotion is rejected before capture protection
   exists. HDR copying requires 10.15 and a Metal device.
+- IOSurface sharing keeps GL fence waits when no Metal device can be queried.
+  Current Dawn image access requires macOS 13; ANGLE shared events require the
+  corresponding OS API. Native color loading uses the original appearance
+  scope on Catalina and older selectors for system colors and input coordinates.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
 Before 10.12, Base's continuous-clock fallback uses `mach_absolute_time`, which
 excludes system sleep. The pre-10.15 application-launch fallback can hide an
 app and avoid activation, but lacks the newer invisible-background-launch SPI.
+Before 10.12, IOSurfaces remain resident because the purge API is unavailable.
 These limitations need review alongside the remaining browser port.
 
 ## Verified so far

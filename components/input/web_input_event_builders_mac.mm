@@ -132,8 +132,10 @@ EventLocationInfo GetWebEventLocationForEventInView(
     bool unaccelerated_movement = false) {
   EventLocationInfo result;
 
+  NSPoint location = event.locationInWindow;
   NSPoint screen_local =
-      [view.window convertPointToScreen:event.locationInWindow];
+      [view.window convertRectToScreen:NSMakeRect(location.x, location.y, 0, 0)]
+          .origin;
   NSScreen* primary_screen =
       (NSScreen.screens.count > 0) ? NSScreen.screens.firstObject : nil;
 

@@ -158,7 +158,7 @@ class GPU_GLES2_EXPORT IOSurfaceImageBacking
   // since there's no other synchronization mechanism, and 2) accessing the
   // IOSurface on different GPUs/MTLDevices since there could be shadow copies
   // performed by the kernel.
-  void WaitForCommandsToBeScheduled(id<MTLDevice> waiting_device = nil)
+  void WaitForCommandsToBeScheduled(id waiting_device = nil)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   IOSurfaceRef GetIOSurface();
@@ -265,13 +265,13 @@ class GPU_GLES2_EXPORT IOSurfaceImageBacking
 
   void AddSharedEventForEndAccess(id<MTLSharedEvent> shared_event,
                                   uint64_t signal_value,
-                                  bool readonly)
-      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+                                  bool readonly) EXCLUSIVE_LOCKS_REQUIRED(lock_)
+      API_AVAILABLE(macos(10.14), ios(12.0));
   void ProcessSharedEventsForBeginAccess(
       bool readonly,
       base::FunctionRef<void(id<MTLSharedEvent> shared_event,
                              uint64_t signaled_value)> process_fn)
-      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+      EXCLUSIVE_LOCKS_REQUIRED(lock_) API_AVAILABLE(macos(10.14), ios(12.0));
 
   // Guarded by ScopedIOSurfaceLock instead of |lock_| for memory access.
   const gfx::ScopedIOSurface io_surface_;
@@ -343,7 +343,7 @@ class GPU_GLES2_EXPORT IOSurfaceImageBacking
   base::flat_map<EGLDisplay, std::unique_ptr<gl::GLFenceEGL>>
       egl_commands_scheduled_fences_ GUARDED_BY(lock_);
 
-  using ScopedSharedEvent = base::apple::scoped_nsprotocol<id<MTLSharedEvent>>;
+  using ScopedSharedEvent = base::apple::scoped_nsprotocol<id>;
   struct SharedEventCompare {
     bool operator()(const ScopedSharedEvent& lhs,
                     const ScopedSharedEvent& rhs) const {
