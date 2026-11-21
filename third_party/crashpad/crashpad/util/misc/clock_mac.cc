@@ -16,10 +16,18 @@
 
 #include <time.h>
 
+#include "base/check.h"
+#include "legacy/apple/clock.h"
+
 namespace crashpad {
 
 uint64_t ClockMonotonicNanoseconds() {
-  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+  if (__builtin_available(macOS 10.12, *)) {
+    return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+  }
+  timespec now;
+  CHECK(chromium_legacy::LegacyMonotonic(&now) == 0);
+  return static_cast<uint64_t>(now.tv_sec) * 1000000000 + static_cast<uint64_t>(now.tv_nsec);
 }
 
 }  // namespace crashpad

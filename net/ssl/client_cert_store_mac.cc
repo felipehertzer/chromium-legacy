@@ -56,8 +56,9 @@ OSStatus CopyCertChain(
   // Create an SSL policy ref configured for client cert evaluation.
   ScopedCFTypeRef<SecPolicyRef> ssl_policy(
       SecPolicyCreateSSL(/*server=*/false, /*hostname=*/nullptr));
-  if (!ssl_policy)
+  if (!ssl_policy) {
     return errSecNoPolicyModule;
+  }
 
   // Create a SecTrustRef.
   ScopedCFTypeRef<CFArrayRef> input_certs(CFArrayCreate(
@@ -70,8 +71,9 @@ OSStatus CopyCertChain(
     result = SecTrustCreateWithCertificates(input_certs.get(), ssl_policy.get(),
                                             &trust_ref);
   }
-  if (result)
+  if (result) {
     return result;
+  }
   ScopedCFTypeRef<SecTrustRef> trust(trust_ref);
 
   // Evaluate trust, which creates the cert chain.
@@ -80,8 +82,31 @@ OSStatus CopyCertChain(
     // The return value is intentionally ignored since we only care about
     // building a cert chain, not whether it is trusted (the server is the
     // only one that can decide that.)
-    std::ignore = SecTrustEvaluateWithError(trust.get(), nullptr);
-    out_cert_chain->reset(SecTrustCopyCertificateChain(trust.get()));
+    if (__builtin_available(macOS 10.14, *)) {
+      std::ignore = SecTrustEvaluateWithError(trust.get(), nullptr);
+    } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101400
+      SecTrustResultType trust_result;
+      std::ignore = SecTrustEvaluate(trust.get(), &trust_result);
+#endif
+    }
+    if (__builtin_available(macOS 12.0, *)) {
+      out_cert_chain->reset(SecTrustCopyCertificateChain(trust.get()));
+    } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
+      ScopedCFTypeRef<CFMutableArrayRef> chain(
+          CFArrayCreateMutable(nullptr, 0, &kCFTypeArrayCallBacks));
+      for (CFIndex index = 0; index < SecTrustGetCertificateCount(trust.get());
+           ++index) {
+        SecCertificateRef certificate =
+            SecTrustGetCertificateAtIndex(trust.get(), index);
+        if (certificate) {
+          CFArrayAppendValue(chain.get(), certificate);
+        }
+      }
+      out_cert_chain->reset(chain.release());
+#endif
+    }
   }
   return result;
 }
@@ -97,8 +122,9 @@ bool IsIssuedByInKeychain(const std::vector<std::string>& valid_issuers,
   ScopedCFTypeRef<SecCertificateRef> os_cert;
   int err = SecIdentityCopyCertificate(identity->sec_identity_ref(),
                                        os_cert.InitializeInto());
-  if (err != noErr)
+  if (err != noErr) {
     return false;
+  }
   base::apple::ScopedCFTypeRef<CFArrayRef> cert_chain;
   OSStatus result = CopyCertChain(os_cert.get(), &cert_chain);
   if (result) {
@@ -106,8 +132,9 @@ bool IsIssuedByInKeychain(const std::vector<std::string>& valid_issuers,
     return false;
   }
 
-  if (!cert_chain)
+  if (!cert_chain) {
     return false;
+  }
 
   std::vector<base::apple::ScopedCFTypeRef<SecCertificateRef>> intermediates;
   for (CFIndex i = 1, chain_count = CFArrayGetCount(cert_chain.get());
@@ -125,8 +152,9 @@ bool IsIssuedByInKeychain(const std::vector<std::string>& valid_issuers,
       x509_util::CreateX509CertificateFromSecCertificate(os_cert, intermediates,
                                                          options));
 
-  if (!new_cert || !new_cert->IsIssuedByEncoded(valid_issuers))
+  if (!new_cert || !new_cert->IsIssuedByEncoded(valid_issuers)) {
     return false;
+  }
 
   std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediate_buffers;
   intermediate_buffers.reserve(new_cert->intermediate_buffers().size());
@@ -155,12 +183,14 @@ bool SupportsSSLClientAuth(CRYPTO_BUFFER* cert) {
     return false;
   }
 
-  if (!tbs.extensions_tlv)
+  if (!tbs.extensions_tlv) {
     return true;
+  }
 
   std::map<bssl::der::Input, bssl::ParsedExtension> extensions;
-  if (!ParseExtensions(tbs.extensions_tlv.value(), &extensions))
+  if (!ParseExtensions(tbs.extensions_tlv.value(), &extensions)) {
     return false;
+  }
 
   // RFC5280 says to take the intersection of the two extensions.
   //
@@ -192,8 +222,9 @@ bool SupportsSSLClientAuth(CRYPTO_BUFFER* cert) {
         break;
       }
     }
-    if (!found_acceptable_eku)
+    if (!found_acceptable_eku) {
       return false;
+    }
   }
 
   return true;
@@ -274,8 +305,9 @@ void AddIdentity(ScopedCFTypeRef<SecIdentityRef> sec_identity,
   ScopedCFTypeRef<SecCertificateRef> cert_handle;
   err = SecIdentityCopyCertificate(sec_identity.get(),
                                    cert_handle.InitializeInto());
-  if (err != noErr)
+  if (err != noErr) {
     return;
+  }
 
   // Allow UTF-8 inside PrintableStrings in client certificates. See
   // crbug.com/770323.
@@ -284,8 +316,9 @@ void AddIdentity(ScopedCFTypeRef<SecIdentityRef> sec_identity,
   scoped_refptr<X509Certificate> cert(
       x509_util::CreateX509CertificateFromSecCertificate(cert_handle, {},
                                                          options));
-  if (!cert)
+  if (!cert) {
     return;
+  }
 
   if (preferred_sec_identity &&
       CFEqual(preferred_sec_identity, sec_identity.get())) {
@@ -320,10 +353,16 @@ ClientCertIdentityList GetClientCertsOnBackgroundThread(
 
   // Now enumerate the identities in the available keychains.
   static const void* kKeys[] = {
-      kSecClass, kSecMatchLimit, kSecReturnRef, kSecAttrCanSign,
+      kSecClass,
+      kSecMatchLimit,
+      kSecReturnRef,
+      kSecAttrCanSign,
   };
   static const void* kValues[] = {
-      kSecClassIdentity, kSecMatchLimitAll, kCFBooleanTrue, kCFBooleanTrue,
+      kSecClassIdentity,
+      kSecMatchLimitAll,
+      kCFBooleanTrue,
+      kCFBooleanTrue,
   };
   ScopedCFTypeRef<CFDictionaryRef> query(CFDictionaryCreate(
       kCFAllocatorDefault, kKeys, kValues, std::size(kValues),

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/rust/rust_executable.gni")
+
 source_set("platform_support") {
   sources = [
     "apple/atomic_wait.h",
@@ -15,6 +17,30 @@ source_set("platform_support") {
 }
 
 if (is_mac) {
+  rust_executable("rust_probe") {
+    testonly = true
+    crate_root = "tests/rust_probe.rs"
+    sources = [ "tests/rust_probe.rs" ]
+  }
+
+  source_set("rust_support") {
+    sources = [
+      "apple/rust_posix.cc",
+      "apple/rust_posix.h",
+    ]
+    deps = [ ":platform_support" ]
+    frameworks = [ "Security.framework" ]
+  }
+
+  executable("sdk_probe") {
+    testonly = true
+    sources = [ "tests/sdk_probe.mm" ]
+    frameworks = [
+      "CoreText.framework",
+      "Foundation.framework",
+    ]
+  }
+
   executable("base_probe") {
     testonly = true
     sources = [ "tests/base_probe.cc" ]
@@ -29,6 +55,7 @@ if (is_mac) {
     sources = [ "tests/runtime_probe.cc" ]
     deps = [
       ":platform_support",
+      ":rust_support",
       "//third_party/boringssl",
     ]
     frameworks = [ "CoreServices.framework" ]

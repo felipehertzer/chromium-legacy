@@ -20,6 +20,9 @@
 #include "base/time/time_override.h"
 #include "build/build_config.h"
 
+// This private MIG routine is missing from older libSystem versions.
+extern "C" decltype(mach_port_peek) mach_port_peek __attribute__((weak_import));
+
 namespace base {
 
 WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
@@ -242,11 +245,12 @@ bool WaitableEvent::PeekPortImpl(mach_port_t port, bool dequeue) {
                  sizeof(msg), port, /*timeout=*/0, /*notify=*/MACH_PORT_NULL);
     if (kr == KERN_SUCCESS) {
       return true;
-    } else {
-      MACH_CHECK(kr == MACH_RCV_TIMED_OUT, kr) << "mach_msg";
-      return false;
     }
-  } else {
+    MACH_CHECK(kr == MACH_RCV_TIMED_OUT, kr) << "mach_msg";
+    return false;
+  }
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (mach_port_peek) {
     mach_port_seqno_t seqno = 0;
     mach_msg_size_t size;
     mach_msg_id_t id;
@@ -258,11 +262,20 @@ bool WaitableEvent::PeekPortImpl(mach_port_t port, bool dequeue) {
         &trailer_size);
     if (kr == KERN_SUCCESS) {
       return true;
-    } else {
-      MACH_CHECK(kr == KERN_FAILURE, kr) << "mach_port_peek";
-      return false;
     }
+    MACH_CHECK(kr == KERN_FAILURE, kr) << "mach_port_peek";
+    return false;
   }
+#endif
+  // Query the receive queue without consuming the notification. This has the
+  // same snapshot semantics as peek when Signal/Reset race with this call.
+  mach_port_status_t status{};
+  mach_msg_type_number_t count = MACH_PORT_RECEIVE_STATUS_COUNT;
+  kern_return_t kr = mach_port_get_attributes(
+      mach_task_self(), port, MACH_PORT_RECEIVE_STATUS,
+      reinterpret_cast<mach_port_info_t>(&status), &count);
+  MACH_CHECK(kr == KERN_SUCCESS, kr) << "mach_port_get_attributes";
+  return status.mps_msgcount != 0;
 }
 
 WaitableEvent::ReceiveRight::ReceiveRight(mach_port_t name) : right_(name) {}

@@ -25,6 +25,11 @@
       "path": "third_party/dawn",
       "revision": "69bfa246b5d7369f73c807d37648e25370f4db40",
       "patch": "patches/dawn-lion-platform.patch"
+    },
+    {
+      "path": "third_party/skia",
+      "revision": "8a65fa27c104d1bb5a58df5ec3e0c1655053fcf6",
+      "patch": "patches/skia-lion-fonts-colors.patch"
     }
   ]
 }

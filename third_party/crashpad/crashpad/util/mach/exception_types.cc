@@ -84,21 +84,18 @@ namespace {
 // and returns -1.
 int ProcGetWakemonParams(pid_t pid, int* rate_hz, int* flags) {
 #if __MAC_OS_X_VERSION_MAX_ALLOWED < __MAC_10_9
-  // proc_get_wakemon_params() isn’t in the SDK. Look it up dynamically.
   static crashpad::NoCfiIcall<ProcGetWakemonParamsType> proc_get_wakemon_params(
       GetProcGetWakemonParams());
-#endif
-
-#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_9
-  // proc_get_wakemon_params() is definitely available if the deployment target
-  // is 10.9 or newer.
-  if (!proc_get_wakemon_params) {
-    errno = ENOSYS;
-    return -1;
+  if (proc_get_wakemon_params) {
+    return proc_get_wakemon_params(pid, rate_hz, flags);
+  }
+#else
+  if (__builtin_available(macOS 10.9, *)) {
+    return proc_get_wakemon_params(pid, rate_hz, flags);
   }
 #endif
-
-  return proc_get_wakemon_params(pid, rate_hz, flags);
+  errno = ENOSYS;
+  return -1;
 }
 
 }  // namespace

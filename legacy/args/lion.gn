@@ -18,3 +18,12 @@ mac_deployment_target = "10.7"
 mac_min_system_version = "10.7"
 treat_warnings_as_errors = true
 fatal_linker_warnings = true
+legacy_build_rust_stdlib = true
+
+# Keep the focused checks available after full-browser graph regeneration.
+root_extra_deps = [
+  "//legacy:runtime_probe",
+  "//legacy:rust_probe",
+  "//legacy:base_probe",
+  "//legacy:sdk_probe",
+]

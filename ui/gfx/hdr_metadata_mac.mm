@@ -4,7 +4,7 @@
 
 #include "ui/gfx/hdr_metadata_mac.h"
 
-#include <simd/simd.h>
+#include <stdint.h>
 
 #include "base/apple/scoped_cftyperef.h"
 #include "ui/gfx/hdr_metadata.h"
@@ -53,9 +53,14 @@ base::apple::ScopedCFTypeRef<CFDataRef> GenerateMasteringDisplayColorVolume(
   }
 
   // This is a SMPTEST2086 Mastering Display Color Volume box.
+  struct ColorCoordinate {
+    uint16_t x;
+    uint16_t y;
+  };
+  static_assert(sizeof(ColorCoordinate) == 4);
   struct MasteringDisplayColorVolumeSEI {
-    vector_ushort2 primaries[3];  // GBR
-    vector_ushort2 white_point;
+    ColorCoordinate primaries[3];  // GBR
+    ColorCoordinate white_point;
     uint32_t luminance_max;
     uint32_t luminance_min;
   } __attribute__((packed, aligned(4)));

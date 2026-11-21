@@ -12,6 +12,15 @@
 #include "base/strings/string_view_util.h"
 #include "base/strings/sys_string_conversions.h"
 
+// These private keys are unannotated by the SDK and absent on Lion.
+extern "C" {
+extern const CFStringRef kSecGuestAttributeAudit __attribute__((weak_import));
+extern const CFStringRef kSecGuestAttributeDynamicCode
+    __attribute__((weak_import));
+extern const CFStringRef kSecGuestAttributeDynamicCodeInfoPlist
+    __attribute__((weak_import));
+}
+
 using base::apple::ScopedCFTypeRef;
 
 namespace base::mac {
@@ -29,6 +38,11 @@ ScopedCFTypeRef<CFDictionaryRef> AttributesForGuestValidation(
                                 &kCFTypeDictionaryValueCallBacks));
 
   if (audit_token_t* token = std::get_if<audit_token_t>(&process)) {
+    // Never substitute a PID for an audit token: PID reuse would weaken the
+    // identity check. Report an unsupported operation instead.
+    if (!&kSecGuestAttributeAudit) {
+      return ScopedCFTypeRef<CFDictionaryRef>();
+    }
     ScopedCFTypeRef<CFDataRef> audit_token_cf(CFDataCreate(
         nullptr, reinterpret_cast<const UInt8*>(token), sizeof(audit_token_t)));
     CFDictionarySetValue(attributes.get(), kSecGuestAttributeAudit,
@@ -41,6 +55,10 @@ ScopedCFTypeRef<CFDictionaryRef> AttributesForGuestValidation(
   }
 
   if (validation_type == SignatureValidationType::DynamicOnly) {
+    if (!&kSecGuestAttributeDynamicCode ||
+        !&kSecGuestAttributeDynamicCodeInfoPlist) {
+      return ScopedCFTypeRef<CFDictionaryRef>();
+    }
     ScopedCFTypeRef<CFDataRef> info_plist(CFDataCreate(
         nullptr, reinterpret_cast<const UInt8*>(info_plist_xml.data()),
         static_cast<CFIndex>(info_plist_xml.length())));
@@ -57,6 +75,11 @@ ScopedCFTypeRef<CFDictionaryRef> AttributesForGuestValidation(
 
 OSStatus ValidateGuestWithAttributes(CFDictionaryRef attributes,
                                      SecRequirementRef requirement) {
+  // Null attributes request a different lookup; they must never be passed
+  // after an unsupported identity or signature-validation request.
+  if (!attributes) {
+    return errSecUnimplemented;
+  }
   ScopedCFTypeRef<SecCodeRef> code;
   OSStatus status = SecCodeCopyGuestWithAttributes(
       nullptr, attributes, kSecCSDefaultFlags, code.InitializeInto());
@@ -113,6 +136,11 @@ DynamicCodeObjectForCurrentProcess() {
       getpid(), SignatureValidationType::DynamicOnly,
       base::as_string_view(info_plist_xml));
 
+  // Null attributes request a different lookup; they must never be passed
+  // after an unsupported identity or signature-validation request.
+  if (!attributes) {
+    return base::unexpected(errSecUnimplemented);
+  }
   ScopedCFTypeRef<SecCodeRef> code;
   OSStatus status = SecCodeCopyGuestWithAttributes(
       nullptr, attributes.get(), kSecCSDefaultFlags, code.InitializeInto());

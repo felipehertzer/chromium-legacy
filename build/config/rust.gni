@@ -6,6 +6,7 @@ import("//build/config/chrome_build.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/toolchain/toolchain.gni")
+import("//legacy/config.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
@@ -443,6 +444,10 @@ if (toolchain_for_rust_host_build_tools) {
 # compiled, which is typically as unwind.
 rust_prebuilt_stdlib =
     !use_chromium_rust_toolchain || toolchain_for_rust_host_build_tools
+if (legacy_build_rust_stdlib && is_mac && current_cpu == "x64" &&
+    !toolchain_for_rust_host_build_tools) {
+  rust_prebuilt_stdlib = false
+}
 
 # `rust_sysroot` is the toolchain root (and the default sysroot of rustc),
 # but the locally built stdlib uses a different sysroot.

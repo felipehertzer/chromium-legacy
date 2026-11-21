@@ -2,6 +2,12 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 declare_args() {
+  # The legacy target must rebuild std even with a custom compiler sysroot.
+  legacy_build_rust_stdlib = false
+
+  # Exact crate names supplied by the separately built host toolchain.
+  legacy_rust_host_stdlib_libs = []
+
   # Exercise legacy backends on a newer test machine. Never use in releases.
   legacy_force_fallbacks_for_tests = false
 }

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "patches": [
+    {
+      "path": "rust-lion",
+      "revision": "96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9",
+      "patch": "patches/rustc-lion-target.patch"
+    }
+  ]
+}

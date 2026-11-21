@@ -4183,6 +4183,12 @@ hooks = [
     'condition': 'checkout_mac',
     'action': ['python3', 'src/legacy/apply_dependency_patches.py'],
   },
+  {
+    'name': 'legacy_rust_std_patches',
+    'pattern': '.',
+    'condition': 'checkout_mac',
+    'action': [ 'python3', 'src/legacy/apply_rust_std_patches.py' ],
+  },
   # Download and initialize "vpython" VirtualEnv environment packages for
   # Python3. We do this before running any other hooks so that any other
   # hooks that might use vpython don't trip over unexpected issues and

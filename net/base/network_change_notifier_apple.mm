@@ -38,13 +38,28 @@ namespace net {
 struct NetworkChangeNotifierApple::NetworkPathMonitorStorage {
   NetworkPathMonitorStorage() = default;
   ~NetworkPathMonitorStorage() {
-    if (monitor) {
-      nw_path_monitor_cancel(monitor);
+    if (@available(macOS 10.14, iOS 12.0, *)) {
+      if (monitor) {
+        nw_path_monitor_cancel(monitor);
+#if !OS_OBJECT_USE_OBJC
+        nw_release(monitor);
+#endif
+      }
+#if !OS_OBJECT_USE_OBJC
+      if (queue) {
+        dispatch_release(queue);
+      }
+#endif
     }
   }
 
-  nw_path_monitor_t __strong monitor;
-  dispatch_queue_t __strong queue;
+#if OS_OBJECT_USE_OBJC
+  nw_path_monitor_t __strong monitor = nil;
+  dispatch_queue_t __strong queue = nil;
+#else
+  nw_path_monitor_t monitor = nullptr;
+  dispatch_queue_t queue = nullptr;
+#endif
 };
 
 namespace {
@@ -167,6 +182,7 @@ base::DictValue NetLogOsConfigChangedParams(
 // nw_interface_t and retrieve from them the connection type. This appears
 // the be the only available API exposing this information (i.e. it is not
 // possible to list all nw_interface_t without having an nw_path_t first).
+API_AVAILABLE(macos(10.14), ios(12.0))
 NetworkChangeNotifier::ConnectionType ConnectionTypeFromPath(nw_path_t path) {
   __block bool is_first = true;
   __block nw_interface_type_t type = nw_interface_type_other;
@@ -275,8 +291,9 @@ NetworkChangeNotifierApple::GetCurrentConnectionType() const {
   base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow_wait;
   base::AutoLock lock(connection_type_lock_);
 
-  if (connection_type_initialized_)
+  if (connection_type_initialized_) {
     return connection_type_;
+  }
 
   // Wait up to a limited amount of time for the connection type to be
   // determined, to avoid blocking the main thread indefinitely. Since
@@ -290,8 +307,9 @@ NetworkChangeNotifierApple::GetCurrentConnectionType() const {
   base::TimeTicks end_time = base::TimeTicks::Now() + remaining_time;
   while (remaining_time.is_positive()) {
     initial_connection_type_cv_.TimedWait(remaining_time);
-    if (connection_type_initialized_)
+    if (connection_type_initialized_) {
       return connection_type_;
+    }
 
     remaining_time = end_time - base::TimeTicks::Now();
   }
@@ -309,8 +327,9 @@ NetworkChangeNotifier::ConnectionType
 NetworkChangeNotifierApple::CalculateConnectionType(
     SCNetworkConnectionFlags flags) {
   bool reachable = CalculateReachability(flags);
-  if (!reachable)
+  if (!reachable) {
     return CONNECTION_NONE;
+  }
 
 #if !BUILDFLAG(IS_IOS)
   return ConnectionTypeFromInterfaces();
@@ -457,7 +476,8 @@ void NetworkChangeNotifierApple::StartReachabilityNotifications() {
       nullptr   // description
   };
   if (!SCNetworkReachabilitySetCallback(
-          reachability_.get(), &NetworkChangeNotifierApple::ReachabilityCallback,
+          reachability_.get(),
+          &NetworkChangeNotifierApple::ReachabilityCallback,
           &reachability_context)) {
     LOG(DFATAL) << "Could not set network reachability callback";
     reachability_.reset();
@@ -505,7 +525,8 @@ void NetworkChangeNotifierApple::SetDynamicStoreNotificationKeys(
 #endif  // BUILDFLAG(IS_IOS) /  BUILDFLAG(IS_MAC)
 }
 
-void NetworkChangeNotifierApple::OnNetworkConfigChange(CFArrayRef changed_keys) {
+void NetworkChangeNotifierApple::OnNetworkConfigChange(
+    CFArrayRef changed_keys) {
 #if BUILDFLAG(IS_IOS)
   // SCDynamicStore API does not exist on iOS.
   NOTREACHED();
@@ -626,87 +647,95 @@ void NetworkChangeNotifierApple::ReachabilityCallback(
 #endif  // defined(COMPILE_OLD_NOTIFIER_IMPL)
 
 bool NetworkChangeNotifierApple::ShouldUseNetworkPathMonitor() const {
-  return base::FeatureList::IsEnabled(
-      features::kUseNetworkPathMonitorForNetworkChangeNotifier);
+  if (@available(macOS 10.14, iOS 12.0, *)) {
+    return base::FeatureList::IsEnabled(
+        features::kUseNetworkPathMonitorForNetworkChangeNotifier);
+  }
+  return false;
 }
 
 bool NetworkChangeNotifierApple::EnsureNetworkPathMonitorStarted() {
-  if (!ShouldUseNetworkPathMonitor()) {
-    return false;
-  }
-  if (!network_path_monitor_) {
-    network_path_monitor_ = std::make_unique<NetworkPathMonitorStorage>();
-  }
-  auto* storage = network_path_monitor_.get();
-  if (storage->monitor) {
+  if (@available(macOS 10.14, iOS 12.0, *)) {
+    if (!ShouldUseNetworkPathMonitor()) {
+      return false;
+    }
+    if (!network_path_monitor_) {
+      network_path_monitor_ = std::make_unique<NetworkPathMonitorStorage>();
+    }
+    auto* storage = network_path_monitor_.get();
+    if (storage->monitor) {
+      return true;
+    }
+
+    storage->monitor = nw_path_monitor_create();
+    if (!storage->monitor) {
+      network_path_monitor_.reset();
+      return false;
+    }
+
+    storage->queue = dispatch_queue_create(
+        "org.chromium.net.network_path_monitor", DISPATCH_QUEUE_SERIAL);
+    if (!storage->queue) {
+      // Tear down the partially constructed monitor before releasing storage.
+      network_path_monitor_.reset();
+      return false;
+    }
+
+    nw_path_monitor_set_update_handler(storage->monitor, ^(nw_path_t path) {
+      // SAFE: StopNetworkPathMonitor() cancels the monitor and synchronously
+      // drains this queue before destruction, so the captured raw pointer
+      // cannot outlive the notifier instance.
+      NetworkChangeNotifier::ConnectionType new_type =
+          NetworkChangeNotifier::CONNECTION_NONE;
+      switch (nw_path_get_status(path)) {
+        case nw_path_status_satisfied:
+          // A fully satisfied path means we can derive the connection type from
+          // the active path.
+          new_type = ConnectionTypeFromPath(path);
+          break;
+        case nw_path_status_satisfiable:
+          // The path could become satisfied if the system performs extra work
+          // (for example, negotiating captive portals). Treat this as unknown
+          // rather than offline to avoid spurious "no connection" drops.
+          new_type = NetworkChangeNotifier::CONNECTION_UNKNOWN;
+          break;
+        case nw_path_status_unsatisfied:
+        case nw_path_status_invalid:
+        default:
+          // Treat invalid/unsatisfied as offline until better information
+          // arrives.
+          new_type = NetworkChangeNotifier::CONNECTION_NONE;
+          break;
+      }
+      OnNetworkPathConnectionTypeChanged(new_type);
+    });
+
+    nw_path_monitor_set_queue(storage->monitor, storage->queue);
+    nw_path_monitor_start(storage->monitor);
     return true;
   }
-
-  storage->monitor = nw_path_monitor_create();
-  if (!storage->monitor) {
-    network_path_monitor_.reset();
-    return false;
-  }
-
-  storage->queue = dispatch_queue_create(
-      "org.chromium.net.network_path_monitor", DISPATCH_QUEUE_SERIAL);
-  if (!storage->queue) {
-    // Tear down the partially constructed monitor before releasing storage.
-    network_path_monitor_.reset();
-    return false;
-  }
-
-  nw_path_monitor_set_update_handler(storage->monitor, ^(nw_path_t path) {
-    // SAFE: StopNetworkPathMonitor() cancels the monitor and synchronously
-    // drains this queue before destruction, so the captured raw pointer cannot
-    // outlive the notifier instance.
-    NetworkChangeNotifier::ConnectionType new_type =
-        NetworkChangeNotifier::CONNECTION_NONE;
-    switch (nw_path_get_status(path)) {
-      case nw_path_status_satisfied:
-        // A fully satisfied path means we can derive the connection type from
-        // the active path.
-        new_type = ConnectionTypeFromPath(path);
-        break;
-      case nw_path_status_satisfiable:
-        // The path could become satisfied if the system performs extra work
-        // (for example, negotiating captive portals). Treat this as unknown
-        // rather than offline to avoid spurious "no connection" drops.
-        new_type = NetworkChangeNotifier::CONNECTION_UNKNOWN;
-        break;
-      case nw_path_status_unsatisfied:
-      case nw_path_status_invalid:
-      default:
-        // Treat invalid/unsatisfied as offline until better information
-        // arrives.
-        new_type = NetworkChangeNotifier::CONNECTION_NONE;
-        break;
-    }
-    OnNetworkPathConnectionTypeChanged(new_type);
-  });
-
-  nw_path_monitor_set_queue(storage->monitor, storage->queue);
-  nw_path_monitor_start(storage->monitor);
-  return true;
+  return false;
 }
 
 void NetworkChangeNotifierApple::StopNetworkPathMonitor() {
-  if (!network_path_monitor_) {
-    return;
+  if (@available(macOS 10.14, iOS 12.0, *)) {
+    if (!network_path_monitor_) {
+      return;
+    }
+    auto* storage = network_path_monitor_.get();
+    dispatch_queue_t queue = storage->queue;
+    if (storage->monitor) {
+      nw_path_monitor_cancel(storage->monitor);
+    }
+    if (queue) {
+      // Flush pending callbacks so none outlive the notifier instance.
+      dispatch_sync(queue, ^{
+                    });
+    }
+    // Resetting the storage runs NetworkPathMonitorStorage's destructor, which
+    // clears the Network.framework monitor and dispatch queue references.
+    network_path_monitor_.reset();
   }
-  auto* storage = network_path_monitor_.get();
-  dispatch_queue_t queue = storage->queue;
-  if (storage->monitor) {
-    nw_path_monitor_cancel(storage->monitor);
-  }
-  if (queue) {
-    // Flush pending callbacks so none outlive the notifier instance.
-    dispatch_sync(queue, ^{
-                  });
-  }
-  // Resetting the storage runs NetworkPathMonitorStorage's destructor, which
-  // clears the Network.framework monitor and dispatch queue references.
-  network_path_monitor_.reset();
 }
 
 void NetworkChangeNotifierApple::OnNetworkPathConnectionTypeChanged(

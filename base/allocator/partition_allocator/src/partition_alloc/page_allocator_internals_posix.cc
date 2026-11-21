@@ -38,7 +38,10 @@
 // on the system since macOS 10.12.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wavailability"
-uint32_t SecTaskGetCodeSignStatus(SecTaskRef task) API_AVAILABLE(macos(10.12));
+uint32_t SecTaskGetCodeSignStatus(SecTaskRef task) API_AVAILABLE(macos(10.12))
+    __attribute__((weak_import));
+extern "C" SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator)
+    __attribute__((weak_import));
 #pragma clang diagnostic pop
 
 #endif  // PA_BUILDFLAG(IS_MAC)
@@ -169,6 +172,14 @@ void NameRegion(void* start, size_t length, PageTag page_tag) {
 // entitlement, returning whether MAP_JIT should be used to allocate regions
 // that will contain JIT-compiled executable code.
 bool UseMapJit() {
+  // MAP_JIT and the hardened runtime were introduced together in Mojave.
+  // Passing the flag to older kernels causes executable allocations to fail.
+  if (!__builtin_available(macOS 10.14, *)) {
+    return false;
+  }
+  if (!SecTaskCreateFromSelf || !SecTaskGetCodeSignStatus) {
+    return false;
+  }
   // Until determining that the hardened runtime is enabled, early returns will
   // return true, so that MAP_JIT will be used. This is important on arm64,
   // which only allows pages to be simultaneously writable and executable when
@@ -207,6 +218,14 @@ bool UseMapJit() {
 }
 #elif PA_BUILDFLAG(IS_IOS)
 bool UseMapJit() {
+  // MAP_JIT and the hardened runtime were introduced together in Mojave.
+  // Passing the flag to older kernels causes executable allocations to fail.
+  if (!__builtin_available(macOS 10.14, *)) {
+    return false;
+  }
+  if (!SecTaskCreateFromSelf || !SecTaskGetCodeSignStatus) {
+    return false;
+  }
   return true;
 }
 #endif  // PA_BUILDFLAG(IS_IOS)

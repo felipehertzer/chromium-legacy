@@ -87,6 +87,7 @@ _tool_files = [
   "//build/toolchain/apple/compile_xcassets.py",
   "//build/toolchain/apple/filter_libtool.py",
   "//build/toolchain/apple/linker_driver.py",
+  "//build/toolchain/apple/legacy_sdk.py",
   "//build/toolchain/apple/swift_const_gather_protocols.json",
   "//build/toolchain/apple/swiftc.py",
 ]

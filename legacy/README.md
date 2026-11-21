@@ -40,6 +40,18 @@ or replaces a Chromium 159 dependency.
   report unavailable when their required APIs or entitlements are absent.
 - Abseil timeout clocks, Perfetto's optional native signposts, and Dawn's common
   allocation/system-version helpers have initial compatibility changes.
+- Rust 1.101's compiler target is rebuilt from the pinned source to accept
+  10.7 and the Core 2 CPU baseline. Target std is rebuilt with clock, entropy,
+  filesystem, and directory-descriptor adapters. Host build tools retain their
+  own modern std; the original packaged compiler is preserved for bootstrap.
+- Build-local SDK stubs restore Foundation's old NSObject exports and the
+  CoreText path under ApplicationServices. Xcode and SDK headers stay untouched.
+- Missing Mach queue inspection uses receive-status queries. MAP_JIT is disabled
+  before Mojave. Missing signature-validation attributes return unsupported;
+  audit-token identities are never weakened to PID checks.
+- Skia's font/ICC helpers, Crashpad's clocks and audit tokens, and network/UI
+  calls have additional availability guards. Optional modern frameworks are
+  weak-linked; old certificate-chain and CSSM signing paths retain OS keys.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -51,29 +63,34 @@ These limitations need review alongside the remaining browser port.
 ## Verified so far
 
 The two PartitionAlloc libraries, current libc++, and Base's static library
-compile with deployment target 10.7. The five previously blocked Crypto objects
-also compile. The full browser is still being compiled and ported.
+compile with deployment target 10.7. Crypto and the separately rebuilt Rust std also compile. The full browser is still being compiled and ported.
 
 | Check | Build Mac | Intel Catalina 10.15.7 |
 | --- | --- | --- |
 | Foundation/version probe | 24 checks passed | 24 checks passed |
 | Mach-port probe | 129 checks passed | 129 checks passed |
 | Filesystem/clock helpers | 64 checks passed | 64 checks passed |
-| Current C++ runtime and BoringSSL probe | 32 checks passed | 32 checks passed |
-| Forced legacy runtime backends | 32 checks passed | 32 checks passed |
+| Current C++ runtime and BoringSSL probe | 35 checks passed | 35 checks passed |
+| Forced legacy C++ runtime backends | 35 checks passed | 35 checks passed |
+| Rust 1.101 runtime | 13 checks passed | 13 checks passed |
+| Forced legacy Rust runtime backends | 13 checks passed | 13 checks passed |
+| Base/Crypto integration | 23 checks passed | 23 checks passed |
+| Base with forced event-queue fallback | 23 checks passed | 23 checks passed |
+| SDK Foundation subclass/CoreText probe | passed | passed |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
 process cwd inheritance. It does not test a TLS handshake or the browser.
-Thirteen Python tests cover the port inventory, pinned patch application, and
-Mach-O audit behavior.
+Twenty-five Python tests cover the port inventory, pinned dependency/Rust patch
+application, SDK overlay preservation, and Mach-O audit behavior.
 
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
-(11G63) libraries** extracted from Apple's official installer. All 149 imports
-in the forced runtime probe have their required symbols; three absent imports
-are weak and guarded. The Foundation probe's 28 imports are present. This is
-an ABI check, not proof of execution, Objective-C selector compatibility, or
-sandbox behavior on Lion. A Lion runtime test is still required.
+(11G63) libraries** extracted from Apple's official installer. The Rust,
+Base/Crypto, SDK, and forced C++ runtime probes have no missing required symbols
+or incomplete required libraries. Absent optional symbols remain weak and their
+call sites have guards or fallbacks. This checks link compatibility; actual
+execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
+Only the Catalina Mac is available for physical-machine tests.
 
 ## Run the focused checks
 
@@ -105,12 +122,26 @@ cp src/legacy/gclient.template .gclient
 gclient sync --no-history --shallow
 cd src
 mkdir -p out/Lion
+# Requires LLVM 23 development files; adjust the path for the build host.
+python3 legacy/build_rust_compiler.py \
+  --llvm-config /opt/homebrew/opt/llvm/bin/llvm-config --jobs 2
 cp legacy/args/lion.gn out/Lion/args.gn
-gn gen out/Lion --fail-on-unused-args
-ninja -C out/Lion -j4 runtime_probe
+cat ../rust-lion-compiler.gni >> out/Lion/args.gn
+buildtools/mac/gn gen out/Lion --fail-on-unused-args
+ninja -C out/Lion -j4 runtime_probe rust_probe base_probe sdk_probe
 out/Lion/runtime_probe
+out/Lion/rust_probe
+out/Lion/base_probe
+out/Lion/sdk_probe
 ninja -C out/Lion -j4 chrome
 ```
+
+The Rust compiler build uses LLVM 23.1.4; Chromium's pinned Clang 24 still builds
+C/C++. The compiler build verifies its resulting minimum version and CPU target,
+then writes the host-library list and GN arguments to `rust-lion-compiler.gni`.
+The Rust std hook verifies the exact toolchain package and source hashes before
+applying the compatibility patch. It preserves unknown edits and can recover
+an already partially applied patch. Original tool executables are unchanged.
 
 The dependency hook verifies exact Git revisions and preflights every patch.
 Repeated runs preserve applied patches; conflicting local changes fail without
@@ -118,13 +149,13 @@ being overwritten. Changed dependency pins require reviewing their patches.
 
 To exercise the legacy runtime backends on a newer Mac, create a separate
 output directory with the same arguments and append
-`legacy_force_fallbacks_for_tests = true`. Build `runtime_probe` there. This
-mode forces the clock, filesystem, entropy, and libc++ wait fallbacks; official
+`legacy_force_fallbacks_for_tests = true`. Build `runtime_probe` and `rust_probe`
+there. This mode forces the clock, filesystem, entropy, and libc++ wait fallbacks; official
 builds reject it. It does not emulate an old kernel.
 
-The `base_probe` target adds integration checks using the actual Base and Crypto
-libraries. Its link currently exposes Rust's minimum macOS 10.12 requirement;
-it has not passed and must not be used as evidence of runtime support.
+The `base_probe` target checks actual Base/Crypto clocks, threading, manual and
+automatic events, directory copy/removal with symlink boundaries, and process
+launch with a requested directory. Its normal build passed on both Macs.
 
 For a symbol audit against an extracted, unmodified OS root:
 
@@ -142,11 +173,11 @@ still require reviewing guards at their call sites.
 
 The full source and 231 processed dependencies are checked out using shallow
 history and the small Mac configuration. Setup hooks and GN generation pass
-with pinned Clang 24/Rust 1.101 and local Xcode 27. The integration link exposed
-that Rust 1.101 clamps Intel macOS objects to 10.12 even when the deployment
-environment requests 10.7. A separate, source-patched compiler and runtime port
-are being prepared; lowering a bundle version or ignoring linker diagnostics
-will not resolve this.
+with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27.
+The Rust minimum-version blocker is fixed and the linked integration probes run
+on Catalina. The complete browser build continues to expose other compatibility
+work. Auxiliary host tools and Rust/C++ binding generation still need validation
+with the custom compiler throughout the full build.
 
 Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
 graphics, media, UI, and the remaining browser API usage still need build and

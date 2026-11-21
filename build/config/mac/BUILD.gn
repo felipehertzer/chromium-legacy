@@ -51,6 +51,9 @@ config("compiler") {
 # that is Mac-only. Please see that target for advice on what should go in
 # :runtime_library vs. :compiler.
 config("runtime_library") {
+  if (current_cpu == "x64" && mac_deployment_target == "10.7") {
+    rustflags = [ "--cfg=chromium_legacy_macos" ]
+  }
   if (legacy_force_fallbacks_for_tests) {
     defines = [ "CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS=1" ]
   }

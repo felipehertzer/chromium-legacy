@@ -10,6 +10,18 @@
 #include "skia/ext/color_profile.h"
 
 namespace gfx {
+namespace {
+CFDataRef CopyICCData(CGColorSpaceRef space) {
+  if (__builtin_available(macOS 10.12, *)) {
+    return CGColorSpaceCopyICCData(space);
+  }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
+  return CGColorSpaceCopyICCProfile(space);
+#else
+  return nullptr;
+#endif
+}
+}  // namespace
 
 DisplayICCProfiles* DisplayICCProfiles::GetInstance() {
   static base::NoDestructor<DisplayICCProfiles> profiles;
@@ -22,8 +34,9 @@ DisplayICCProfiles::GetDataForColorSpace(const ColorSpace& color_space) {
   UpdateIfNeeded();
   base::apple::ScopedCFTypeRef<CFDataRef> result;
   auto found = map_.find(color_space);
-  if (found != map_.end())
+  if (found != map_.end()) {
     result = found->second;
+  }
   return result;
 }
 
@@ -37,8 +50,9 @@ DisplayICCProfiles::~DisplayICCProfiles() {
 }
 
 void DisplayICCProfiles::UpdateIfNeeded() {
-  if (!needs_update_)
+  if (!needs_update_) {
     return;
+  }
   needs_update_ = false;
   map_.clear();
 
@@ -47,7 +61,7 @@ void DisplayICCProfiles::UpdateIfNeeded() {
       CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
   CHECK(srgb_colorspace);
   base::apple::ScopedCFTypeRef<CFDataRef> srgb_icc(
-      CGColorSpaceCopyICCData(srgb_colorspace.get()));
+      CopyICCData(srgb_colorspace.get()));
   CHECK(srgb_icc);
   map_[ColorSpace::CreateSRGB()] = srgb_icc;
 
@@ -55,26 +69,31 @@ void DisplayICCProfiles::UpdateIfNeeded() {
   uint32_t display_count = 0;
   CGError error = kCGErrorSuccess;
   error = CGGetActiveDisplayList(0, nullptr, &display_count);
-  if (error != kCGErrorSuccess)
+  if (error != kCGErrorSuccess) {
     return;
-  if (!display_count)
+  }
+  if (!display_count) {
     return;
+  }
 
   std::vector<CGDirectDisplayID> displays(display_count);
   error =
       CGGetActiveDisplayList(displays.size(), displays.data(), &display_count);
-  if (error != kCGErrorSuccess)
+  if (error != kCGErrorSuccess) {
     return;
+  }
 
   for (uint32_t i = 0; i < display_count; ++i) {
     base::apple::ScopedCFTypeRef<CGColorSpaceRef> cg_color_space(
         CGDisplayCopyColorSpace(displays[i]));
-    if (!cg_color_space)
+    if (!cg_color_space) {
       continue;
+    }
     base::apple::ScopedCFTypeRef<CFDataRef> icc_data(
-        CGColorSpaceCopyICCData(cg_color_space.get()));
-    if (!icc_data)
+        CopyICCData(cg_color_space.get()));
+    if (!icc_data) {
       continue;
+    }
     auto icc_profile =
         skia::ColorProfile::Make(base::apple::CFDataToSpan(icc_data.get()));
     // If the ICC profile isn't accurately parametrically approximated, then

@@ -90,6 +90,20 @@ if (toolchain_has_rust) {
   ]
   stdlib_test_files -= removed_rust_stdlib_libs
 
+  if (legacy_build_rust_stdlib && !use_chromium_rust_toolchain && is_mac &&
+      rust_prebuilt_stdlib && current_cpu == host_cpu) {
+    assert(
+        legacy_rust_host_stdlib_libs != [],
+        "Run legacy/build_rust_compiler.py to describe the custom host sysroot.")
+
+    # Bootstrap's host library has a different dependency set from Chromium's
+    # locally built target std. Copy exactly its declared, existing crates.
+    stdlib_files = []
+    stdlib_files = [ "std" ] + (legacy_rust_host_stdlib_libs - [ "std" ])
+    skip_stdlib_files = []
+    stdlib_test_files = []
+  }
+
   # Libraries needed when linking the Rust standard library.
   #
   # `libs` set on a target (rather than in a config) propagate to dependents
@@ -100,6 +114,9 @@ if (toolchain_has_rust) {
   # When `rustc` drives the linking, then `rustc_wrapper.py` removes the
   # suffix from the `-l<name>.lib` arguments (because `rustc` adds it).
   source_set("stdlib_dependent_libs") {
+    if (is_mac && current_cpu == "x64" && mac_deployment_target == "10.7") {
+      deps = [ "//legacy:rust_support" ]
+    }
     if (is_win) {
       # The libc crate tries to link in the Windows CRT, but we specify the CRT
       # library ourselves in //build/config/win:dynamic_crt and

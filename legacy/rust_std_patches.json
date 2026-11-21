@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "revision": "96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9",
+  "toolchain_version_sha256": "b9d8dbfe32f8b0be1ee098fe4d608d301f737e13ab62b444392ff7286af2a0c8",
+  "patch": "patches/rust-stdlib-lion.patch",
+  "files": [
+    {
+      "path": "library/std/src/sys/pal/unix/mod.rs",
+      "before": "cf51d0e94117cc636829e08ecf12d441bf91ca8e9a04a667c1e9e234c13ecd0e",
+      "after": "b3ec053a9efa308561e4d342a5bbc25b83745f6899a17ea15848e7d475d9ff66"
+    },
+    {
+      "path": "library/std/src/sys/pal/unix/time.rs",
+      "before": "6e1caa7b5e1c9a26b0b8cd02d8fd67c0fc57e4de11c89877d01c2b69eb32031a",
+      "after": "9e219e866bc3337f722a193236b991db98672466417333e09cbcc3bb18df692e"
+    },
+    {
+      "path": "library/std/src/sys/random/apple.rs",
+      "before": "a92044363fba9f163418f529da26960f0871a3eb23fa28e9b9bd06b69aa97e14",
+      "after": "06ba898f60d162612ff0fb98d1f7a34f4818691d15778fd5fb079ab321666169"
+    },
+    {
+      "path": "library/std/src/sys/fs/unix.rs",
+      "before": "1c9463e398e077d093284364aeeffe816047b31904de2cd0ecdd8b7c9034d24d",
+      "after": "341d97892b32fedf9a57a08d62d750121dbf6f9c2d6622b2da0ca05a1712d037"
+    },
+    {
+      "path": "library/std/src/sys/fs/unix/dir.rs",
+      "before": "e73f406783a1d1715394aa9ab768f52d8591f4df31f6b0958b9f174472cc2e97",
+      "after": "ff50b3920efd03d2ab5e47231593022d3b6703a46df2769d3a49951a811e141c"
+    }
+  ]
+}

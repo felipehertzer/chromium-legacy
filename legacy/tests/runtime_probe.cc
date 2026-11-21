@@ -26,6 +26,7 @@
 #include "legacy/apple/atomic_wait.h"
 #include "legacy/apple/audit_token.h"
 #include "legacy/apple/fd_io.h"
+#include "legacy/apple/rust_posix.h"
 
 namespace {
 int failures = 0;
@@ -209,11 +210,27 @@ int main() {
             identity.st_ino == child_identity.st_ino,
         "legacy relative metadata preserves renamed directory identity");
   int opened =
-      chromium_legacy::LegacyOpenAt(directory, "entry", O_RDONLY | O_NOFOLLOW);
+      chromium_legacy::LegacyOpenAt(directory, "entry", O_RDWR | O_NOFOLLOW);
   Check(opened >= 0 && ::fstat(opened, &child_identity) == 0 &&
             identity.st_ino == child_identity.st_ino,
         "legacy relative open cannot follow the replacement path");
   if (opened >= 0) {
+    timespec omitted{0, UTIME_OMIT};
+    timespec modified{1700000000, 123456789};
+    struct stat after{};
+    Check(ChromiumLegacyRustFutimens(opened, &omitted, &modified) == 0 &&
+              ::fstat(opened, &after) == 0 &&
+              after.st_mtimespec.tv_sec == modified.tv_sec,
+          "Rust adapter updates descriptor timestamps");
+    Check(after.st_atimespec.tv_sec == child_identity.st_atimespec.tv_sec &&
+              after.st_atimespec.tv_nsec == child_identity.st_atimespec.tv_nsec,
+          "Rust adapter atomically preserves omitted access time");
+    timespec now{0, UTIME_NOW};
+    Check(ChromiumLegacyRustFutimens(opened, &now, &now) == 0 &&
+              ::fstat(opened, &after) == 0 &&
+              after.st_atimespec.tv_sec == after.st_mtimespec.tv_sec &&
+              after.st_atimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+          "UTIME_NOW uses one timestamp for both attributes");
     ::close(opened);
   }
   Check(chromium_legacy::LegacyMkdirAt(directory, "child", 0700) == 0 &&

@@ -600,6 +600,9 @@ crashpad_static_library("util") {
   ]
 
   deps = [ "$mini_chromium_source_parent:base" ]
+  if (crashpad_is_mac) {
+    deps += [ "//legacy:platform_support" ]
+  }
 
   configs = [ "../build:flock_always_supported_defines" ]
 

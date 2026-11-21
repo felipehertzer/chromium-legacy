@@ -26,8 +26,9 @@ bool Animation::ScrollAnimationsEnabledBySystem() {
   id value = nil;
   value = [NSUserDefaults.standardUserDefaults
       objectForKey:@"NSScrollAnimationEnabled"];
-  if (value)
+  if (value) {
     enabled = [value boolValue];
+  }
   return enabled;
 }
 
@@ -37,8 +38,13 @@ void Animation::UpdatePrefersReducedMotion() {
   // TODO(crbug.com/40611878): DCHECK this assertion once tests are
   // well-behaved.
 
-  prefers_reduced_motion_ =
-      NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+  if (@available(macOS 10.12, *)) {
+    prefers_reduced_motion_ =
+        NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+  } else {
+    // The Reduce Motion system preference was introduced in Sierra.
+    prefers_reduced_motion_ = false;
+  }
 }
 
-} // namespace gfx
+}  // namespace gfx

@@ -9,11 +9,13 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 #include "base/apple/foundation_util.h"
 #include "base/apple/scoped_cftyperef.h"
 #include "base/containers/span.h"
 #include "base/memory/scoped_policy.h"
+#include "base/no_destructor.h"
 #include "third_party/skia/modules/skcms/skcms.h"
 #include "ui/gfx/color_space.h"
 
@@ -52,33 +54,43 @@ struct CVImagePrimary {
   const gfx::ColorSpace::PrimaryID id;
 };
 base::span<const CVImagePrimary> GetSupportedImagePrimaries() {
-  static const auto kSupportedPrimaries = std::to_array<CVImagePrimary>({
-      {kCVImageBufferColorPrimaries_ITU_R_709_2,
-       kCMFormatDescriptionColorPrimaries_ITU_R_709_2,
-       gfx::ColorSpace::PrimaryID::BT709},
-      {kCVImageBufferColorPrimaries_EBU_3213,
-       kCMFormatDescriptionColorPrimaries_EBU_3213,
-       gfx::ColorSpace::PrimaryID::BT470BG},
-      {kCVImageBufferColorPrimaries_EBU_3213,
-       kCMFormatDescriptionColorPrimaries_EBU_3213,
-       gfx::ColorSpace::PrimaryID::EBU_3213_E},
-      {kCVImageBufferColorPrimaries_SMPTE_C,
-       kCMFormatDescriptionColorPrimaries_SMPTE_C,
-       gfx::ColorSpace::PrimaryID::SMPTE170M},
-      {kCVImageBufferColorPrimaries_SMPTE_C,
-       kCMFormatDescriptionColorPrimaries_SMPTE_C,
-       gfx::ColorSpace::PrimaryID::SMPTE240M},
-      {kCVImageBufferColorPrimaries_ITU_R_2020,
-       kCMFormatDescriptionColorPrimaries_ITU_R_2020,
-       gfx::ColorSpace::PrimaryID::BT2020},
-      {kCVImageBufferColorPrimaries_DCI_P3,
-       kCMFormatDescriptionColorPrimaries_DCI_P3,
-       gfx::ColorSpace::PrimaryID::SMPTEST431_2},
-      {kCVImageBufferColorPrimaries_P3_D65,
-       kCMFormatDescriptionColorPrimaries_P3_D65,
-       gfx::ColorSpace::PrimaryID::P3},
-  });
-  return kSupportedPrimaries;
+  static const base::NoDestructor<std::vector<CVImagePrimary>>
+      kSupportedPrimaries([] {
+        std::vector<CVImagePrimary> pairs;
+        pairs.reserve(8);
+        pairs.push_back({kCVImageBufferColorPrimaries_ITU_R_709_2,
+                         kCMFormatDescriptionColorPrimaries_ITU_R_709_2,
+                         gfx::ColorSpace::PrimaryID::BT709});
+        pairs.push_back({kCVImageBufferColorPrimaries_EBU_3213,
+                         kCMFormatDescriptionColorPrimaries_EBU_3213,
+                         gfx::ColorSpace::PrimaryID::BT470BG});
+        pairs.push_back({kCVImageBufferColorPrimaries_EBU_3213,
+                         kCMFormatDescriptionColorPrimaries_EBU_3213,
+                         gfx::ColorSpace::PrimaryID::EBU_3213_E});
+        pairs.push_back({kCVImageBufferColorPrimaries_SMPTE_C,
+                         kCMFormatDescriptionColorPrimaries_SMPTE_C,
+                         gfx::ColorSpace::PrimaryID::SMPTE170M});
+        pairs.push_back({kCVImageBufferColorPrimaries_SMPTE_C,
+                         kCMFormatDescriptionColorPrimaries_SMPTE_C,
+                         gfx::ColorSpace::PrimaryID::SMPTE240M});
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferColorPrimaries_ITU_R_2020,
+                           kCMFormatDescriptionColorPrimaries_ITU_R_2020,
+                           gfx::ColorSpace::PrimaryID::BT2020});
+        }
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferColorPrimaries_DCI_P3,
+                           kCMFormatDescriptionColorPrimaries_DCI_P3,
+                           gfx::ColorSpace::PrimaryID::SMPTEST431_2});
+        }
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferColorPrimaries_P3_D65,
+                           kCMFormatDescriptionColorPrimaries_P3_D65,
+                           gfx::ColorSpace::PrimaryID::P3});
+        }
+        return pairs;
+      }());
+  return *kSupportedPrimaries;
 }
 
 gfx::ColorSpace::PrimaryID GetCoreVideoPrimary(CFTypeRef primaries_untyped) {
@@ -97,47 +109,68 @@ struct CVImageTransferFn {
   const gfx::ColorSpace::TransferID id;
 };
 base::span<const CVImageTransferFn> GetSupportedImageTransferFn() {
-  static const auto kSupportedTransferFuncs = std::to_array<CVImageTransferFn>({
-      {kCVImageBufferTransferFunction_ITU_R_709_2,
-       kCMFormatDescriptionTransferFunction_ITU_R_709_2,
-       gfx::ColorSpace::TransferID::BT709_APPLE},
-      {kCVImageBufferTransferFunction_ITU_R_709_2,
-       kCMFormatDescriptionTransferFunction_ITU_R_709_2,
-       gfx::ColorSpace::TransferID::BT709},
-      {kCVImageBufferTransferFunction_ITU_R_709_2,
-       kCMFormatDescriptionTransferFunction_ITU_R_709_2,
-       gfx::ColorSpace::TransferID::SMPTE170M},
-      {kCVImageBufferTransferFunction_SMPTE_240M_1995,
-       kCMFormatDescriptionTransferFunction_SMPTE_240M_1995,
-       gfx::ColorSpace::TransferID::SMPTE240M},
-      {kCVImageBufferTransferFunction_UseGamma,
-       kCMFormatDescriptionTransferFunction_UseGamma,
-       gfx::ColorSpace::TransferID::CUSTOM},
-      {kCVImageBufferTransferFunction_ITU_R_2020,
-       kCMFormatDescriptionTransferFunction_ITU_R_2020,
-       gfx::ColorSpace::TransferID::BT2020_10},
-      {kCVImageBufferTransferFunction_ITU_R_2020,
-       kCMFormatDescriptionTransferFunction_ITU_R_2020,
-       gfx::ColorSpace::TransferID::BT2020_12},
-      {kCVImageBufferTransferFunction_SMPTE_ST_428_1,
-       kCMFormatDescriptionTransferFunction_SMPTE_ST_428_1,
-       gfx::ColorSpace::TransferID::SMPTEST428_1},
-      {kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
-       kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
-       gfx::ColorSpace::TransferID::PQ},
-      {kCVImageBufferTransferFunction_ITU_R_2100_HLG,
-       kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG,
-       gfx::ColorSpace::TransferID::HLG},
-      {kCVImageBufferTransferFunction_sRGB, nullptr,
-       gfx::ColorSpace::TransferID::SRGB},
-      {kCVImageBufferTransferFunction_Linear,
-       kCMFormatDescriptionTransferFunction_Linear,
-       gfx::ColorSpace::TransferID::LINEAR},
-      {kCVImageBufferTransferFunction_sRGB,
-       kCMFormatDescriptionTransferFunction_sRGB,
-       gfx::ColorSpace::TransferID::SRGB},
-  });
-  return kSupportedTransferFuncs;
+  static const base::NoDestructor<std::vector<CVImageTransferFn>>
+      kSupportedTransferFuncs([] {
+        std::vector<CVImageTransferFn> pairs;
+        pairs.reserve(13);
+        pairs.push_back({kCVImageBufferTransferFunction_ITU_R_709_2,
+                         kCMFormatDescriptionTransferFunction_ITU_R_709_2,
+                         gfx::ColorSpace::TransferID::BT709_APPLE});
+        pairs.push_back({kCVImageBufferTransferFunction_ITU_R_709_2,
+                         kCMFormatDescriptionTransferFunction_ITU_R_709_2,
+                         gfx::ColorSpace::TransferID::BT709});
+        pairs.push_back({kCVImageBufferTransferFunction_ITU_R_709_2,
+                         kCMFormatDescriptionTransferFunction_ITU_R_709_2,
+                         gfx::ColorSpace::TransferID::SMPTE170M});
+        pairs.push_back({kCVImageBufferTransferFunction_SMPTE_240M_1995,
+                         kCMFormatDescriptionTransferFunction_SMPTE_240M_1995,
+                         gfx::ColorSpace::TransferID::SMPTE240M});
+        pairs.push_back({kCVImageBufferTransferFunction_UseGamma,
+                         kCMFormatDescriptionTransferFunction_UseGamma,
+                         gfx::ColorSpace::TransferID::CUSTOM});
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_ITU_R_2020,
+                           kCMFormatDescriptionTransferFunction_ITU_R_2020,
+                           gfx::ColorSpace::TransferID::BT2020_10});
+        }
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_ITU_R_2020,
+                           kCMFormatDescriptionTransferFunction_ITU_R_2020,
+                           gfx::ColorSpace::TransferID::BT2020_12});
+        }
+        if (@available(macOS 10.12, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_SMPTE_ST_428_1,
+                           kCMFormatDescriptionTransferFunction_SMPTE_ST_428_1,
+                           gfx::ColorSpace::TransferID::SMPTEST428_1});
+        }
+        if (@available(macOS 10.13, *)) {
+          pairs.push_back(
+              {kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
+               kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
+               gfx::ColorSpace::TransferID::PQ});
+        }
+        if (@available(macOS 10.13, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_ITU_R_2100_HLG,
+                           kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG,
+                           gfx::ColorSpace::TransferID::HLG});
+        }
+        if (@available(macOS 10.13, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_sRGB, nullptr,
+                           gfx::ColorSpace::TransferID::SRGB});
+        }
+        if (@available(macOS 10.14, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_Linear,
+                           kCMFormatDescriptionTransferFunction_Linear,
+                           gfx::ColorSpace::TransferID::LINEAR});
+        }
+        if (@available(macOS 10.15, *)) {
+          pairs.push_back({kCVImageBufferTransferFunction_sRGB,
+                           kCMFormatDescriptionTransferFunction_sRGB,
+                           gfx::ColorSpace::TransferID::SRGB});
+        }
+        return pairs;
+      }());
+  return *kSupportedTransferFuncs;
 }
 
 gfx::ColorSpace::TransferID GetCoreVideoTransferFn(CFTypeRef transfer_untyped,
@@ -185,24 +218,30 @@ struct CVImageMatrix {
   gfx::ColorSpace::MatrixID id;
 };
 base::span<const CVImageMatrix> GetSupportedImageMatrix() {
-  static const auto kSupportedMatrices = std::to_array<CVImageMatrix>({
-      {kCVImageBufferYCbCrMatrix_ITU_R_709_2,
-       kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2,
-       gfx::ColorSpace::MatrixID::BT709},
-      {kCVImageBufferYCbCrMatrix_ITU_R_601_4,
-       kCMFormatDescriptionYCbCrMatrix_ITU_R_601_4,
-       gfx::ColorSpace::MatrixID::SMPTE170M},
-      {kCVImageBufferYCbCrMatrix_ITU_R_601_4,
-       kCMFormatDescriptionYCbCrMatrix_ITU_R_601_4,
-       gfx::ColorSpace::MatrixID::BT470BG},
-      {kCVImageBufferYCbCrMatrix_SMPTE_240M_1995,
-       kCMFormatDescriptionYCbCrMatrix_SMPTE_240M_1995,
-       gfx::ColorSpace::MatrixID::SMPTE240M},
-      {kCVImageBufferYCbCrMatrix_ITU_R_2020,
-       kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
-       gfx::ColorSpace::MatrixID::BT2020_NCL},
-  });
-  return kSupportedMatrices;
+  static const base::NoDestructor<std::vector<CVImageMatrix>>
+      kSupportedMatrices([] {
+        std::vector<CVImageMatrix> pairs;
+        pairs.reserve(5);
+        pairs.push_back({kCVImageBufferYCbCrMatrix_ITU_R_709_2,
+                         kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2,
+                         gfx::ColorSpace::MatrixID::BT709});
+        pairs.push_back({kCVImageBufferYCbCrMatrix_ITU_R_601_4,
+                         kCMFormatDescriptionYCbCrMatrix_ITU_R_601_4,
+                         gfx::ColorSpace::MatrixID::SMPTE170M});
+        pairs.push_back({kCVImageBufferYCbCrMatrix_ITU_R_601_4,
+                         kCMFormatDescriptionYCbCrMatrix_ITU_R_601_4,
+                         gfx::ColorSpace::MatrixID::BT470BG});
+        pairs.push_back({kCVImageBufferYCbCrMatrix_SMPTE_240M_1995,
+                         kCMFormatDescriptionYCbCrMatrix_SMPTE_240M_1995,
+                         gfx::ColorSpace::MatrixID::SMPTE240M});
+        if (@available(macOS 10.11, *)) {
+          pairs.push_back({kCVImageBufferYCbCrMatrix_ITU_R_2020,
+                           kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
+                           gfx::ColorSpace::MatrixID::BT2020_NCL});
+        }
+        return pairs;
+      }());
+  return *kSupportedMatrices;
 }
 
 gfx::ColorSpace::MatrixID GetCoreVideoMatrix(CFTypeRef matrix_untyped) {
@@ -256,8 +295,10 @@ gfx::ColorSpace::RangeID GetCoreVideoRange(CFTypeRef range_untyped) {
   if (!range) {
     return gfx::ColorSpace::RangeID::LIMITED;
   }
-  if (CFEqual(range, kCVPixelFormatComponentRange_FullRange)) {
-    return gfx::ColorSpace::RangeID::FULL;
+  if (@available(macOS 10.10, *)) {
+    if (CFEqual(range, kCVPixelFormatComponentRange_FullRange)) {
+      return gfx::ColorSpace::RangeID::FULL;
+    }
   }
   return gfx::ColorSpace::RangeID::LIMITED;
 }
@@ -323,8 +364,9 @@ bool ColorSpaceToCVImageBufferKeys(const gfx::ColorSpace& color_space,
       break;
     }
   }
-  if (found_transfer && prefer_srgb_trfn) {
-    if (*out_transfer == kCVImageBufferTransferFunction_ITU_R_709_2) {
+  if (@available(macOS 10.13, *)) {
+    if (found_transfer && prefer_srgb_trfn &&
+        *out_transfer == kCVImageBufferTransferFunction_ITU_R_709_2) {
       *out_transfer = kCVImageBufferTransferFunction_sRGB;
     }
   }

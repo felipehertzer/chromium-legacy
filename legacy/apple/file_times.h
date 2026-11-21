@@ -14,23 +14,27 @@
 
 namespace chromium_legacy {
 
-// setattrlist predates Lion and can update only mtime, atomically preserving
-// atime. Attribute values must follow bitmap order: modification before access.
-inline int LegacySetFileTimes(const char* path,
-                              const timespec& access,
-                              const timespec& modification) {
-  if (!path) {
-    errno = EINVAL;
-    return -1;
-  }
+namespace internal {
+// Attribute values follow bitmap order: modification before access. Setting
+// only the requested attributes preserves omitted timestamps atomically.
+template <class Setter>
+inline int SetLegacyFileTimes(const timespec& access,
+                              const timespec& modification,
+                              Setter set) {
   timespec accessed = access;
   timespec modified = modification;
-  auto prepare = [](timespec& value) {
+  timespec now{};
+  if ((accessed.tv_nsec == UTIME_NOW || modified.tv_nsec == UTIME_NOW) &&
+      LegacyRealtime(&now)) {
+    return -1;
+  }
+  auto prepare = [&now](timespec& value) {
     if (value.tv_nsec == UTIME_OMIT) {
       return 0;
     }
     if (value.tv_nsec == UTIME_NOW) {
-      return LegacyRealtime(&value);
+      value = now;
+      return 0;
     }
     if (value.tv_nsec < 0 || value.tv_nsec >= 1000000000) {
       errno = EINVAL;
@@ -65,7 +69,32 @@ inline int LegacySetFileTimes(const char* path,
       length += sizeof(timespec);
     }
   }
-  return setattrlist(path, &attributes, &values, length, 0);
+  return set(&attributes, &values, length);
+}
+}  // namespace internal
+
+inline int LegacySetFileTimes(const char* path,
+                              const timespec& access,
+                              const timespec& modification,
+                              unsigned options = 0) {
+  if (!path) {
+    errno = EINVAL;
+    return -1;
+  }
+  return internal::SetLegacyFileTimes(
+      access, modification,
+      [=](attrlist* attributes, void* values, size_t length) {
+        return setattrlist(path, attributes, values, length, options);
+      });
+}
+inline int LegacySetFDFileTimes(int fd,
+                                const timespec& access,
+                                const timespec& modification) {
+  return internal::SetLegacyFileTimes(
+      access, modification,
+      [=](attrlist* attributes, void* values, size_t length) {
+        return fsetattrlist(fd, attributes, values, length, 0);
+      });
 }
 
 }  // namespace chromium_legacy

@@ -1,0 +1,128 @@
+diff --git a/compiler/rustc_codegen_llvm/src/back/llvm_backend.rs b/compiler/rustc_codegen_llvm/src/back/llvm_backend.rs
+index 16465436e239e9341c845e35efa983581cc3902d..8bfc5d6d68284db619dccbb7f6f83145586cd1c4 100644
+--- a/compiler/rustc_codegen_llvm/src/back/llvm_backend.rs
++++ b/compiler/rustc_codegen_llvm/src/back/llvm_backend.rs
+@@ -471,11 +471,11 @@ unsafe fn wrap_llcx<'ll>(llcx_raw: ptr::NonNull<llvm::ContextRaw>) -> llvm::Cont
+     llvm::Context { llcx_raw, _invariant_ll: PhantomData }
+ }
+ 
+-/// Shared helper to call [`llvm::LLVMContextCreate`] and then configure
++/// Shared helper to call [`llvm::LLVMRustContextCreate`] and then configure
+ /// [`llvm::LLVMContextSetDiscardValueNames`].
+ fn create_context_and_set_fewer_names(fewer_names: bool) -> ptr::NonNull<llvm::ContextRaw> {
+     unsafe {
+-        let llcx_raw = llvm::LLVMContextCreate();
++        let llcx_raw = llvm::LLVMRustContextCreate();
+         llvm::LLVMContextSetDiscardValueNames(wrap_llcx(llcx_raw), fewer_names.to_llvm_bool());
+         llcx_raw
+     }
+diff --git a/compiler/rustc_codegen_llvm/src/llvm/ffi.rs b/compiler/rustc_codegen_llvm/src/llvm/ffi.rs
+index 7e6c4869f0b26d351f795ef19284b7e6e63eb280..eb6fcc820a555a443d9061efa3de01fb277c42b5 100644
+--- a/compiler/rustc_codegen_llvm/src/llvm/ffi.rs
++++ b/compiler/rustc_codegen_llvm/src/llvm/ffi.rs
+@@ -897,7 +897,7 @@ pub struct GEPNoWrapFlags : c_uint {
+ 
+ unsafe extern "C" {
+     // Create and destroy contexts.
+-    pub(crate) fn LLVMContextCreate() -> ptr::NonNull<ContextRaw>;
++    pub(crate) fn LLVMRustContextCreate() -> ptr::NonNull<ContextRaw>;
+     pub(crate) fn LLVMContextDispose(C: ptr::NonNull<ContextRaw>);
+     pub(crate) fn LLVMContextSetDiscardValueNames<'ll>(C: Context<'ll>, Discard: Bool);
+     pub(crate) fn LLVMGetMDKindIDInContext<'ll>(
+diff --git a/compiler/rustc_llvm/llvm-wrapper/PassWrapper.cpp b/compiler/rustc_llvm/llvm-wrapper/PassWrapper.cpp
+index f891ef556db4c7014b45d09224fd903f088e75dc..113709afd223acd7be41ca7fbb5e071b646cf3d6 100644
+--- a/compiler/rustc_llvm/llvm-wrapper/PassWrapper.cpp
++++ b/compiler/rustc_llvm/llvm-wrapper/PassWrapper.cpp
+@@ -29,6 +29,9 @@
+ #include "llvm/Plugins/PassPlugin.h"
+ #include "llvm/Support/CBindingWrapping.h"
+ #include "llvm/Support/FileSystem.h"
++#if LLVM_VERSION_GE(24, 0)
++#include "llvm/Support/LibraryOptionsContext.h"
++#endif
+ #include "llvm/Support/Program.h"
+ #include "llvm/Support/TimeProfiler.h"
+ #include "llvm/Support/VirtualFileSystem.h"
+@@ -347,6 +350,10 @@ extern "C" const char *LLVMRustGetHostCPUName(size_t *OutLen) {
+   return Name.data();
+ }
+ 
++#if LLVM_VERSION_GE(24, 0)
++static cl::LibraryOptionsContext OptionsContext;
++#endif
++
+ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
+     const char *TripleStr, const char *CPU, const char *Feature,
+     const char *ABIStr, LLVMRustCodeModel RustCM, LLVMRustRelocModel RustReloc,
+@@ -372,6 +379,9 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
+   }
+ 
+   TargetOptions Options = codegen::InitTargetOptionsFromCodeGenFlags(Trip);
++#if LLVM_VERSION_GE(24, 0)
++  Options.MCOptions.LibraryOptions = &OptionsContext;
++#endif
+ 
+ #if LLVM_VERSION_LT(24, 0)
+   Options.FloatABIType = FloatABIType;
+@@ -440,6 +450,14 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
+   return wrap(TM);
+ }
+ 
++extern "C" LLVMContextRef LLVMRustContextCreate() {
++  LLVMContextRef Ctx = LLVMContextCreate();
++#if LLVM_VERSION_GE(24, 0)
++  unwrap(Ctx)->getLibraryOptions().assign(OptionsContext);
++#endif
++  return Ctx;
++}
++
+ extern "C" void LLVMRustSetLLVMOptions(int Argc, char **Argv) {
+   // Initializing the command-line options more than once is not allowed. So,
+   // check if they've already been initialized. (This could happen if we're
+@@ -449,7 +467,11 @@ extern "C" void LLVMRustSetLLVMOptions(int Argc, char **Argv) {
+   if (Initialized)
+     return;
+   Initialized = true;
++#if LLVM_VERSION_LT(24, 0)
+   cl::ParseCommandLineOptions(Argc, Argv);
++#else
++  cl::parseCommandLineOptions(OptionsContext, ArrayRef(Argv, Argc));
++#endif
+ }
+ 
+ enum class LLVMRustFileType {
+diff --git a/compiler/rustc_target/src/spec/base/apple/mod.rs b/compiler/rustc_target/src/spec/base/apple/mod.rs
+index d1d91cbd3788429c9efe8a9f890c48d9a47e7c18..9dfbe196d379b2ae13a93e2d1aed38f56ef25f3e 100644
+--- a/compiler/rustc_target/src/spec/base/apple/mod.rs
++++ b/compiler/rustc_target/src/spec/base/apple/mod.rs
+@@ -308,7 +308,7 @@ pub fn os_minimum_deployment_target(os: &Os) -> Self {
+         // $ rustc --print deployment-target
+         // ```
+         let (major, minor, patch) = match os {
+-            Os::MacOs => (10, 12, 0),
++            Os::MacOs => (10, 7, 0),
+             Os::IOs => (10, 0, 0),
+             Os::TvOs => (10, 0, 0),
+             Os::WatchOs => (5, 0, 0),
+diff --git a/compiler/rustc_target/src/spec/targets/x86_64_apple_darwin.rs b/compiler/rustc_target/src/spec/targets/x86_64_apple_darwin.rs
+index 8d0febc362d406780a92918969320f639ad69f5a..ce9cdb496713429c2d387aa5d0fed9967bf37a29 100644
+--- a/compiler/rustc_target/src/spec/targets/x86_64_apple_darwin.rs
++++ b/compiler/rustc_target/src/spec/targets/x86_64_apple_darwin.rs
+@@ -6,7 +6,7 @@ pub(crate) fn target() -> Target {
+     Target {
+         llvm_target,
+         metadata: TargetMetadata {
+-            description: Some("x86_64 Apple macOS (10.12+, Sierra+)".into()),
++            description: Some("x86_64 Apple macOS (10.7+, Lion+)".into()),
+             tier: Some(2),
+             host_tools: Some(true),
+             std: Some(true),
+@@ -16,6 +16,8 @@ pub(crate) fn target() -> Target {
+             "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128".into(),
+         arch,
+         options: TargetOptions {
++            // Lion also runs on pre-Penryn Core 2 Macs without SSE4.1.
++            cpu: "core2".into(),
+             mcount: "\u{1}mcount".into(),
+             max_atomic_width: Some(128), // penryn+ supports cmpxchg16b
+             supported_sanitizers: SanitizerSet::ADDRESS

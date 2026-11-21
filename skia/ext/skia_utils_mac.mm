@@ -74,9 +74,9 @@ SkBitmap NSImageOrNSImageRepToSkBitmap(NSImage* image,
 
   // Allocate a bitmap context with 4 components per pixel (BGRA). Apple
   // recommends these flags for improved CG performance.
-#define HAS_ARGB_SHIFTS(a, r, g, b) \
-            (SK_A32_SHIFT == (a) && SK_R32_SHIFT == (r) \
-             && SK_G32_SHIFT == (g) && SK_B32_SHIFT == (b))
+#define HAS_ARGB_SHIFTS(a, r, g, b)                                     \
+  (SK_A32_SHIFT == (a) && SK_R32_SHIFT == (r) && SK_G32_SHIFT == (g) && \
+   SK_B32_SHIFT == (b))
 #if defined(SK_CPU_LENDIAN) && HAS_ARGB_SHIFTS(24, 16, 8, 0)
   base::apple::ScopedCFTypeRef<CGContextRef> context(CGBitmapContextCreate(
       data, size.width, size.height, 8, size.width * 4, cg_color_space.get(),
@@ -93,8 +93,18 @@ SkBitmap NSImageOrNSImageRepToSkBitmap(NSImage* image,
 
   [NSGraphicsContext saveGraphicsState];
 
-  NSGraphicsContext* context_cocoa =
-      [NSGraphicsContext graphicsContextWithCGContext:context.get() flipped:NO];
+  NSGraphicsContext* context_cocoa = nil;
+  if (@available(macOS 10.10, *)) {
+    context_cocoa =
+        [NSGraphicsContext graphicsContextWithCGContext:context.get()
+                                                flipped:NO];
+  } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    context_cocoa =
+        [NSGraphicsContext graphicsContextWithGraphicsPort:context.get()
+                                                   flipped:NO];
+#endif
+  }
   [NSGraphicsContext setCurrentContext:context_cocoa];
 
   NSRect drawRect = NSMakeRect(0, 0, size.width, size.height);
@@ -125,7 +135,7 @@ base::span<const CGFloat> AsSpan(CGColorRef color_ref) {
                                    CGColorGetNumberOfComponents(color_ref)));
 }
 
-} // namespace
+}  // namespace
 
 namespace skia {
 
@@ -136,46 +146,58 @@ CGAffineTransform SkMatrixToCGAffineTransform(const SkMatrix& matrix) {
   DCHECK(matrix[SkMatrix::kMPersp1] == 0.0f);
   DCHECK(matrix[SkMatrix::kMPersp2] == 1.0f);
 
-  return CGAffineTransformMake(matrix[SkMatrix::kMScaleX],
-                               matrix[SkMatrix::kMSkewY],
-                               matrix[SkMatrix::kMSkewX],
-                               matrix[SkMatrix::kMScaleY],
-                               matrix[SkMatrix::kMTransX],
-                               matrix[SkMatrix::kMTransY]);
+  return CGAffineTransformMake(
+      matrix[SkMatrix::kMScaleX], matrix[SkMatrix::kMSkewY],
+      matrix[SkMatrix::kMSkewX], matrix[SkMatrix::kMScaleY],
+      matrix[SkMatrix::kMTransX], matrix[SkMatrix::kMTransY]);
 }
 
 SkRect CGRectToSkRect(const CGRect& rect) {
-  SkRect sk_rect = {
-    rect.origin.x, rect.origin.y, CGRectGetMaxX(rect), CGRectGetMaxY(rect)
-  };
+  SkRect sk_rect = {rect.origin.x, rect.origin.y, CGRectGetMaxX(rect),
+                    CGRectGetMaxY(rect)};
   return sk_rect;
 }
 
 CGRect SkIRectToCGRect(const SkIRect& rect) {
-  CGRect cg_rect = {
-    { rect.fLeft, rect.fTop },
-    { rect.fRight - rect.fLeft, rect.fBottom - rect.fTop }
-  };
+  CGRect cg_rect = {{rect.fLeft, rect.fTop},
+                    {rect.fRight - rect.fLeft, rect.fBottom - rect.fTop}};
   return cg_rect;
 }
 
 CGRect SkRectToCGRect(const SkRect& rect) {
-  CGRect cg_rect = {
-    { rect.fLeft, rect.fTop },
-    { rect.fRight - rect.fLeft, rect.fBottom - rect.fTop }
-  };
+  CGRect cg_rect = {{rect.fLeft, rect.fTop},
+                    {rect.fRight - rect.fLeft, rect.fBottom - rect.fTop}};
   return cg_rect;
 }
 
 SkColor CGColorRefToSkColor(CGColorRef color) {
-  base::apple::ScopedCFTypeRef<CGColorRef> cg_color(
-      CGColorCreateCopyByMatchingToColorSpace(base::mac::GetSRGBColorSpace(),
-                                              kCGRenderingIntentDefault, color,
-                                              nullptr));
-  base::span<const CGFloat> components = AsSpan(cg_color.get());
-
-  DCHECK_EQ(components.size(), 4u);
-  return SkColor4f{components[0], components[1], components[2], components[3]}
+  if (@available(macOS 10.11, *)) {
+    base::apple::ScopedCFTypeRef<CGColorRef> cg_color(
+        CGColorCreateCopyByMatchingToColorSpace(base::mac::GetSRGBColorSpace(),
+                                                kCGRenderingIntentDefault,
+                                                color, nullptr));
+    base::span<const CGFloat> components = AsSpan(cg_color.get());
+    DCHECK_EQ(components.size(), 4u);
+    return SkColor4f{components[0], components[1], components[2], components[3]}
+        .toSkColor();
+  }
+  NSColorSpace* source =
+      [[NSColorSpace alloc] initWithCGColorSpace:CGColorGetColorSpace(color)];
+  if (!source) {
+    return SK_ColorTRANSPARENT;
+  }
+  auto input = AsSpan(color);
+  NSColor* converted = [[NSColor colorWithColorSpace:source
+                                          components:input.data()
+                                               count:input.size()]
+      colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+  if (!converted) {
+    return SK_ColorTRANSPARENT;
+  }
+  CGFloat red, green, blue, alpha;
+  [converted getRed:&red green:&green blue:&blue alpha:&alpha];
+  return SkColor4f{static_cast<float>(red), static_cast<float>(green),
+                   static_cast<float>(blue), static_cast<float>(alpha)}
       .toSkColor();
 }
 
@@ -224,8 +246,9 @@ NSColor* SkColorToSRGBNSColor(SkColor color) {
 
 SkBitmap CGImageToSkBitmap(CGImageRef image) {
   SkBitmap bitmap;
-  if (image && SkCreateBitmapFromCGImage(&bitmap, image))
+  if (image && SkCreateBitmapFromCGImage(&bitmap, image)) {
     return bitmap;
+  }
   return SkBitmap();
 }
 
@@ -245,21 +268,24 @@ NSBitmapImageRep* SkBitmapToNSBitmapImageRep(const SkBitmap& skiaBitmap) {
   // First convert SkBitmap to CGImageRef.
   base::apple::ScopedCFTypeRef<CGImageRef> cgimage(
       SkCreateCGImageRef(skiaBitmap));
-  if (!cgimage)
+  if (!cgimage) {
     return nil;
+  }
 
   // Now convert to NSBitmapImageRep.
   return [[NSBitmapImageRep alloc] initWithCGImage:cgimage.get()];
 }
 
 NSImage* SkBitmapToNSImage(const SkBitmap& skiaBitmap) {
-  if (skiaBitmap.isNull())
+  if (skiaBitmap.isNull()) {
     return nil;
+  }
 
   NSImage* image = [[NSImage alloc] init];
   NSBitmapImageRep* imageRep = SkBitmapToNSBitmapImageRep(skiaBitmap);
-  if (!imageRep)
+  if (!imageRep) {
     return nil;
+  }
   [image addRepresentation:imageRep];
   image.size = NSMakeSize(skiaBitmap.width(), skiaBitmap.height());
   return image;

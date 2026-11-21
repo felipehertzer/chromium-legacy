@@ -16,6 +16,7 @@ import tempfile
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import whole_archive
+from legacy_sdk import add_legacy_sdk_overlay
 
 # Prefix for all custom linker driver arguments.
 LINKER_DRIVER_ARG_PREFIX = '-Wcrl,'
@@ -179,6 +180,9 @@ class LinkerDriver(object):
         self._compiler_driver_args = whole_archive.wrap_with_whole_archive(
             self._compiler_driver_args, is_apple=True
         )
+
+        self._compiler_driver_args = add_legacy_sdk_overlay(
+            self._compiler_driver_args)
 
         linker_driver_outputs = [self._get_linker_output()]
 

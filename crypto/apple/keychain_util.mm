@@ -15,6 +15,12 @@
 #include "base/strings/sys_string_conversions.h"
 #include "crypto/apple/keychain_v2.h"
 
+// The SDK does not annotate this private SPI with its macOS introduction.
+#if !BUILDFLAG(IS_IOS)
+extern "C" SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator)
+    __attribute__((weak_import));
+#endif
+
 namespace crypto::apple {
 
 namespace {
@@ -36,6 +42,9 @@ enum class KeychainMigrationResult {
 #if !BUILDFLAG(IS_IOS)
 bool ExecutableHasKeychainAccessGroupEntitlement(
     const std::string& keychain_access_group) {
+  if (!SecTaskCreateFromSelf) {
+    return false;
+  }
   base::apple::ScopedCFTypeRef<SecTaskRef> task(SecTaskCreateFromSelf(nullptr));
   if (!task) {
     return false;

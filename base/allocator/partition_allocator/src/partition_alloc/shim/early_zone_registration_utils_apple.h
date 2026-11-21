@@ -13,6 +13,7 @@
 #include <mach/mach.h>
 #include <malloc/malloc.h>
 
+#include <cstdlib>
 #include <span>
 #include <string_view>
 
@@ -20,10 +21,20 @@ extern "C" {
 // abort_report_np() records the message in a special section that both the
 // system CrashReporter and Crashpad collect in crash reports. See also in
 // chrome_exe_main_mac.cc.
-void abort_report_np(const char* fmt, ...);
+void abort_report_np(const char* fmt, ...) __attribute__((weak_import));
 }  // extern "C"
 
 namespace allocator_shim {
+
+// Early allocator initialization must not allocate to format a diagnostic.
+// Older systems lack abort_report_np, but must still terminate on failure.
+template <typename... Args>
+[[noreturn]] inline void AbortWithMessage(const char* format, Args... args) {
+  if (abort_report_np) {
+    abort_report_np(format, args...);
+  }
+  std::abort();
+}
 
 // This function intentionally returns a `std::span` instead of `base::span`
 // because this file cannot depend on the base library (or any other libraries
@@ -34,7 +45,7 @@ inline std::span<malloc_zone_t*> GetMallocZonesOrDie() {
   kern_return_t result = malloc_get_all_zones(
       mach_task_self(), /*reader=*/nullptr, &zones, &zone_count);
   if (result != KERN_SUCCESS) [[unlikely]] {
-    abort_report_np("Cannot enumerate malloc zones.");
+    AbortWithMessage("Cannot enumerate malloc zones.");
   }
   // This is not guaranteed by the C++ standard, but commonly satisfied.
   // It must be safe to assume the same memory layout for arrays of two

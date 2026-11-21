@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
 // The entry point for all Mac Chromium processes, including the outer app
 // bundle (browser) and helper app (renderer, plugin, and friends).
 
@@ -36,7 +35,7 @@ extern "C" {
 // system CrashReporter and Crashpad collect in crash reports. Using a Crashpad
 // Annotation would be preferable, but this executable cannot depend on
 // Crashpad directly.
-void abort_report_np(const char* fmt, ...);
+void abort_report_np(const char* fmt, ...) __attribute__((weak_import));
 }
 
 namespace {
@@ -135,7 +134,9 @@ __attribute__((used)) const char kGrossPaddingForCrbug1300598[216 * 1024] = {};
   char message[4096];
   if (UNSAFE_TODO(vsnprintf(message, sizeof(message), format, valist)) >= 0) {
     UNSAFE_TODO(fputs(message, stderr));
-    abort_report_np("%s", message);
+    if (abort_report_np) {
+      abort_report_np("%s", message);
+    }
   }
   va_end(valist);
   abort();

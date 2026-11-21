@@ -98,8 +98,8 @@ int pthread_chdir_np(const char* dir);
 
 int pthread_fchdir_np(int fd);
 
-int responsibility_spawnattrs_setdisclaim(posix_spawnattr_t attrs,
-                                          int disclaim);
+int responsibility_spawnattrs_setdisclaim(posix_spawnattr_t attrs, int disclaim)
+    __attribute__((weak_import));
 }  // extern "C"
 
 namespace base {
@@ -308,7 +308,9 @@ Process LaunchProcess(const std::vector<std::string>& argv,
   }
 
 #if BUILDFLAG(IS_MAC)
-  if (options.disclaim_responsibility) {
+  // Older systems do not implement process responsibility.
+  if (options.disclaim_responsibility &&
+      responsibility_spawnattrs_setdisclaim) {
     DPSXCHECK(responsibility_spawnattrs_setdisclaim(attr.get(), 1));
   }
 

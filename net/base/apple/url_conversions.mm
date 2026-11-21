@@ -64,7 +64,22 @@ GURL GURLWithNSURL(NSURL* url) {
       // The bug in NSURL absoluteString is natively fixed in iOS 27+.
       NSString* scheme = url.scheme;
       if (scheme && [scheme caseInsensitiveCompare:@"about"] == NSOrderedSame) {
-        NSData* data = [url dataRepresentation];
+        NSData* data = nil;
+        if (@available(macOS 10.11, *)) {
+          data = [url dataRepresentation];
+        } else {
+          // Preserve the original URL bytes, including an unescaped about:
+          // fragment, rather than round-tripping through absoluteString.
+          CFURLRef cf_url = (__bridge CFURLRef)url;
+          CFIndex length = CFURLGetBytes(cf_url, nullptr, 0);
+          if (length > 0) {
+            NSMutableData* bytes = [NSMutableData dataWithLength:length];
+            if (CFURLGetBytes(cf_url, static_cast<UInt8*>(bytes.mutableBytes),
+                              length) == length) {
+              data = bytes;
+            }
+          }
+        }
         if (data && data.length > 0) {
           return GURL(std::string_view(
               reinterpret_cast<const char*>(data.bytes), data.length));

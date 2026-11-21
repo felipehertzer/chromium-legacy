@@ -1,0 +1,60 @@
+diff --git a/src/ports/SkFontMgr_mac_ct.cpp b/src/ports/SkFontMgr_mac_ct.cpp
+index 0c53c11e52959ccd3db4b03a0c7e1a7f8628d361..44eaf632e7e48607d2168619b8a0de96510aaa38 100644
+--- a/src/ports/SkFontMgr_mac_ct.cpp
++++ b/src/ports/SkFontMgr_mac_ct.cpp
+@@ -440,8 +440,13 @@ protected:
+                 kCFAllocatorDefault, reinterpret_cast<const UInt8 *>(locale), strlen(locale),
+                 kCFStringEncodingUTF8, false));
+ 
+-        SkUniqueCFRef<CTFontRef> fallbackFont(CTFontCreateForStringWithLanguage(
+-                familyFont.get(), string.get(), range, cfLocale.get()));
++        SkUniqueCFRef<CTFontRef> fallbackFont;
++        if (__builtin_available(macOS 10.9, *)) {
++            fallbackFont.reset(CTFontCreateForStringWithLanguage(
++                    familyFont.get(), string.get(), range, cfLocale.get()));
++        } else {
++            fallbackFont.reset(CTFontCreateForString(familyFont.get(), string.get(), range));
++        }
+         if (!fallbackFont || !has_character(fallbackFont.get(), character)) {
+             return nullptr;
+         }
+diff --git a/src/ports/SkTypeface_mac_ct.cpp b/src/ports/SkTypeface_mac_ct.cpp
+index c1b40e05361a29189f47185d772a1331f684aed1..bb43bc3b72c574c87f49380ac23118e0291abc06 100644
+--- a/src/ports/SkTypeface_mac_ct.cpp
++++ b/src/ports/SkTypeface_mac_ct.cpp
+@@ -723,6 +723,7 @@ bool SkTypeface_Mac::onGlyphMaskNeedsCurrentColor() const {
+ 
+ CFArrayRef SkTypeface_Mac::getVariationAxes() const {
+     fInitVariationAxes([this]{
++        if (__builtin_available(macOS 10.13, *)) {
+         // Prefer kCTFontVariationAxesAttribute, faster since it doesn't localize axis names.
+         SkUniqueCFRef<CTFontDescriptorRef> desc(CTFontCopyFontDescriptor(fFontRef.get()));
+         SkUniqueCFRef<CFTypeRef> cf(
+@@ -733,6 +734,7 @@ CFArrayRef SkTypeface_Mac::getVariationAxes() const {
+             cf.release();
+             return;
+         }
++        }
+         fVariationAxes.reset(CTFontCopyVariationAxes(fFontRef.get()));
+     });
+     return fVariationAxes.get();
+diff --git a/src/utils/mac/SkCreateCGImageRef.cpp b/src/utils/mac/SkCreateCGImageRef.cpp
+index b7578502b362c061a9d1ecf2d41c51c1270cd4c2..3c9d4c61bea65f2c7599b73a8ea8ae5142b52c92 100644
+--- a/src/utils/mac/SkCreateCGImageRef.cpp
++++ b/src/utils/mac/SkCreateCGImageRef.cpp
+@@ -292,7 +292,14 @@ sk_sp<SkColorSpace> SkMakeColorSpaceFromCGColorSpace(CGColorSpaceRef cgColorSpac
+     }
+ 
+     // Attempt to convert by parsing the ICC profile.
+-    SkUniqueCFRef<CFDataRef> iccData(CGColorSpaceCopyICCData(cgColorSpace));
++    SkUniqueCFRef<CFDataRef> iccData;
++    if (__builtin_available(macOS 10.12, *)) {
++        iccData.reset(CGColorSpaceCopyICCData(cgColorSpace));
++    } else {
++#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) &&     __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101200
++        iccData.reset(CGColorSpaceCopyICCProfile(cgColorSpace));
++#endif
++    }
+     if (!iccData) {
+         return nullptr;
+     }

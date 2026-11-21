@@ -1,0 +1,212 @@
+--- a/library/std/src/sys/pal/unix/mod.rs
++++ b/library/std/src/sys/pal/unix/mod.rs
+@@ -389,3 +389,56 @@
+ pub fn unsupported_err() -> crate::io::Error {
+     io::Error::UNSUPPORTED_PLATFORM
+ }
++
++// Compatibility adapters are linked by Chromium only for its Lion target.
++// FFI pointers retain the contracts of the corresponding libc functions.
++#[cfg(chromium_legacy_macos)]
++pub(crate) mod legacy_macos {
++    use libc::{c_char, c_int, clockid_t, mode_t, stat, timespec, DIR};
++    unsafe extern "C" {
++        #[link_name = "ChromiumLegacyRustClockGettime"]
++        pub fn clock_gettime(clock: clockid_t, result: *mut timespec) -> c_int;
++        #[link_name = "ChromiumLegacyRustRandom"]
++        pub fn random(output: *mut u8, size: usize);
++        #[link_name = "ChromiumLegacyRustOpenAt"]
++        fn openat_impl(parent: c_int, path: *const c_char, flags: c_int, mode: mode_t) -> c_int;
++        #[link_name = "ChromiumLegacyRustFstatAt"]
++        pub fn fstatat(parent: c_int, path: *const c_char, result: *mut stat, flags: c_int) -> c_int;
++        #[link_name = "ChromiumLegacyRustMkdirAt"]
++        pub fn mkdirat(parent: c_int, path: *const c_char, mode: mode_t) -> c_int;
++        #[link_name = "ChromiumLegacyRustUnlinkAt"]
++        pub fn unlinkat(parent: c_int, path: *const c_char, flags: c_int) -> c_int;
++        #[link_name = "ChromiumLegacyRustFdOpenDir"]
++        pub fn fdopendir(fd: c_int) -> *mut DIR;
++        #[link_name = "ChromiumLegacyRustDirFd"]
++        pub fn dirfd(directory: *mut DIR) -> c_int;
++        #[link_name = "ChromiumLegacyRustRenameAt"]
++        pub fn renameat(from_fd: c_int, from: *const c_char, to_fd: c_int, to: *const c_char) -> c_int;
++        #[link_name = "ChromiumLegacyRustFchmodAt"]
++        pub fn fchmodat(parent: c_int, path: *const c_char, mode: mode_t, flags: c_int) -> c_int;
++        #[link_name = "ChromiumLegacyRustLinkAt"]
++        pub fn linkat(from_fd: c_int, from: *const c_char, to_fd: c_int, to: *const c_char, flags: c_int) -> c_int;
++        #[link_name = "ChromiumLegacyRustFutimens"]
++        fn set_fd_times(fd: c_int, access: *const timespec, modified: *const timespec) -> c_int;
++        #[link_name = "ChromiumLegacyRustUtimensAt"]
++        fn set_path_times(parent: c_int, path: *const c_char, access: *const timespec, modified: *const timespec, flags: c_int) -> c_int;
++    }
++    pub unsafe fn openat(parent: c_int, path: *const c_char, flags: c_int, mode: c_int) -> c_int {
++        // libc's variadic openat promotes mode_t to int. Preserve that caller
++        // interface while the fixed C adapter accepts the actual mode_t ABI.
++        unsafe { openat_impl(parent, path, flags, mode as mode_t) }
++    }
++    pub unsafe fn openat_dir(parent: c_int, path: *const c_char, flags: c_int) -> c_int {
++        // O_CREAT is not used by the directory-removal caller.
++        unsafe { openat(parent, path, flags, 0) }
++    }
++    pub unsafe fn futimens(fd: c_int, times: *const timespec) -> c_int {
++        // libc's contract requires two readable timespecs, or a null pointer.
++        let modified = if times.is_null() { times } else { unsafe { times.add(1) } };
++        unsafe { set_fd_times(fd, times, modified) }
++    }
++    pub unsafe fn utimensat(parent: c_int, path: *const c_char, times: *const timespec, flags: c_int) -> c_int {
++        let modified = if times.is_null() { times } else { unsafe { times.add(1) } };
++        unsafe { set_path_times(parent, path, times, modified, flags) }
++    }
++}
+--- a/library/std/src/sys/pal/unix/time.rs
++++ b/library/std/src/sys/pal/unix/time.rs
+@@ -104,7 +104,11 @@
+         }
+ 
+         let mut t = MaybeUninit::uninit();
+-        cvt(unsafe { libc::clock_gettime(clock, t.as_mut_ptr()) }).unwrap();
++        #[cfg(chromium_legacy_macos)]
++        use super::legacy_macos::clock_gettime;
++        #[cfg(not(chromium_legacy_macos))]
++        use libc::clock_gettime;
++        cvt(unsafe { clock_gettime(clock, t.as_mut_ptr()) }).unwrap();
+         let t = unsafe { t.assume_init() };
+         Timespec::new(t.tv_sec as i64, t.tv_nsec as i64).unwrap()
+     }
+--- a/library/std/src/sys/random/apple.rs
++++ b/library/std/src/sys/random/apple.rs
+@@ -10,6 +10,11 @@
+ //! proven to be App Store-compatible.
+ 
+ pub fn fill_bytes(bytes: &mut [u8]) {
+-    let ret = unsafe { libc::CCRandomGenerateBytes(bytes.as_mut_ptr().cast(), bytes.len()) };
+-    assert_eq!(ret, libc::kCCSuccess, "failed to generate random data");
++    #[cfg(chromium_legacy_macos)]
++    unsafe { crate::sys::pal::legacy_macos::random(bytes.as_mut_ptr(), bytes.len()) };
++    #[cfg(not(chromium_legacy_macos))]
++    {
++        let ret = unsafe { libc::CCRandomGenerateBytes(bytes.as_mut_ptr().cast(), bytes.len()) };
++        assert_eq!(ret, libc::kCCSuccess, "failed to generate random data");
++    }
+ }
+--- a/library/std/src/sys/fs/unix.rs
++++ b/library/std/src/sys/fs/unix.rs
+@@ -3,6 +3,11 @@
+ 
+ #[cfg(test)]
+ mod tests;
++
++#[cfg(chromium_legacy_macos)]
++use crate::sys::pal::legacy_macos as legacy_libc;
++#[cfg(not(chromium_legacy_macos))]
++use libc as legacy_libc;
+ 
+ // Import the file operations under consistent names.
+ cfg_select! {
+@@ -806,7 +811,7 @@
+             ) => Dir::open(&self.inner.root, &options),
+             // Use `dirfd` where possible.
+             _ => {
+-                let fd = unsafe { libc::dirfd(self.inner.dirp.0) };
++                let fd = unsafe { legacy_libc::dirfd(self.inner.dirp.0) };
+                 // Make this FD into a directory handle. We don't actually drop it,
+                 // so having an `OwnedFd` is fine.
+                 let dir_handle =
+@@ -1020,7 +1025,7 @@
+             target_os = "rtems",
+         )))]
+         {
+-            let fd = unsafe { libc::dirfd(self.0) };
++            let fd = unsafe { legacy_libc::dirfd(self.0) };
+             debug_assert_fd_is_open(fd);
+         }
+         let r = unsafe { libc::closedir(self.0) };
+@@ -1059,7 +1064,7 @@
+                 target_os = "vxworks",
+                 target_os = "rtems",
+             )) => {
+-                let fd = cvt(unsafe { libc::dirfd(self.dir.dirp.0) })?;
++                let fd = cvt(unsafe { legacy_libc::dirfd(self.dir.dirp.0) })?;
+ 
+                 // Make this FD into a directory handle. We don't actually drop it,
+                 // so having an `OwnedFd` is fine.
+@@ -1643,7 +1648,7 @@
+                     file_time_to_timespec(times.accessed)?,
+                     file_time_to_timespec(times.modified)?,
+                 ];
+-                cvt(unsafe { libc::futimens(self.as_raw_fd(), times.as_ptr()) })?;
++                cvt(unsafe { legacy_libc::futimens(self.as_raw_fd(), times.as_ptr()) })?;
+                 Ok(())
+             }
+         }
+@@ -2003,7 +2008,7 @@
+     ))]
+     {
+         res = cvt_r(|| unsafe {
+-            libc::fchmodat(libc::AT_FDCWD, p.as_ptr(), perm.mode, libc::AT_SYMLINK_NOFOLLOW)
++            legacy_libc::fchmodat(libc::AT_FDCWD, p.as_ptr(), perm.mode, libc::AT_SYMLINK_NOFOLLOW)
+         })
+         .map(|_| ());
+     }
+@@ -2091,7 +2096,7 @@
+             // Where we can, use `linkat` instead of `link`; see the comment above
+             // this one for details on why.
+             cvt(unsafe {
+-                libc::linkat(libc::AT_FDCWD, original.as_ptr(), libc::AT_FDCWD, link.as_ptr(), 0)
++                legacy_libc::linkat(libc::AT_FDCWD, original.as_ptr(), libc::AT_FDCWD, link.as_ptr(), 0)
+             })?;
+         }
+     }
+@@ -2250,7 +2255,7 @@
+             }
+             let times =
+                 [file_time_to_timespec(times.accessed)?, file_time_to_timespec(times.modified)?];
+-            cvt(unsafe { libc::utimensat(libc::AT_FDCWD, p.as_ptr(), times.as_ptr(), flags) })?;
++            cvt(unsafe { legacy_libc::utimensat(libc::AT_FDCWD, p.as_ptr(), times.as_ptr(), flags) })?;
+             Ok(())
+         }
+     }
+@@ -2502,7 +2507,9 @@
+     miri
+ )))]
+ mod remove_dir_impl {
+-    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
++    #[cfg(chromium_legacy_macos)]
++    use crate::sys::pal::legacy_macos::{fdopendir, openat_dir as openat, unlinkat};
++    #[cfg(all(not(chromium_legacy_macos), not(all(target_os = "linux", target_env = "gnu"))))]
+     use libc::{fdopendir, openat, unlinkat};
+     #[cfg(all(target_os = "linux", target_env = "gnu"))]
+     use libc::{fdopendir, openat64 as openat, unlinkat};
+@@ -2535,7 +2542,15 @@
+         }
+         let dirp = DirStream(ptr);
+         // file descriptor is automatically closed by libc::closedir() now, so give up ownership
+-        let new_parent_fd = dir_fd.into_raw_fd();
++        let transferred_fd = dir_fd.into_raw_fd();
++        #[cfg(chromium_legacy_macos)]
++        let new_parent_fd = {
++            // The legacy fdopendir adapter may use a different descriptor.
++            let _ = transferred_fd;
++            cvt(unsafe { super::legacy_libc::dirfd(ptr) })?
++        };
++        #[cfg(not(chromium_legacy_macos))]
++        let new_parent_fd = transferred_fd;
+         // a valid root is not needed because we do not call any functions involving the full path
+         // of the `DirEntry`s.
+         let dummy_root = PathBuf::new();
+--- a/library/std/src/sys/fs/unix/dir.rs
++++ b/library/std/src/sys/fs/unix/dir.rs
+@@ -1,6 +1,13 @@
+-use libc::{c_int, mkdirat, renameat, unlinkat};
++use libc::c_int;
++#[cfg(chromium_legacy_macos)]
++use crate::sys::pal::legacy_macos::{mkdirat, renameat, unlinkat};
++#[cfg(not(chromium_legacy_macos))]
++use libc::{mkdirat, renameat, unlinkat};
+ 
+ cfg_select! {
++    chromium_legacy_macos => {
++        use crate::sys::pal::legacy_macos::{fstatat as fstatat64, openat as openat64};
++    }
+     not(any(
+         all(target_os = "linux", not(target_env = "musl")),
+         target_os = "l4re",

@@ -197,13 +197,13 @@ void EarlyMallocZoneRegistration() {
   // a duplicate even when a binary copy of this code exists.
   if (allocator_shim::IsZoneAlreadyRegistered(
           allocator_shim::kDelegatingZoneName)) {
-    abort_report_np(
+    allocator_shim::AbortWithMessage(
         "The delegating default zone has unexpectedly already been "
         "registered.");
   }
   if (allocator_shim::IsZoneAlreadyRegistered(
           allocator_shim::kPartitionAllocZoneName)) {
-    abort_report_np(
+    allocator_shim::AbortWithMessage(
         "The PartitionAlloc default zone has unexpectedly already been "
         "registered.");
   }
@@ -229,7 +229,8 @@ void EarlyMallocZoneRegistration() {
 
   // Sanity check.
   if (allocator_shim::GetDefaultMallocZoneOrDie() != &g_delegating_zone) {
-    abort_report_np("Failed to install the delegating zone as default.");
+    allocator_shim::AbortWithMessage(
+        "Failed to install the delegating zone as default.");
   }
 }
 

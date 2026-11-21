@@ -2277,11 +2277,7 @@ component("base") {
 
     deps += [ ":plist_size_buildflags" ]
 
-    libs += [
-      "bsm",
-      "pmenergy",
-      "pmsample",
-    ]
+    libs += [ "bsm" ]
     frameworks += [
       "ApplicationServices.framework",
       "AppKit.framework",

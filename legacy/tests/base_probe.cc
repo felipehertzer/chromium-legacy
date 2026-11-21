@@ -48,6 +48,19 @@ int main(int argc, char** argv) {
   Check(event.TimedWait(base::Seconds(5)), "Mach-backed event notification");
   signaler.join();
 
+  base::WaitableEvent manual(base::WaitableEvent::ResetPolicy::MANUAL,
+                             base::WaitableEvent::InitialState::NOT_SIGNALED);
+  Check(!manual.IsSignaled(), "manual event starts empty");
+  manual.Signal();
+  Check(manual.IsSignaled() && manual.IsSignaled(),
+        "manual event inspection preserves the queued notification");
+  manual.Reset();
+  Check(!manual.IsSignaled(), "manual event reset empties the queue");
+  base::WaitableEvent automatic(base::WaitableEvent::ResetPolicy::AUTOMATIC,
+                                base::WaitableEvent::InitialState::SIGNALED);
+  Check(automatic.IsSignaled() && !automatic.IsSignaled(),
+        "automatic event consumes one notification");
+
   base::ScopedTempDir temp;
   if (!temp.CreateUniqueTempDir()) {
     Check(false, "create private test directory");
@@ -64,19 +77,29 @@ int main(int argc, char** argv) {
         "outside sentinel");
   Check(base::CreateSymbolicLink(outside, source.AppendASCII("link")),
         "directory symlink creation");
+  const auto rejected_target = temp.GetPath().AppendASCII("rejected");
+  Check(!base::CopyDirectoryNoFollow(source, rejected_target, true),
+        "directory copy rejects source symlinks");
+  Check(!base::PathExists(rejected_target.AppendASCII("link/keep")) &&
+            base::PathExists(outside.AppendASCII("keep")),
+        "rejected copy preserves the outside symlink target");
+  Check(base::DeleteFile(source.AppendASCII("link")),
+        "remove only the source test symlink");
   Check(base::CopyDirectoryNoFollow(source, target, true),
-        "directory copy without following symlinks");
+        "copy regular directory entries");
   std::string contents;
   Check(base::ReadFileToString(target.AppendASCII("nested/entry"), &contents) &&
             contents == "payload",
         "copied contents");
   Check(!base::PathExists(target.AppendASCII("link/keep")),
         "directory copy excludes symlink targets");
-  Check(base::DeletePathRecursively(source) &&
+  Check(base::CreateSymbolicLink(outside, source.AppendASCII("link")) &&
+            base::DeletePathRecursively(source) &&
             base::PathExists(outside.AppendASCII("keep")),
         "recursive deletion preserves outside symlink target");
 
   base::LaunchOptions options;
+  options.disclaim_responsibility = true;
   options.current_directory = target.AppendASCII("nested");
   base::CommandLine command({"/bin/sh", "-c", "test -f entry"});
   base::Process process = base::LaunchProcess(command, options);
