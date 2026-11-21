@@ -1,0 +1,44 @@
+diff --git a/src/base/platform/platform-posix.cc b/src/base/platform/platform-posix.cc
+index 939cb01a..96a8948f 100644
+--- a/src/base/platform/platform-posix.cc
++++ b/src/base/platform/platform-posix.cc
+@@ -1280,19 +1280,27 @@ static void* ThreadEntry(void* arg) {
+   { MutexGuard lock_guard(&thread->data()->thread_creation_mutex_); }
+   SetThreadName(thread->name());
+ #if V8_OS_DARWIN
+-  switch (thread->priority()) {
+-    case Thread::Priority::kBestEffort:
+-      pthread_set_qos_class_self_np(QOS_CLASS_BACKGROUND, 0);
+-      break;
+-    case Thread::Priority::kUserVisible:
+-      pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, -1);
+-      break;
+-    case Thread::Priority::kUserBlocking:
+-      pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
+-      break;
+-    case Thread::Priority::kDefault:
+-      break;
++  if (__builtin_available(macOS 10.10, iOS 8.0, tvOS 9.0, *)) {
++    switch (thread->priority()) {
++      case Thread::Priority::kBestEffort:
++        pthread_set_qos_class_self_np(QOS_CLASS_BACKGROUND, 0);
++        break;
++      case Thread::Priority::kUserVisible:
++        pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, -1);
++        break;
++      case Thread::Priority::kUserBlocking:
++        pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
++        break;
++      case Thread::Priority::kDefault:
++        break;
++    }
++  }
++#if defined(PRIO_DARWIN_THREAD)
++  else if (thread->priority() == Thread::Priority::kBestEffort) {
++    // Lower only this thread's priority on systems without QoS classes.
++    setpriority(PRIO_DARWIN_THREAD, 0, 10);
+   }
++#endif
+ #elif V8_OS_LINUX || V8_OS_ZOS
+   switch (thread->priority()) {
+     case Thread::Priority::kBestEffort:

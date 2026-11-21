@@ -9,11 +9,13 @@ source_set("platform_support") {
     "apple/atomic_wait.h",
     "apple/audit_token.h",
     "apple/clock.h",
+    "apple/cv_buffer.h",
     "apple/fd_io.h",
     "apple/file_times.h",
     "apple/font_cascade.h",
     "apple/product_version.h",
     "apple/remove_all.h",
+    "apple/scoped_dispatch.h",
   ]
 }
 
@@ -39,6 +41,15 @@ if (is_mac) {
     frameworks = [
       "CoreText.framework",
       "Foundation.framework",
+    ]
+  }
+
+  executable("crubit_probe") {
+    testonly = true
+    sources = [ "tests/crubit_probe.cc" ]
+    deps = [
+      "//build/rust/tests/test_cpp_api_from_rust",
+      "//testing/gtest",
     ]
   }
 

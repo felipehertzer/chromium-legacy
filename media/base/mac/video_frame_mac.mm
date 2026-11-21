@@ -4,6 +4,8 @@
 
 #include "media/base/mac/video_frame_mac.h"
 
+#include "legacy/apple/cv_buffer.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -188,10 +190,10 @@ void CvPixelBufferReleaseBytesCallback(void* release_refcon, const void* data) {
 }
 
 bool CvPixelBufferHasColorSpace(CVPixelBufferRef pixel_buffer) {
-  return CVBufferHasAttachment(pixel_buffer, kCVImageBufferColorPrimariesKey) &&
-         CVBufferHasAttachment(pixel_buffer,
+  return chromium_legacy::HasBufferAttachment(pixel_buffer, kCVImageBufferColorPrimariesKey) &&
+         chromium_legacy::HasBufferAttachment(pixel_buffer,
                                kCVImageBufferTransferFunctionKey) &&
-         CVBufferHasAttachment(pixel_buffer, kCVImageBufferYCbCrMatrixKey);
+         chromium_legacy::HasBufferAttachment(pixel_buffer, kCVImageBufferYCbCrMatrixKey);
 }
 
 void SetCvPixelBufferColorSpace(const gfx::ColorSpace& frame_cs,
@@ -224,15 +226,17 @@ void SetCvPixelBufferColorSpace(const gfx::ColorSpace& frame_cs,
 
 void SetCvPixelBufferHdrMetadata(const gfx::HDRMetadata& hdr_metadata,
                                  CVPixelBufferRef pixel_buffer) {
-  if (auto mdcv = gfx::GenerateMasteringDisplayColorVolume(
-          hdr_metadata, /*fallback_to_defaults=*/false)) {
-    CVBufferSetAttachment(pixel_buffer,
-                          kCVImageBufferMasteringDisplayColorVolumeKey,
-                          mdcv.get(), kCVAttachmentMode_ShouldPropagate);
-  }
-  if (auto clli = gfx::GenerateContentLightLevelInfo(hdr_metadata)) {
-    CVBufferSetAttachment(pixel_buffer, kCVImageBufferContentLightLevelInfoKey,
-                          clli.get(), kCVAttachmentMode_ShouldPropagate);
+  if (__builtin_available(macOS 10.13, iOS 11.0, tvOS 11.0, *)) {
+    if (auto mdcv = gfx::GenerateMasteringDisplayColorVolume(
+            hdr_metadata, /*fallback_to_defaults=*/false)) {
+      CVBufferSetAttachment(pixel_buffer,
+                            kCVImageBufferMasteringDisplayColorVolumeKey,
+                            mdcv.get(), kCVAttachmentMode_ShouldPropagate);
+    }
+    if (auto clli = gfx::GenerateContentLightLevelInfo(hdr_metadata)) {
+      CVBufferSetAttachment(pixel_buffer, kCVImageBufferContentLightLevelInfoKey,
+                            clli.get(), kCVAttachmentMode_ShouldPropagate);
+    }
   }
 }
 

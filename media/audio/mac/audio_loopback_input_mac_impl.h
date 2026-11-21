@@ -12,6 +12,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
+#include "legacy/apple/scoped_dispatch.h"
 #include "media/audio/agc_audio_stream.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/mac/audio_manager_mac.h"
@@ -53,7 +54,7 @@ class SharedHelper;
 //   requestUserPermissionForScreenCapture] to be swizzled so that it reports
 //   that permissions have been granted. This is currently done in
 //   AudioManagerMac.
-class MEDIA_EXPORT SCKAudioInputStream
+class MEDIA_EXPORT API_AVAILABLE(macos(13.0)) SCKAudioInputStream
     : public AgcAudioStream<AudioInputStream> {
   using NotifyOnCloseCallback =
       base::RepeatingCallback<void(AudioInputStream*)>;
@@ -143,7 +144,7 @@ class MEDIA_EXPORT SCKAudioInputStream
   SCStream* __strong stream_;
 
   // Serial queue used by the API for new samples.
-  dispatch_queue_t __strong queue_;
+  chromium_legacy::ScopedDispatchObject<dispatch_queue_t> queue_;
 
   // The length of time covered by the audio data in a single audio buffer.
   const base::TimeDelta buffer_frames_duration_;

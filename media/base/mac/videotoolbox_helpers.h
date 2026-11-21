@@ -11,6 +11,7 @@
 
 #include "base/apple/scoped_cftyperef.h"
 #include "base/containers/span.h"
+#include "base/check.h"
 #include "base/notreached.h"
 #include "media/base/media_export.h"
 #include "media/base/video_codecs.h"
@@ -41,7 +42,12 @@ struct ScopedVTCompressionSessionRefTraits {
   }
   static void Release(VTCompressionSessionRef session) {
     // Blocks until all pending frames have been flushed out.
-    VTCompressionSessionInvalidate(session);
+    if (__builtin_available(macOS 10.8, *)) {
+      VTCompressionSessionInvalidate(session);
+    } else {
+      // A compression session cannot be created without VideoToolbox.
+      CHECK(!session);
+    }
     CFRelease(session);
   }
 };

@@ -65,6 +65,11 @@
       "path": "third_party/dawn",
       "revision": "69bfa246b5d7369f73c807d37648e25370f4db40",
       "patch": "patches/dawn-lion-metal-gating.patch"
+    },
+    {
+      "path": "v8",
+      "revision": "4593f4dc1e9b7c400645778417f394ba6d52f64b",
+      "patch": "patches/v8-lion-thread-qos.patch"
     }
   ]
 }

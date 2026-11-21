@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "base/debug/leak_annotations.h"
+#include "legacy/apple/scoped_dispatch.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
@@ -528,27 +529,27 @@ class PropertyListenerHelper {
     };
 
     catap_api_->AudioObjectAddPropertyListenerBlock(
-        aggregate_device_id_, &kDeviceIsAliveAddress, queue_,
+        aggregate_device_id_, &kDeviceIsAliveAddress, queue_.get(),
         property_listener_block_);
 
     if (capture_audio_device_id_.has_value()) {
       catap_api_->AudioObjectAddPropertyListenerBlock(
           kAudioObjectSystemObject, &kDefaultOutputDevicePropertyAddress,
-          queue_, property_listener_block_);
+          queue_.get(), property_listener_block_);
       if (ShouldDefaultDeviceUseInternalResampling()) {
         catap_api_->AudioObjectAddPropertyListenerBlock(
-            *capture_audio_device_id_, &kSampleRateAddress, queue_,
+            *capture_audio_device_id_, &kSampleRateAddress, queue_.get(),
             property_listener_block_);
       }
     }
 
     catap_api_->AudioObjectAddPropertyListenerBlock(aggregate_device_id_,
-                                                    &kSampleRateAddress, queue_,
+                                                    &kSampleRateAddress, queue_.get(),
                                                     property_listener_block_);
 
     if (monitor_process_object_list_) {
       catap_api_->AudioObjectAddPropertyListenerBlock(
-          kAudioObjectSystemObject, &kAudioProcessListAddress, queue_,
+          kAudioObjectSystemObject, &kAudioProcessListAddress, queue_.get(),
           property_listener_block_);
     }
   }
@@ -560,28 +561,28 @@ class PropertyListenerHelper {
     // Use the stored block reference to remove the listener.
     if (monitor_process_object_list_) {
       catap_api_->AudioObjectRemovePropertyListenerBlock(
-          kAudioObjectSystemObject, &kAudioProcessListAddress, queue_,
+          kAudioObjectSystemObject, &kAudioProcessListAddress, queue_.get(),
           property_listener_block_);
     }
 
     catap_api_->AudioObjectRemovePropertyListenerBlock(
-        aggregate_device_id_, &kSampleRateAddress, queue_,
+        aggregate_device_id_, &kSampleRateAddress, queue_.get(),
         property_listener_block_);
 
     if (capture_audio_device_id_.has_value()) {
       if (ShouldDefaultDeviceUseInternalResampling()) {
         catap_api_->AudioObjectRemovePropertyListenerBlock(
-            *capture_audio_device_id_, &kSampleRateAddress, queue_,
+            *capture_audio_device_id_, &kSampleRateAddress, queue_.get(),
             property_listener_block_);
       }
 
       catap_api_->AudioObjectRemovePropertyListenerBlock(
           kAudioObjectSystemObject, &kDefaultOutputDevicePropertyAddress,
-          queue_, property_listener_block_);
+          queue_.get(), property_listener_block_);
     }
 
     catap_api_->AudioObjectRemovePropertyListenerBlock(
-        aggregate_device_id_, &kDeviceIsAliveAddress, queue_,
+        aggregate_device_id_, &kDeviceIsAliveAddress, queue_.get(),
         property_listener_block_);
 
     property_listener_block_ = nil;
@@ -600,7 +601,7 @@ class PropertyListenerHelper {
   AudioObjectPropertyListenerBlock property_listener_block_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
-  const dispatch_queue_t __strong queue_;
+  const chromium_legacy::ScopedDispatchObject<dispatch_queue_t> queue_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

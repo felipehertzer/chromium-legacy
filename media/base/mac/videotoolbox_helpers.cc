@@ -109,9 +109,12 @@ OSStatus GetParameterSetAtIndex(VideoCodec codec,
                                 int* NALUnitHeaderLengthOut) {
   switch (codec) {
     case VideoCodec::kH264:
-      return CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-          videoDesc, parameterSetIndex, parameterSetPointerOut,
-          parameterSetSizeOut, parameterSetCountOut, NALUnitHeaderLengthOut);
+      if (__builtin_available(macOS 10.9, *)) {
+        return CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            videoDesc, parameterSetIndex, parameterSetPointerOut,
+            parameterSetSizeOut, parameterSetCountOut, NALUnitHeaderLengthOut);
+      }
+      return kCMFormatDescriptionError_InvalidParameter;
 #if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
     case VideoCodec::kHEVC:
       return CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(
@@ -147,7 +150,8 @@ bool CopySampleBufferToAnnexBBuffer(VideoCodec codec,
   int nal_size_field_bytes;
   status = GetParameterSetAtIndex(codec, fdesc, 0, nullptr, nullptr,
                                   &pset_count, &nal_size_field_bytes);
-  if (status == kCMFormatDescriptionBridgeError_InvalidParameter) {
+  // The bridge error name was added in 10.10; the OSStatus ABI is -12712.
+  if (status == static_cast<OSStatus>(-12712)) {
     DLOG(WARNING) << " assuming " << int(codec == VideoCodec::kHEVC ? 3 : 2)
                   << " parameter sets and 4 bytes NAL length header";
     pset_count = codec == VideoCodec::kHEVC ? 3 : 2;
@@ -267,6 +271,16 @@ bool CopySampleBufferToAnnexBBuffer(VideoCodec codec,
   return copy_rv;
 }
 
+namespace {
+bool SetSessionProperty(VTCompressionSessionRef session, CFStringRef key,
+                         CFTypeRef value) {
+  if (__builtin_available(macOS 10.8, *)) {
+    return VTSessionSetProperty(session, key, value) == noErr;
+  }
+  return false;
+}
+}  // namespace
+
 SessionPropertySetter::SessionPropertySetter(
     base::apple::ScopedCFTypeRef<VTCompressionSessionRef> session)
     : session_(session) {}
@@ -275,11 +289,13 @@ SessionPropertySetter::~SessionPropertySetter() {}
 
 bool SessionPropertySetter::IsSupported(CFStringRef key) {
   DCHECK(session_);
-  if (!supported_keys_) {
-    CFDictionaryRef dict_ref;
-    if (VTSessionCopySupportedPropertyDictionary(session_.get(), &dict_ref) ==
-        noErr) {
-      supported_keys_.reset(dict_ref);
+  if (__builtin_available(macOS 10.8, *)) {
+    if (!supported_keys_) {
+      CFDictionaryRef dict_ref;
+      if (VTSessionCopySupportedPropertyDictionary(session_.get(), &dict_ref) ==
+          noErr) {
+        supported_keys_.reset(dict_ref);
+      }
     }
   }
   return supported_keys_ && CFDictionaryContainsKey(supported_keys_.get(), key);
@@ -289,40 +305,40 @@ bool SessionPropertySetter::Set(CFStringRef key, int32_t value) {
   DCHECK(session_);
   base::apple::ScopedCFTypeRef<CFNumberRef> cfvalue(
       CFNumberCreate(nullptr, kCFNumberSInt32Type, &value));
-  return VTSessionSetProperty(session_.get(), key, cfvalue.get()) == noErr;
+  return SetSessionProperty(session_.get(), key, cfvalue.get());
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, bool value) {
   DCHECK(session_);
   CFBooleanRef cfvalue = (value) ? kCFBooleanTrue : kCFBooleanFalse;
-  return VTSessionSetProperty(session_.get(), key, cfvalue) == noErr;
+  return SetSessionProperty(session_.get(), key, cfvalue);
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, double value) {
   DCHECK(session_);
   base::apple::ScopedCFTypeRef<CFNumberRef> cfvalue(
       CFNumberCreate(nullptr, kCFNumberDoubleType, &value));
-  return VTSessionSetProperty(session_.get(), key, cfvalue.get()) == noErr;
+  return SetSessionProperty(session_.get(), key, cfvalue.get());
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFStringRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_.get(), key, value) == noErr;
+  return SetSessionProperty(session_.get(), key, value);
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFArrayRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_.get(), key, value) == noErr;
+  return SetSessionProperty(session_.get(), key, value);
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFDictionaryRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_.get(), key, value) == noErr;
+  return SetSessionProperty(session_.get(), key, value);
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFDataRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_.get(), key, value) == noErr;
+  return SetSessionProperty(session_.get(), key, value);
 }
 
 }  // namespace media::video_toolbox

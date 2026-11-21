@@ -27,6 +27,7 @@
 #include "base/task/sequenced_task_runner.h"
 #import "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "legacy/apple/scoped_dispatch.h"
 #include "components/crash/core/common/crash_key.h"
 #include "media/base/mac/color_space_util_mac.h"
 #include "media/base/timestamp_constants.h"
@@ -83,8 +84,13 @@ std::optional<base::TimeTicks> GetCMSampleBufferTimestamp(
   const CMTime cm_timestamp =
       CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
   if (CMTIME_IS_VALID(cm_timestamp)) {
-    uint64_t mach_time = CMClockConvertHostTimeToSystemUnits(cm_timestamp);
-    return base::TimeTicks::FromMachAbsoluteTime(mach_time);
+    if (__builtin_available(macOS 10.8, *)) {
+      uint64_t mach_time = CMClockConvertHostTimeToSystemUnits(cm_timestamp);
+      return base::TimeTicks::FromMachAbsoluteTime(mach_time);
+    }
+    if (CMTIME_IS_NUMERIC(cm_timestamp)) {
+      return base::TimeTicks() + base::Seconds(CMTimeGetSeconds(cm_timestamp));
+    }
   }
   return std::nullopt;
 }
@@ -207,6 +213,12 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
 
 }  // namespace media
 
+@interface VideoCaptureDeviceAVFoundation ()
+- (void)didTakePhotoData:(NSData*)data
+                   error:(NSError*)error
+                  output:(AVCaptureOutput*)output;
+@end
+
 @implementation VideoCaptureDeviceAVFoundation {
   // The following attributes are set via -setCaptureHeight:width:frameRate:.
   float _frameRate;
@@ -227,7 +239,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
 
   // A serial queue to deliver frames on, ensuring frames are delivered in
   // order.
-  dispatch_queue_t __strong _sampleQueue;
+  chromium_legacy::ScopedDispatchObject<dispatch_queue_t> _sampleQueue;
 
   // Protects concurrent setting and using |frameReceiver_|. Note that the
   // GUARDED_BY decoration below does not have any effect.
@@ -263,7 +275,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   // in case the color space cannot be correclty determined from the buffer.
   std::optional<gfx::ColorSpace> _colorSpaceAfterTransform;
 
-  AVCapturePhotoOutput* __strong _photoOutput;
+  AVCaptureOutput* __strong _photoOutput;
 
   // Only accessed on the main thread. The takePhoto() operation is considered
   // pending until we're ready to take another photo, which involves a PostTask
@@ -313,10 +325,10 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
     (media::VideoCaptureDeviceAVFoundationFrameReceiver*)frameReceiver {
   if ((self = [super init])) {
     _mainThreadTaskRunner = base::SingleThreadTaskRunner::GetCurrentDefault();
-    _sampleQueue =
+    _sampleQueue.reset(
         dispatch_queue_create("org.chromium.VideoCaptureDeviceAVFoundation."
                               "SampleDeliveryDispatchQueue",
-                              DISPATCH_QUEUE_SERIAL);
+                              DISPATCH_QUEUE_SERIAL));
     DCHECK(frameReceiver);
     _rotation = 0;
     _useGPUMemoryBuffer = true;
@@ -383,14 +395,16 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   // 1. Unlock any configuration (if locked)
   [_captureDevice unlockForConfiguration];
   // 2. Remove observer
-  [_captureDevice removeObserver:self forKeyPath:@"portraitEffectActive"];
+  if (@available(macOS 12.0, iOS 15.0, *)) {
+    [_captureDevice removeObserver:self forKeyPath:@"portraitEffectActive"];
+  }
   // 3. Release and deallocate the capture device
   _captureDevice = nil;
 
   _frameReceiver = nullptr;
   _sampleBufferTransformer.reset();
   _mainThreadTaskRunner = nullptr;
-  _sampleQueue = nil;
+  _sampleQueue.reset();
 }
 
 - (void)setFrameReceiver:
@@ -429,7 +443,9 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
     [self stopPhotoOutput];
     if (_captureDeviceInput) {
       DCHECK(_captureDevice);
-      [_captureDevice removeObserver:self forKeyPath:@"portraitEffectActive"];
+      if (@available(macOS 12.0, iOS 15.0, *)) {
+    [_captureDevice removeObserver:self forKeyPath:@"portraitEffectActive"];
+  }
       [_captureSession stopRunning];
       [_captureSession removeInput:_captureDeviceInput];
       _captureDeviceInput = nil;
@@ -474,13 +490,15 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   }
   _captureVideoDataOutput.alwaysDiscardsLateVideoFrames = true;
 
-  [_captureVideoDataOutput setSampleBufferDelegate:self queue:_sampleQueue];
+  [_captureVideoDataOutput setSampleBufferDelegate:self queue:_sampleQueue.get()];
   [_captureSession addOutput:_captureVideoDataOutput];
 
-  [_captureDevice addObserver:self
-                   forKeyPath:@"portraitEffectActive"
-                      options:0
-                      context:(__bridge void*)_captureDevice];
+  if (@available(macOS 12.0, iOS 15.0, *)) {
+    [_captureDevice addObserver:self
+                     forKeyPath:@"portraitEffectActive"
+                        options:0
+                        context:(__bridge void*)_captureDevice];
+  }
 
 #if BUILDFLAG(IS_IOS)
   _orientation = [[UIDevice currentDevice] orientation];
@@ -556,10 +574,12 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
         CMTimeMake(media::kFrameRatePrecision,
                    (int)(frameRate * media::kFrameRatePrecision));
   }
-  if (captureConnection.supportsVideoMaxFrameDuration) {
-    captureConnection.videoMaxFrameDuration =
-        CMTimeMake(media::kFrameRatePrecision,
-                   (int)(frameRate * media::kFrameRatePrecision));
+  if (@available(macOS 10.9, *)) {
+    if (captureConnection.supportsVideoMaxFrameDuration) {
+      captureConnection.videoMaxFrameDuration =
+          CMTimeMake(media::kFrameRatePrecision,
+                     (int)(frameRate * media::kFrameRatePrecision));
+    }
   }
 #endif
   return YES;
@@ -641,7 +661,16 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   {
     // `_lock` is needed since `_photoOutput` may be read from non-main thread.
     base::AutoLock lock(_lock);
-    _photoOutput = [[AVCapturePhotoOutput alloc] init];
+    if (@available(macOS 10.15, *)) {
+      _photoOutput = [[AVCapturePhotoOutput alloc] init];
+    }
+#if BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+    else {
+      AVCaptureStillImageOutput* output = [[AVCaptureStillImageOutput alloc] init];
+      output.outputSettings = @{ AVVideoCodecKey : AVVideoCodecJPEG };
+      _photoOutput = output;
+    }
+#endif
   }
   if (![_captureSession canAddOutput:_photoOutput]) {
     {
@@ -689,12 +718,29 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
     // Asynchronous success or failure is handled inside
     // captureOutput:didFinishProcessingPhoto:error on an unknown thread.
     // Synchronous failures are handled in the catch clause below.
-    [_photoOutput
-        capturePhotoWithSettings:[AVCapturePhotoSettings
-                                     photoSettingsWithFormat:@{
-                                       AVVideoCodecKey : AVVideoCodecTypeJPEG
-                                     }]
-                        delegate:self];
+    if (@available(macOS 10.15, *)) {
+      [(AVCapturePhotoOutput*)_photoOutput
+          capturePhotoWithSettings:[AVCapturePhotoSettings
+                                       photoSettingsWithFormat:@{
+                                         AVVideoCodecKey : AVVideoCodecTypeJPEG
+                                       }]
+                          delegate:self];
+    }
+#if BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+    else {
+      AVCaptureStillImageOutput* output = (AVCaptureStillImageOutput*)_photoOutput;
+      __weak VideoCaptureDeviceAVFoundation* weak_self = self;
+      __weak AVCaptureOutput* weak_output = output;
+      [output captureStillImageAsynchronouslyFromConnection:
+                  [output connectionWithMediaType:AVMediaTypeVideo]
+              completionHandler:^(CMSampleBufferRef sample, NSError* error) {
+                NSData* data = sample
+                    ? [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:sample]
+                    : nil;
+                [weak_self didTakePhotoData:data error:error output:weak_output];
+              }];
+    }
+#endif
   } @catch (id exception) {
     {
       base::AutoLock lock(_lock);
@@ -710,17 +756,25 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
 - (void)captureOutput:(id)output        // AVCapturePhotoOutput*
     didFinishProcessingPhoto:(id)photo  // AVCapturePhoto*
                        error:(NSError*)error {
+  DCHECK(photo);
+  NSData* data = nil;
+  if (@available(macOS 10.15, *)) {
+    data = static_cast<AVCapturePhoto*>(photo).fileDataRepresentation;
+  }
+  [self didTakePhotoData:data error:error output:output];
+}
+
+- (void)didTakePhotoData:(NSData*)data
+                   error:(NSError*)error
+                  output:(AVCaptureOutput*)output {
   base::AutoLock lock(_lock);
   // If `output` is no longer current, ignore the result of this operation.
   // `_frameReceiver->OnPhotoError()` will already have been called inside
   // stopPhotoOutput().
-  if (output != _photoOutput) {
+  if (!output || output != _photoOutput) {
     return;
   }
   if (_frameReceiver) {
-    // Always non-nil according to Apple's documentation.
-    DCHECK(photo);
-    NSData* data = static_cast<AVCapturePhoto*>(photo).fileDataRepresentation;
     if (!error && data) {
       _frameReceiver->OnPhotoTaken(reinterpret_cast<const uint8_t*>(data.bytes),
                                    data.length, "image/jpeg");
@@ -1252,7 +1306,10 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   if (_isPortraitEffectSupportedForTesting.has_value()) {
     return _isPortraitEffectSupportedForTesting.value();
   }
-  return _captureDevice.activeFormat.portraitEffectSupported;
+  if (@available(macOS 12.0, iOS 15.0, *)) {
+    return _captureDevice.activeFormat.portraitEffectSupported;
+  }
+  return false;
 }
 
 - (void)setIsPortraitEffectActiveForTesting:
@@ -1273,7 +1330,10 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   if (_isPortraitEffectActiveForTesting.has_value()) {
     return _isPortraitEffectActiveForTesting.value();
   }
-  return _captureDevice.portraitEffectActive;
+  if (@available(macOS 12.0, iOS 15.0, *)) {
+    return _captureDevice.portraitEffectActive;
+  }
+  return false;
 }
 
 - (void)observeValueForKeyPath:(NSString*)keyPath
@@ -1294,7 +1354,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
 
 - (void)onVideoError:(NSNotification*)errorNotification {
   NSError* error = base::apple::ObjCCast<NSError>(
-      errorNotification.userInfo[AVCaptureSessionErrorKey]);
+      [errorNotification.userInfo objectForKey:AVCaptureSessionErrorKey]);
   [self
       sendErrorString:[NSString stringWithFormat:@"%@: %@",
                                                  error.localizedDescription,

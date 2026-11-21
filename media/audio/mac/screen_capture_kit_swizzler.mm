@@ -22,6 +22,9 @@ namespace media {
 
 std::unique_ptr<base::apple::ScopedObjCClassSwizzler>
 SwizzleScreenCaptureKit() {
+  if (!__builtin_available(macOS 13.0, *)) {
+    return nullptr;
+  }
   // Private API +[SCStreamManager requestUserPermissionForScreenCapture] does
   // not exist on macOS 15+.
   if (@available(macOS 15.0, *)) {

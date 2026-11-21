@@ -69,6 +69,17 @@ or replaces a Chromium 159 dependency.
 - Clipboard and drag/drop use stable UTI strings and LaunchServices on older
   macOS. Clipboard integration checks use an isolated pasteboard. Old screen
   capture uses fresh CGImage snapshots when display streams are unavailable.
+- The pinned Crubit frontend is rebuilt against the custom compiler. Original
+  Chromium interoperability tests cover integers, chars, cross-crate objects,
+  allocator declarations, and standard-library Duration values.
+- CoreVideo attachment fallbacks preserve Copy ownership and propagation flags.
+  Dispatch owners release C objects on old macOS and use ARC on modern hosts.
+  ScreenCaptureKit loopback capture is unavailable before macOS 13.
+- Camera code retains the original still-image API before 10.15 and gates
+  portrait effects/KVO at macOS 12. Systems without VideoToolbox select the
+  existing libyuv converter for NV12/I420. Actual camera capture remains untested.
+- Current V8 thread setup uses per-thread background priority where QoS classes
+  are absent. Modern QoS behavior is unchanged.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -100,16 +111,19 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | TensorFlow Lite/XLA clocks, normal and forced legacy paths | 3 checks each | 3 checks each |
 | Isolated clipboard URL/file integration, normal and forced legacy paths | 12 checks each | 12 checks each |
 | Display ID/refresh queries, normal and forced legacy paths | 8 checks each | 8 checks each |
+| CoreVideo/GCD ownership, normal and forced legacy paths | 16 checks each, Intel and ARM | 16 checks each |
+| Original Chromium Rust/C++ interoperability tests | 5 tests passed | 5 tests passed |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
 process cwd inheritance. It does not test a TLS handshake or the browser.
-Twenty-seven Python tests cover the port inventory, pinned dependency/Rust patch
+Thirty Python tests cover the port inventory, pinned dependency/Rust patch
 application, SDK overlay preservation, and Mach-O audit behavior.
 
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
-Base/Crypto, SDK, Services/fonts, clipboard, displays, timers, atomics, and forced C++
+Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
+timers, atomics, and forced C++
 runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -125,6 +139,7 @@ legacy/test_platform.sh
 legacy/test_appkit.sh
 legacy/test_vpx_timer.sh
 legacy/test_pthreadpool_atomics.sh
+legacy/test_media_platform.sh
 python3 legacy/test_ml_clocks.py
 # Requires the integration objects and a retained base_probe.rsp:
 python3 legacy/test_clipboard.py
@@ -157,20 +172,33 @@ mkdir -p out/Lion
 # Requires LLVM 23 development files; adjust the path for the build host.
 python3 legacy/build_rust_compiler.py \
   --llvm-config /opt/homebrew/opt/llvm/bin/llvm-config --jobs 2
+python3 legacy/build_crubit.py --jobs 2
 cp legacy/args/lion.gn out/Lion/args.gn
-cat ../rust-lion-compiler.gni >> out/Lion/args.gn
+cat ../rust-lion-compiler.gni ../crubit-lion.gni >> out/Lion/args.gn
 buildtools/mac/gn gen out/Lion --fail-on-unused-args
-ninja -C out/Lion -j4 -d keeprsp runtime_probe rust_probe base_probe sdk_probe
+ninja -C out/Lion -j4 -d keeprsp runtime_probe rust_probe base_probe sdk_probe crubit_probe
 out/Lion/runtime_probe
 out/Lion/rust_probe
 out/Lion/base_probe
 out/Lion/sdk_probe
+out/Lion/crubit_probe
 ninja -C out/Lion -j4 chrome
 ```
 
 The Rust compiler build uses LLVM 23.1.4; Chromium's pinned Clang 24 still builds
 C/C++. The compiler build verifies its resulting minimum version and CPU target,
 then writes the host-library list and GN arguments to `rust-lion-compiler.gni`.
+It completes a second compiler build to install matching rustc-dev metadata, and
+provides the matching LLVM objcopy for Cargo release builds. Host stdlib inputs
+come from bootstrap's std artifact manifest. `build_crubit.py` builds the pinned
+Rust-to-C++ frontend, preserves the original tools/support sources, and emits
+`crubit-lion.gni`.
+
+Crubit uses date-based `rustversion` checks for unstable compiler APIs. Its
+explicit `RUSTVERSION=1` query goes through a wrapper that reports the verified
+source commit's snapshot date for a custom `-dev` build. Other version queries,
+actual compiler invocations, crate versions, and metadata checks are unchanged.
+
 The Rust std hook verifies the exact toolchain package and source hashes before
 applying the compatibility patch. It preserves unknown edits and can recover
 an already partially applied patch. Original tool executables are unchanged.
@@ -208,8 +236,8 @@ history and the small Mac configuration. Setup hooks and GN generation pass
 with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27.
 The Rust minimum-version blocker is fixed and the linked integration probes run
 on Catalina. The complete browser build continues to expose other compatibility
-work. Auxiliary host tools and Rust/C++ binding generation still need validation
-with the custom compiler throughout the full build.
+work. The custom compiler and Crubit now pass the original interoperability tests
+on Catalina; the remaining auxiliary host tools still need full-build validation.
 
 Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
 graphics, media, UI, and the remaining browser API usage still need build and

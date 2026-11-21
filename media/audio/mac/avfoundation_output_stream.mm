@@ -8,6 +8,7 @@
 #include <CoreAudio/CoreAudio.h>
 
 #include "base/apple/osstatus_logging.h"
+#include "legacy/apple/scoped_dispatch.h"
 #include "base/containers/heap_array.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
@@ -84,7 +85,7 @@ base::apple::ScopedCFTypeRef<CMBlockBufferRef> CreateBlockBuffer(
 struct AVFoundationOutputStream::ObjCStorage {
   AVSampleBufferAudioRenderer* __strong renderer;
   AVSampleBufferRenderSynchronizer* __strong synchronizer;
-  dispatch_queue_t __strong queue;
+  chromium_legacy::ScopedDispatchObject<dispatch_queue_t> queue;
 };
 
 AVFoundationOutputStream::AVFoundationOutputStream(
@@ -123,10 +124,10 @@ bool AVFoundationOutputStream::Open() {
     return false;
   }
 
-  objc_storage_->queue = dispatch_queue_create(
+  objc_storage_->queue.reset(dispatch_queue_create(
       "com.chromium.media.AVFoundationOutputStream",
       dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,
-                                              QOS_CLASS_USER_INTERACTIVE, 0));
+                                              QOS_CLASS_USER_INTERACTIVE, 0)));
   if (!objc_storage_->queue) {
     LOG(ERROR) << "Failed to create dispatch queue.";
     return false;
@@ -185,7 +186,7 @@ void AVFoundationOutputStream::Start(AudioSourceCallback* callback) {
 
   objc_storage_->synchronizer.rate = 1.0;
 
-  [objc_storage_->renderer requestMediaDataWhenReadyOnQueue:objc_storage_->queue
+  [objc_storage_->renderer requestMediaDataWhenReadyOnQueue:objc_storage_->queue.get()
                                                  usingBlock:^{
                                                    FeedCallback();
                                                  }];
@@ -194,7 +195,7 @@ void AVFoundationOutputStream::Start(AudioSourceCallback* callback) {
 void AVFoundationOutputStream::Stop() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  dispatch_sync(objc_storage_->queue, ^{
+  dispatch_sync(objc_storage_->queue.get(), ^{
     [objc_storage_->renderer stopRequestingMediaData];
     [objc_storage_->renderer flush];
     objc_storage_->synchronizer.rate = 0.0;

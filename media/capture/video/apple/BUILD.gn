@@ -41,6 +41,7 @@ source_set("apple") {
 
   deps = [
     "//base",
+    "//legacy:platform_support",
     "//media",
     "//media/capture:capture_base",
     "//media/capture:capture_device_specific",
@@ -74,11 +75,15 @@ source_set("apple") {
     "CoreVideo.framework",
     "Foundation.framework",
     "IOSurface.framework",
-    "VideoToolbox.framework",
   ]
 
   if (is_ios) {
-    frameworks += [ "UIKit.framework" ]
+    frameworks += [
+      "UIKit.framework",
+      "VideoToolbox.framework",
+    ]
+  } else {
+    weak_frameworks = [ "VideoToolbox.framework" ]
   }
 }
 
@@ -117,10 +122,14 @@ source_set("unit_tests") {
     "CoreVideo.framework",
     "Foundation.framework",
     "IOSurface.framework",
-    "VideoToolbox.framework",
   ]
 
   if (is_ios) {
-    frameworks += [ "UIKit.framework" ]
+    frameworks += [
+      "UIKit.framework",
+      "VideoToolbox.framework",
+    ]
+  } else {
+    weak_frameworks = [ "VideoToolbox.framework" ]
   }
 }

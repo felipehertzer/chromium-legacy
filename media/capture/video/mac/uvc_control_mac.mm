@@ -181,7 +181,7 @@ static bool FindDeviceWithVendorAndProductIds(int vendor_id,
                        base::apple::NSToCFPtrCast(@(product_id)));
 
   kern_return_t kr = IOServiceGetMatchingServices(
-      kIOMainPortDefault, query_dictionary.release(), usb_iterator);
+      MACH_PORT_NULL, query_dictionary.release(), usb_iterator);
   if (kr != kIOReturnSuccess) {
     VLOG(1) << "No devices found with specified Vendor and Product ID.";
     return false;

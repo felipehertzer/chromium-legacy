@@ -52,13 +52,13 @@ source_set("mac") {
     ]
   }
   public_deps = [ "//third_party/webrtc_overrides:webrtc_component" ]
+  weak_frameworks = [ "VideoToolbox.framework" ]
   frameworks = [
     "CoreFoundation.framework",
     "CoreMedia.framework",
     "Foundation.framework",
     "IOSurface.framework",
     "QuartzCore.framework",
-    "VideoToolbox.framework",
   ]
   deps = [
     "//base",

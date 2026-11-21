@@ -31,7 +31,8 @@ class CAPTURE_EXPORT PixelBufferTransferer {
   bool TransferImage(CVPixelBufferRef source, CVPixelBufferRef destination);
 
  private:
-  base::apple::ScopedCFTypeRef<VTPixelTransferSessionRef> transfer_session_;
+  // VideoToolbox's typed session is unavailable on Lion.
+  base::apple::ScopedCFTypeRef<CFTypeRef> transfer_session_;
 };
 
 }  // namespace media

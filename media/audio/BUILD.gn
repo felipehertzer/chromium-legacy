@@ -176,6 +176,7 @@ source_set("audio") {
   }
 
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
     sources += [
       "mac/audio_device_listener_mac.cc",
       "mac/audio_device_listener_mac.h",
@@ -198,8 +199,8 @@ source_set("audio") {
     frameworks += [
       "AudioUnit.framework",
       "CoreMedia.framework",
-      "ScreenCaptureKit.framework",
     ]
+    weak_frameworks = [ "ScreenCaptureKit.framework" ]
   }
 
   if (is_ios) {
@@ -517,10 +518,7 @@ source_set("unit_tests") {
       "mac/catap_audio_input_stream_unittest.mm",
     ]
     deps += [ "//third_party/ocmock" ]
-    frameworks = [
-      "CoreMedia.framework",
-      "ScreenCaptureKit.framework",
-    ]
+    frameworks = [ "CoreMedia.framework" ]
   }
 
   if (use_cras) {

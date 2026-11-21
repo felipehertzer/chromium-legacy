@@ -35,12 +35,17 @@ source_set("mac") {
       "AVFoundation.framework",
       "CoreMedia.framework",
       "CoreVideo.framework",  # Required by video_frame_mac.cc.
-      "VideoToolbox.framework",
     ]
+  }
+  if (is_mac) {
+    weak_frameworks = [ "VideoToolbox.framework" ]
+  } else {
+    frameworks += [ "VideoToolbox.framework" ]
   }
   configs += [ "//media:subcomponent_config" ]
 
   deps = [
+    "//legacy:platform_support",
     "//media/base",
     "//ui/gfx:color_space",
   ]

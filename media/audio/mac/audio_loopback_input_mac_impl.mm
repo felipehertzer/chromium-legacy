@@ -24,7 +24,7 @@ using SampleCallback = base::RepeatingCallback<
     void(base::apple::ScopedCFTypeRef<CMSampleBufferRef>, const double)>;
 using ErrorCallback = base::RepeatingCallback<void()>;
 
-namespace media {
+namespace __attribute__((availability(macos, introduced=13.0))) media {
 
 using Error = AudioInputStream::AudioInputCallback::Error;
 
@@ -216,6 +216,7 @@ class SharedHelper : public base::RefCountedThreadSafe<SharedHelper> {
 
 }  // namespace media
 
+API_AVAILABLE(macos(13.0))
 @interface ScreenCaptureKitAudioHelper
     : NSObject <SCStreamDelegate, SCStreamOutput> {
   scoped_refptr<media::SharedHelper> _sharedHelper;
@@ -259,7 +260,7 @@ class SharedHelper : public base::RefCountedThreadSafe<SharedHelper> {
 
 @end
 
-namespace media {
+namespace __attribute__((availability(macos, introduced=13.0))) media {
 
 SCKAudioInputStream::SCKAudioInputStream(
     const AudioParameters& params,
@@ -357,14 +358,14 @@ AudioInputStream::OpenOutcome SCKAudioInputStream::Open() {
 
   // |queue_| is used internally by the API to store |config.queueDepth| number
   // of frames (default is 3).
-  queue_ = dispatch_queue_create("org.chromium.SCKAudioInputStream",
-                                 DISPATCH_QUEUE_SERIAL);
+  queue_.reset(dispatch_queue_create("org.chromium.SCKAudioInputStream",
+                                      DISPATCH_QUEUE_SERIAL));
 
   NSError* add_stream_output_error = nil;
   const bool stream_output_added =
       [stream_ addStreamOutput:sck_helper_
                           type:SCStreamOutputTypeAudio
-            sampleHandlerQueue:queue_
+            sampleHandlerQueue:queue_.get()
                          error:&add_stream_output_error];
   if (!stream_output_added) {
     SendLogMessage(
@@ -372,7 +373,7 @@ AudioInputStream::OpenOutcome SCKAudioInputStream::Open() {
         base::SysNSStringToUTF8([add_stream_output_error localizedDescription])
             .c_str());
     stream_ = nil;
-    queue_ = nil;
+    queue_.reset();
     return OpenOutcome::kFailed;
   }
 
@@ -563,13 +564,19 @@ void SCKAudioInputStream::SendLogMessage(const char* format, ...) {
   va_end(args);
 }
 
+}  // namespace media
+
+namespace media {
 AudioInputStream* CreateSCKAudioInputStream(
     const AudioParameters& params,
     const std::string& device_id,
     AudioManager::LogCallback log_callback,
     const base::RepeatingCallback<void(AudioInputStream*)> close_callback) {
-  return new SCKAudioInputStream(params, device_id, std::move(log_callback),
-                                 std::move(close_callback));
+  if (__builtin_available(macOS 13.0, *)) {
+    return new SCKAudioInputStream(params, device_id, std::move(log_callback),
+                                   std::move(close_callback));
+  }
+  return nullptr;
 }
 
 }  // namespace media

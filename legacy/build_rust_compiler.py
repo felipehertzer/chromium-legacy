@@ -19,6 +19,25 @@ def run(arguments, **kwargs):
     return subprocess.run(arguments, check=True, **kwargs)
 
 
+def host_stdlib_libraries(source, sysroot, host):
+    # rustc-dev adds compiler crates to the same directory. Copy only the std
+    # artifacts recorded by bootstrap, rather than globbing every installed rlib.
+    stamp = source / 'build' / host / 'stage1-std' / host / 'dist/.libstd-stamp'
+    libraries = []
+    for entry in stamp.read_bytes().split(b'\0'):
+        if not entry.startswith(b't') or not entry.endswith(b'.rlib'):
+            continue
+        name = Path(os.fsdecode(entry[1:])).name
+        if not (sysroot / 'lib/rustlib' / host / 'lib' / name).is_file():
+            raise ValueError(f'Host standard-library artifact is missing: {name}')
+        libraries.append(name[3:].rsplit('-', 1)[0])
+    if not {'core', 'alloc', 'std', 'proc_macro', 'test'}.issubset(libraries):
+        raise ValueError('Expected a complete host standard-library build')
+    if len(libraries) != len(set(libraries)):
+        raise ValueError('Host standard-library artifacts are ambiguous')
+    return sorted(libraries)
+
+
 def main():
     legacy = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
@@ -112,10 +131,22 @@ ar = {q(llvm_bin / 'llvm-ar')}
     environment['MACOSX_DEPLOYMENT_TARGET'] = '13.0'
     environment['CARGO_HOME'] = str(workspace / 'rust-lion-cargo')
     if not args.verify_only:
-        run([sys.executable, 'x.py', '--config', str(config), 'build', '--stage', '1',
+        # The second compiler build installs matching rustc-dev metadata into
+        # stage1, needed to build Crubit with this compiler's internal APIs.
+        run([str(source / 'x'), '--config', str(config), 'build', '--stage', '2',
              'compiler/rustc', 'library'], cwd=source, env=environment)
     sysroot = source / 'build' / host / 'stage1'
     compiler = sysroot / 'bin/rustc'
+    objcopy = llvm_bin / 'llvm-objcopy'
+    if not objcopy.is_file():
+        raise ValueError('The matching LLVM objcopy is required for Cargo release builds')
+    tool = sysroot / 'lib/rustlib' / host / 'bin/rust-objcopy'
+    tool.parent.mkdir(parents=True, exist_ok=True)
+    if tool.exists() or tool.is_symlink():
+        if tool.resolve() != objcopy.resolve():
+            raise ValueError(f'Preserving unexpected objcopy: {tool}')
+    else:
+        tool.symlink_to(objcopy)
     environment['MACOSX_DEPLOYMENT_TARGET'] = '10.7'
     deployment = subprocess.check_output(
         [str(compiler), '--target', 'x86_64-apple-darwin', '--print',
@@ -128,14 +159,10 @@ ar = {q(llvm_bin / 'llvm-ar')}
     if specification['cpu'] != 'core2':
         raise ValueError('Compiler does not target the required Core 2 baseline')
     version = subprocess.check_output([str(compiler), '--version'], text=True).strip()
-    host_libraries = sorted(path.name[3:].rsplit('-', 1)[0] for path in
-                            (sysroot / 'lib/rustlib' / host / 'lib').glob('lib*-*.rlib'))
-    if 'proc_macro' not in host_libraries or len(set(host_libraries)) != len(host_libraries):
-        raise ValueError('Expected one complete, unambiguous host standard-library build')
+    host_libraries = host_stdlib_libraries(source, sysroot, host)
     output = workspace / 'rust-lion-compiler.gni'
     output.write_text(f'rust_sysroot_absolute = {q(sysroot)}\n'
                       f'rustc_version = {q(version)}\n'
-                      f'rust_crubit_root = {q(bootstrap)}\n'
                       'legacy_build_rust_stdlib = true\n'
                       f'legacy_rust_host_stdlib_libs = {json.dumps(host_libraries)}\n')
     print(f'Lion-capable compiler built; GN arguments: {output}')

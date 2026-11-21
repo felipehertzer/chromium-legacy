@@ -5,7 +5,7 @@
 #import "media/capture/video/mac/video_capture_metrics_mac.h"
 
 #include <AVFoundation/AVFoundation.h>
-#include <CoreMediaIO/CoreMediaIO.h>
+#include <CoreMediaIO/CMIOHardware.h>
 #include <Foundation/Foundation.h>
 #import <IOKit/audio/IOAudioTypes.h>
 
@@ -57,6 +57,8 @@ bool HasPrefix(NSString* string, NSString* prefix) {
 // Returns a classification of an AVCaptureDevice not based on its underlying
 // plugin.
 AVCaptureDeviceClassification ClassifyAVCaptureDeviceNonPlugin(
+    AVCaptureDevice* device) API_AVAILABLE(macos(10.9));
+AVCaptureDeviceClassification ClassifyAVCaptureDeviceNonPlugin(
     AVCaptureDevice* device) {
   // The docs say that Apple devices return the manufacturer string "Apple Inc."
   // but in reality, variations are returned, so look for a slightly more broad
@@ -82,6 +84,8 @@ AVCaptureDeviceClassification ClassifyAVCaptureDeviceNonPlugin(
   }
 }
 
+AVCaptureDeviceClassification ClassifyAVCaptureDevice(AVCaptureDevice* device)
+    API_AVAILABLE(macos(10.9));
 AVCaptureDeviceClassification ClassifyAVCaptureDevice(AVCaptureDevice* device) {
   CMIOObjectID plugin;
   UInt32 plugin_size = sizeof(plugin);
@@ -153,9 +157,11 @@ void LogReactionEffectsGesturesState() {
 // full revert as to strip references to CoreMediaIO.framework that are no
 // longer needed.
 void LogAVCaptureDeviceInfo(AVCaptureDevice* device) {
-  base::UmaHistogramEnumeration(
-      "Media.VideoCapture.Mac.Device.ImplementationClassification",
-      ClassifyAVCaptureDevice(device));
+  if (@available(macOS 10.9, *)) {
+    base::UmaHistogramEnumeration(
+        "Media.VideoCapture.Mac.Device.ImplementationClassification",
+        ClassifyAVCaptureDevice(device));
+  }
 }
 
 }  // namespace media

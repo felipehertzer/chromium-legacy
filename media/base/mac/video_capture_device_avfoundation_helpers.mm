@@ -17,46 +17,53 @@ BASE_FEATURE(kUseAVCaptureDeviceTypeContinuity,
 #endif  // BUILDFLAG(IS_MAC)
 
 NSArray<AVCaptureDevice*>* GetVideoCaptureDevices() {
-  // Camera device types available on all apple platforms.
-  NSArray* captureDeviceTypes = @[ AVCaptureDeviceTypeBuiltInWideAngleCamera ];
+  if (@available(macOS 10.15, *)) {
+    // Camera device types available on all apple platforms.
+    NSArray* captureDeviceTypes = @[ AVCaptureDeviceTypeBuiltInWideAngleCamera ];
 
 #if BUILDFLAG(IS_MAC)
-  // MacOS has an additional 'external' device type we want to include.
-  // AVCaptureDeviceTypeExternal since 14.0, AVCaptureDeviceTypeExternalUnknown
-  // before. See crbug.com/1484830.
-  if (@available(macOS 14.0, *)) {
-    captureDeviceTypes =
-        [captureDeviceTypes arrayByAddingObject:AVCaptureDeviceTypeExternal];
-    // Continuity cameras are available from MacOS 14.0 and also have to
-    // be queried.
-    if (base::FeatureList::IsEnabled(kUseAVCaptureDeviceTypeContinuity)) {
+    // MacOS has an additional 'external' device type we want to include.
+    // AVCaptureDeviceTypeExternal since 14.0, AVCaptureDeviceTypeExternalUnknown
+    // before. See crbug.com/1484830.
+    if (@available(macOS 14.0, *)) {
+      captureDeviceTypes =
+          [captureDeviceTypes arrayByAddingObject:AVCaptureDeviceTypeExternal];
+      // Continuity cameras are available from MacOS 14.0 and also have to
+      // be queried.
+      if (base::FeatureList::IsEnabled(kUseAVCaptureDeviceTypeContinuity)) {
+        captureDeviceTypes = [captureDeviceTypes
+            arrayByAddingObject:AVCaptureDeviceTypeContinuityCamera];
+      }
+    } else {
       captureDeviceTypes = [captureDeviceTypes
-          arrayByAddingObject:AVCaptureDeviceTypeContinuityCamera];
+          arrayByAddingObject:AVCaptureDeviceTypeExternalUnknown];
     }
-  } else {
-    captureDeviceTypes = [captureDeviceTypes
-        arrayByAddingObject:AVCaptureDeviceTypeExternalUnknown];
-  }
 #endif  // BUILDFLAG(IS_MAC)
 
-  @try {
-    AVCaptureDeviceDiscoverySession* deviceDiscoverySession =
-        [AVCaptureDeviceDiscoverySession
-            discoverySessionWithDeviceTypes:captureDeviceTypes
-                                  mediaType:AVMediaTypeVideo
-                                   position:AVCaptureDevicePositionUnspecified];
-    return deviceDiscoverySession.devices;
-  } @catch (NSException* exception) {
-    SCOPED_CRASH_KEY_STRING1024("AVCaptureDeviceCrash", "Exception_name",
-                                exception.name.UTF8String);
-    SCOPED_CRASH_KEY_STRING1024("AVCaptureDeviceCrash", "Exception_reason",
-                                exception.reason.UTF8String);
+    @try {
+      AVCaptureDeviceDiscoverySession* deviceDiscoverySession =
+          [AVCaptureDeviceDiscoverySession
+              discoverySessionWithDeviceTypes:captureDeviceTypes
+                                    mediaType:AVMediaTypeVideo
+                                     position:AVCaptureDevicePositionUnspecified];
+      return deviceDiscoverySession.devices;
+    } @catch (NSException* exception) {
+      SCOPED_CRASH_KEY_STRING1024("AVCaptureDeviceCrash", "Exception_name",
+                                  exception.name.UTF8String);
+      SCOPED_CRASH_KEY_STRING1024("AVCaptureDeviceCrash", "Exception_reason",
+                                  exception.reason.UTF8String);
 
-    base::debug::DumpWithoutCrashing();
+      base::debug::DumpWithoutCrashing();
 
-    // Return empty array when catching exception.
-    return @[];
+      // Return empty array when catching exception.
+      return @[];
+    }
   }
+#if BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+  return [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+#else
+  return @[];
+#endif
 }
 
 }  // namespace media

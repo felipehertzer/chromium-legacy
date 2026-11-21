@@ -22,8 +22,9 @@ legacy_build_rust_stdlib = true
 
 # Keep the focused checks available after full-browser graph regeneration.
 root_extra_deps = [
+  "//legacy:base_probe",
+  "//legacy:crubit_probe",
   "//legacy:runtime_probe",
   "//legacy:rust_probe",
-  "//legacy:base_probe",
   "//legacy:sdk_probe",
 ]

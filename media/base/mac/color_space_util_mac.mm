@@ -6,7 +6,6 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreVideo/CoreVideo.h>
-#include <simd/simd.h>
 
 #include <vector>
 
@@ -14,6 +13,7 @@
 #include "base/apple/scoped_cftyperef.h"
 #include "base/memory/scoped_policy.h"
 #include "base/no_destructor.h"
+#include "legacy/apple/cv_buffer.h"
 #include "third_party/skia/modules/skcms/skcms.h"
 #include "ui/gfx/mac/color_space_util.h"
 
@@ -39,22 +39,32 @@ GetImageBufferPixelFormatDescription(CVImageBufferRef image_buffer) {
 
 gfx::ColorSpace GetImageBufferColorSpace(CVImageBufferRef image_buffer) {
   base::apple::ScopedCFTypeRef<CFTypeRef> color_primaries(
-      CVBufferCopyAttachment(image_buffer, kCVImageBufferColorPrimariesKey,
+      chromium_legacy::CopyBufferAttachment(image_buffer, kCVImageBufferColorPrimariesKey,
                              /*attachmentMode=*/nullptr));
   base::apple::ScopedCFTypeRef<CFTypeRef> transfer_function(
-      CVBufferCopyAttachment(image_buffer, kCVImageBufferTransferFunctionKey,
+      chromium_legacy::CopyBufferAttachment(image_buffer, kCVImageBufferTransferFunctionKey,
                              /*attachmentMode=*/nullptr));
-  base::apple::ScopedCFTypeRef<CFTypeRef> gamma_level(CVBufferCopyAttachment(
+  base::apple::ScopedCFTypeRef<CFTypeRef> gamma_level(chromium_legacy::CopyBufferAttachment(
       image_buffer, kCVImageBufferGammaLevelKey, /*attachmentMode=*/nullptr));
-  base::apple::ScopedCFTypeRef<CFTypeRef> ycbcr_matrix(CVBufferCopyAttachment(
+  base::apple::ScopedCFTypeRef<CFTypeRef> ycbcr_matrix(chromium_legacy::CopyBufferAttachment(
       image_buffer, kCVImageBufferYCbCrMatrixKey, /*attachmentMode=*/nullptr));
   const auto pixel_format_description =
       GetImageBufferPixelFormatDescription(image_buffer);
-  const CFTypeRef component_range =
-      pixel_format_description
-          ? CFDictionaryGetValue(pixel_format_description.get(),
-                                 kCVPixelFormatComponentRange)
-          : nullptr;
+  CFTypeRef component_range = nullptr;
+  if (__builtin_available(macOS 10.10, *)) {
+    if (pixel_format_description) {
+      component_range = CFDictionaryGetValue(pixel_format_description.get(),
+                                             kCVPixelFormatComponentRange);
+    }
+  } else if (image_buffer &&
+             CFGetTypeID(image_buffer) == CVPixelBufferGetTypeID()) {
+    const OSType format = CVPixelBufferGetPixelFormatType(image_buffer);
+    component_range =
+        (format == kCVPixelFormatType_420YpCbCr8PlanarFullRange ||
+         format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+            ? kCFBooleanTrue
+            : kCFBooleanFalse;
+  }
   return gfx::ColorSpaceFromCVImageBufferKeys(
       color_primaries.get(), transfer_function.get(), gamma_level.get(),
       ycbcr_matrix.get(), component_range);

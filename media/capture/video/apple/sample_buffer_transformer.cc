@@ -490,6 +490,14 @@ void SampleBufferTransformer::Reconfigure(
     const gfx::Size& destination_size,
     int rotation_angle,
     std::optional<size_t> buffer_pool_size) {
+#if BUILDFLAG(IS_MAC)
+  if (!__builtin_available(macOS 10.8, *)) {
+    // Use the existing software converter when VideoToolbox is absent.
+    CHECK(destination_pixel_format == kPixelFormatI420 ||
+          destination_pixel_format == kPixelFormatNv12);
+    transformer = Transformer::kLibyuv;
+  }
+#endif
   DCHECK(transformer != Transformer::kLibyuv ||
          destination_pixel_format == kPixelFormatI420 ||
          destination_pixel_format == kPixelFormatNv12)
