@@ -1,0 +1,1456 @@
+diff --git a/include/dawn/native/MetalBackend.h b/include/dawn/native/MetalBackend.h
+index 61fb64fca..7f33a0a7d 100644
+--- a/include/dawn/native/MetalBackend.h
++++ b/include/dawn/native/MetalBackend.h
+@@ -36,7 +36,18 @@
+ #import <Metal/Metal.h>
+ #endif
+ 
+-namespace dawn::native::metal {
++#if defined(__APPLE__) && defined(__clang__)
++#define DAWN_METAL_AVAILABLE __attribute__((availability(macos, introduced=13.0)))
++#else
++#define DAWN_METAL_AVAILABLE
++#endif
++
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // When making Metal interop with other APIs, we need to be careful that QueueSubmit doesn't
+ // mean that the operations will be visible to other APIs/Metal devices right away. macOS
+@@ -44,13 +55,16 @@ namespace dawn::native::metal {
+ // when they are "scheduled". Submitting other operations before the command buffer is
+ // scheduled could lead to races in who gets scheduled first and incorrect rendering.
+ // TODO(crbug.com/444702048): Remove after migrating Chromium to commands scheduled futures.
+-DAWN_NATIVE_EXPORT void WaitForCommandsToBeScheduled(WGPUDevice device);
++DAWN_NATIVE_EXPORT void WaitForCommandsToBeScheduled(WGPUDevice device) DAWN_METAL_AVAILABLE;
+ 
+ #if defined(__OBJC__)
+ // Return the MTLDevice corresponding to the WGPUDevice.
+-DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
++DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device) DAWN_METAL_AVAILABLE;
+ #endif
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
++
++#undef DAWN_METAL_AVAILABLE
+ 
+ #endif  // INCLUDE_DAWN_NATIVE_METALBACKEND_H_
+diff --git a/src/dawn/native/BUILD.gn b/src/dawn/native/BUILD.gn
+index c88d9de7d..c712ccc75 100644
+--- a/src/dawn/native/BUILD.gn
++++ b/src/dawn/native/BUILD.gn
+@@ -694,6 +694,8 @@ source_set("sources") {
+       "QuartzCore.framework",
+     ]
+     if (is_mac) {
++      frameworks -= [ "Metal.framework" ]
++      weak_frameworks = [ "Metal.framework" ]
+       frameworks += [
+         "Cocoa.framework",
+         "IOKit.framework",
+diff --git a/src/dawn/native/Surface_metal.mm b/src/dawn/native/Surface_metal.mm
+index 7ef0b1ad8..01c344998 100644
+--- a/src/dawn/native/Surface_metal.mm
++++ b/src/dawn/native/Surface_metal.mm
+@@ -38,6 +38,9 @@
+ namespace dawn::native {
+ 
+ bool InheritsFromCAMetalLayer(void* obj) {
++#if DAWN_PLATFORM_IS(MACOS)
++    if (@available(macOS 13.0, *)) {
++#endif
+     id<NSObject> object =
+ #if DAWN_PLATFORM_IS(IOS)
+         (__bridge id)obj;
+@@ -46,6 +49,10 @@ bool InheritsFromCAMetalLayer(void* obj) {
+ #endif  // DAWN_PLATFORM_IS(IOS)
+ 
+     return [object isKindOfClass:[CAMetalLayer class]];
++#if DAWN_PLATFORM_IS(MACOS)
++    }
++    return false;
++#endif
+ }
+ 
+ }  // namespace dawn::native
+diff --git a/src/dawn/native/metal/BackendMTL.mm b/src/dawn/native/metal/BackendMTL.mm
+index b15f0a25b..3c25223d0 100644
+--- a/src/dawn/native/metal/BackendMTL.mm
++++ b/src/dawn/native/metal/BackendMTL.mm
+@@ -76,6 +76,9 @@ Backend::~Backend() = default;
+ 
+ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
+     const UnpackedPtr<RequestAdapterOptions>& options) {
++#if DAWN_PLATFORM_IS(MACOS)
++    if (@available(macOS 13.0, *)) {
++#endif
+     if (options->forceFallbackAdapter) {
+         return {};
+     }
+@@ -106,6 +109,10 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
+ #endif
+ 
+     return std::vector<Ref<PhysicalDeviceBase>>{mPhysicalDevices};
++#if DAWN_PLATFORM_IS(MACOS)
++    }
++    return {};
++#endif
+ }
+ 
+ BackendConnection* Connect(InstanceBase* instance) {
+diff --git a/src/dawn/native/metal/BindGroupLayoutMTL.h b/src/dawn/native/metal/BindGroupLayoutMTL.h
+index 40edb91f6..b06aec6b2 100644
+--- a/src/dawn/native/metal/BindGroupLayoutMTL.h
++++ b/src/dawn/native/metal/BindGroupLayoutMTL.h
+@@ -41,7 +41,12 @@ namespace tint::msl::writer {
+ struct ArgumentBufferInfo;
+ }
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class BindGroup;
+ class Device;
+@@ -69,6 +74,7 @@ class BindGroupLayout final : public BindGroupLayoutInternalBase {
+     MutexProtected<NSPRef<id<MTLArgumentEncoder>>> mArgumentEncoder;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_BINDGROUPLAYOUTMTL_H_
+diff --git a/src/dawn/native/metal/BindGroupLayoutMTL.mm b/src/dawn/native/metal/BindGroupLayoutMTL.mm
+index 06aea9f49..6acdb0c3e 100644
+--- a/src/dawn/native/metal/BindGroupLayoutMTL.mm
++++ b/src/dawn/native/metal/BindGroupLayoutMTL.mm
+@@ -37,7 +37,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "tint/tint.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ Ref<BindGroupLayout> BindGroupLayout::Create(
+@@ -152,4 +157,5 @@ void BindGroupLayout::FillTintArgumentBufferInfo(
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/BindGroupMTL.h b/src/dawn/native/metal/BindGroupMTL.h
+index e107a4ae4..b21de0f67 100644
+--- a/src/dawn/native/metal/BindGroupMTL.h
++++ b/src/dawn/native/metal/BindGroupMTL.h
+@@ -34,7 +34,12 @@
+ #include "src/dawn/common/PlacementAllocated.h"
+ #include "src/dawn/native/BindGroup.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -57,6 +62,7 @@ class BindGroup final : public BindGroupBase, public PlacementAllocated {
+     NSPRef<id<MTLBuffer>> mArgumentBuffer;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_BINDGROUPMTL_H_
+diff --git a/src/dawn/native/metal/BindGroupMTL.mm b/src/dawn/native/metal/BindGroupMTL.mm
+index a249dda19..74388edfc 100644
+--- a/src/dawn/native/metal/BindGroupMTL.mm
++++ b/src/dawn/native/metal/BindGroupMTL.mm
+@@ -36,7 +36,12 @@
+ #include "src/dawn/native/metal/TextureMTL.h"
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ ResultOrError<Ref<BindGroup>> BindGroup::Create(
+@@ -135,4 +140,5 @@ NSPRef<id<MTLBuffer>> BindGroup::GetArgumentBuffer() const {
+     return mArgumentBuffer;
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/BindGroupTrackerMTL.h b/src/dawn/native/metal/BindGroupTrackerMTL.h
+index e8a2fdb22..896b64934 100644
+--- a/src/dawn/native/metal/BindGroupTrackerMTL.h
++++ b/src/dawn/native/metal/BindGroupTrackerMTL.h
+@@ -39,7 +39,12 @@
+ #include "src/dawn/native/metal/StorageBufferLengthTrackerMTL.h"
+ #include "src/dawn/native/metal/TextureMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // Keeps track of the dirty bind groups so they can be lazily applied when we know the
+ // pipeline state.
+@@ -326,6 +331,7 @@ class BindGroupTracker : public BindGroupTrackerBase<true> {
+     raw_ptr<ResourceTable> mLastAppliedResourceTable = nullptr;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_BINDGROUPTRACKERMTL_H_
+diff --git a/src/dawn/native/metal/BufferMTL.h b/src/dawn/native/metal/BufferMTL.h
+index 78343437a..ad03f467d 100644
+--- a/src/dawn/native/metal/BufferMTL.h
++++ b/src/dawn/native/metal/BufferMTL.h
+@@ -34,7 +34,12 @@
+ #include "src/dawn/common/SerialQueue.h"
+ #include "src/dawn/native/Buffer.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class CommandRecordingContext;
+ class Device;
+@@ -83,6 +88,7 @@ class Buffer final : public BufferBase {
+     NSPRef<id<MTLBuffer>> mMtlBuffer;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_BUFFERMTL_H_
+diff --git a/src/dawn/native/metal/BufferMTL.mm b/src/dawn/native/metal/BufferMTL.mm
+index bdb5c7b37..8d80fd1c2 100644
+--- a/src/dawn/native/metal/BufferMTL.mm
++++ b/src/dawn/native/metal/BufferMTL.mm
+@@ -40,7 +40,12 @@
+ #include "src/utils/compiler.h"
+ #include "src/utils/platform.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ // The size of uniform buffer and storage buffer need to be aligned to 16 bytes which is the
+ // largest alignment of supported data types
+ static constexpr uint32_t kMinUniformOrStorageBufferAlignment = 16u;
+@@ -310,4 +315,5 @@ void Buffer::SetLabelImpl() {
+     SetDebugName(GetDevice(), mMtlBuffer.Get(), "Dawn_Buffer", GetLabel());
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/CommandBufferMTL.h b/src/dawn/native/metal/CommandBufferMTL.h
+index b315ba80b..0292af7e4 100644
+--- a/src/dawn/native/metal/CommandBufferMTL.h
++++ b/src/dawn/native/metal/CommandBufferMTL.h
+@@ -45,7 +45,12 @@ struct BeginComputePassCmd;
+ struct BeginRenderPassCmd;
+ }  // namespace dawn::native
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class CommandRecordingContext;
+ class Device;
+@@ -119,6 +124,7 @@ class CommandBuffer final : public CommandBufferBase {
+     MaybeError RecordWriteBuffer(CommandRecordingContext* commandContext, WriteBufferCmd* cmd);
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_COMMANDBUFFERMTL_H_
+diff --git a/src/dawn/native/metal/CommandBufferMTL.mm b/src/dawn/native/metal/CommandBufferMTL.mm
+index 7c00facb2..b2ef14ab5 100644
+--- a/src/dawn/native/metal/CommandBufferMTL.mm
++++ b/src/dawn/native/metal/CommandBufferMTL.mm
+@@ -59,7 +59,12 @@
+ #include "src/utils/assert.h"
+ #include "src/utils/compiler.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ 
+@@ -1682,4 +1687,5 @@ MaybeError CommandBuffer::RecordWriteBuffer(CommandRecordingContext* commandCont
+     return {};
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/CommandRecordingContext.h b/src/dawn/native/metal/CommandRecordingContext.h
+index 2c77f6ede..60fda9333 100644
+--- a/src/dawn/native/metal/CommandRecordingContext.h
++++ b/src/dawn/native/metal/CommandRecordingContext.h
+@@ -34,7 +34,12 @@
+ #include "src/dawn/native/Error.h"
+ #include "src/utils/non_movable.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Queue;
+ 
+@@ -94,6 +99,7 @@ class CommandRecordingContext : NonMovable {
+     bool mUsed = false;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_COMMANDRECORDINGCONTEXT_H_
+diff --git a/src/dawn/native/metal/CommandRecordingContext.mm b/src/dawn/native/metal/CommandRecordingContext.mm
+index eb8ea3005..a4c7e9abc 100644
+--- a/src/dawn/native/metal/CommandRecordingContext.mm
++++ b/src/dawn/native/metal/CommandRecordingContext.mm
+@@ -33,7 +33,12 @@
+ #include "src/dawn/native/metal/QueueMTL.h"
+ #include "src/utils/assert.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ CommandRecordingContext::CommandRecordingContext(const Queue* queue) : mQueue(queue) {}
+ 
+@@ -218,4 +223,5 @@ void CommandRecordingContext::WaitForSharedEvent(id<MTLSharedEvent> sharedEvent,
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/ComputePipelineMTL.h b/src/dawn/native/metal/ComputePipelineMTL.h
+index 035b22d0c..c8bc01c49 100644
+--- a/src/dawn/native/metal/ComputePipelineMTL.h
++++ b/src/dawn/native/metal/ComputePipelineMTL.h
+@@ -36,7 +36,12 @@
+ #include "src/dawn/native/ComputePipeline.h"
+ #include "src/dawn/native/CreatePipelineAsyncEvent.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -60,6 +65,7 @@ class ComputePipeline final : public ComputePipelineBase {
+     std::vector<uint32_t> mWorkgroupAllocations;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_COMPUTEPIPELINEMTL_H_
+diff --git a/src/dawn/native/metal/ComputePipelineMTL.mm b/src/dawn/native/metal/ComputePipelineMTL.mm
+index 1a7b2d12d..d1f6feba3 100644
+--- a/src/dawn/native/metal/ComputePipelineMTL.mm
++++ b/src/dawn/native/metal/ComputePipelineMTL.mm
+@@ -38,7 +38,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "src/dawn/platform/metrics/HistogramMacros.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ Ref<ComputePipeline> ComputePipeline::CreateUninitialized(
+@@ -114,4 +119,5 @@ MTLSize ComputePipeline::GetLocalWorkGroupSize() const {
+     return ToMTLSize(GetWorkgroupSize());
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/DeviceMTL.h b/src/dawn/native/metal/DeviceMTL.h
+index e3cd23d0a..3d80e4fea 100644
+--- a/src/dawn/native/metal/DeviceMTL.h
++++ b/src/dawn/native/metal/DeviceMTL.h
+@@ -43,7 +43,12 @@
+ #include "src/dawn/native/metal/CommandRecordingContext.h"
+ #include "src/dawn/native/metal/Forward.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class FencedReferencer;
+ struct KalmanInfo;
+@@ -176,6 +181,7 @@ class Device final : public DeviceBase {
+     Ref<FencedReferencer> mFencedReferencer;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_DEVICEMTL_H_
+diff --git a/src/dawn/native/metal/DeviceMTL.mm b/src/dawn/native/metal/DeviceMTL.mm
+index 59badf970..6ffd13afb 100644
+--- a/src/dawn/native/metal/DeviceMTL.mm
++++ b/src/dawn/native/metal/DeviceMTL.mm
+@@ -58,7 +58,12 @@
+ #include "src/dawn/platform/tracing/TraceEvent.h"
+ #include "src/utils/platform.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ struct KalmanInfo {
+     float filterValue;  // The estimation value
+@@ -514,4 +519,5 @@ void Device::StopTrace() {
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/FencedReferencer.h b/src/dawn/native/metal/FencedReferencer.h
+index eb7e3ecfb..f7e976577 100644
+--- a/src/dawn/native/metal/FencedReferencer.h
++++ b/src/dawn/native/metal/FencedReferencer.h
+@@ -39,7 +39,12 @@
+ #include "src/dawn/native/ExecutionQueue.h"
+ #include "src/dawn/native/IntegerTypes.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -67,6 +72,7 @@ class FencedReferencer final : public ExecutionQueueBase::SerialProcessor {
+     MutexProtected<PendingDeletions> mPendingDeletions;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_FENCEDREFERENCER_H_
+diff --git a/src/dawn/native/metal/FencedReferencer.mm b/src/dawn/native/metal/FencedReferencer.mm
+index eb9be8436..802758273 100644
+--- a/src/dawn/native/metal/FencedReferencer.mm
++++ b/src/dawn/native/metal/FencedReferencer.mm
+@@ -33,7 +33,12 @@
+ #include "src/dawn/native/Queue.h"
+ #include "src/dawn/native/metal/DeviceMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ FencedReferencer::FencedReferencer(Device* device) : mDevice(device) {}
+ 
+@@ -64,4 +69,5 @@ bool FencedReferencer::HasPendingObjectsForTesting() const {
+     return mPendingDeletions.Use([](const auto& pending) { return !pending->mObjects.Empty(); });
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/Forward.h b/src/dawn/native/metal/Forward.h
+index ba94cef75..d6ca648d6 100644
+--- a/src/dawn/native/metal/Forward.h
++++ b/src/dawn/native/metal/Forward.h
+@@ -30,7 +30,12 @@
+ 
+ #include "src/dawn/native/ToBackend.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class BindGroup;
+ class BindGroupLayout;
+@@ -80,6 +85,7 @@ auto ToBackend(T&& common) -> decltype(ToBackendBase<MetalBackendTraits>(common)
+     return ToBackendBase<MetalBackendTraits>(common);
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_FORWARD_H_
+diff --git a/src/dawn/native/metal/ImmediatesLayoutMTL.h b/src/dawn/native/metal/ImmediatesLayoutMTL.h
+index 5729784d2..6debe80b9 100644
+--- a/src/dawn/native/metal/ImmediatesLayoutMTL.h
++++ b/src/dawn/native/metal/ImmediatesLayoutMTL.h
+@@ -30,7 +30,12 @@
+ 
+ #include "src/dawn/native/ImmediatesLayout.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // Define Metal immediates layout. Append members to expand layouts.
+ // NOTE: 'offsetof' doesn't support non-standard-layout structs. So use aggregate instead of
+@@ -53,6 +58,7 @@ struct ComputeImmediates {
+ };
+ DAWN_DISABLE_STRUCT_PADDING_WARNINGS
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_IMMEDIATESLAYOUTMTL_H_
+diff --git a/src/dawn/native/metal/ImmediatesTrackerMTL.h b/src/dawn/native/metal/ImmediatesTrackerMTL.h
+index 544b03d61..866532533 100644
+--- a/src/dawn/native/metal/ImmediatesTrackerMTL.h
++++ b/src/dawn/native/metal/ImmediatesTrackerMTL.h
+@@ -33,7 +33,12 @@
+ #include "src/dawn/native/metal/ImmediatesLayoutMTL.h"
+ #include "src/dawn/native/metal/StorageBufferLengthTrackerMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class RenderImmediatesTracker
+     : public UserImmediatesTrackerBase<RenderImmediates, RenderPipelineBase> {
+@@ -180,6 +185,7 @@ class ImmediateTracker : public T {
+     wgpu::ShaderStage dirtyStages = wgpu::ShaderStage::None;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_IMMEDIATESTRACKERMTL_H_
+diff --git a/src/dawn/native/metal/MetalBackend.mm b/src/dawn/native/metal/MetalBackend.mm
+index 567994b94..b4ebed6f6 100644
+--- a/src/dawn/native/metal/MetalBackend.mm
++++ b/src/dawn/native/metal/MetalBackend.mm
+@@ -34,7 +34,12 @@
+ #include "src/dawn/native/metal/QueueMTL.h"
+ #include "src/dawn/native/metal/TextureMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ void WaitForCommandsToBeScheduled(WGPUDevice device) {
+     Device* backendDevice = ToBackend(FromAPI(device));
+@@ -47,4 +52,5 @@ id<MTLDevice> GetMTLDevice(WGPUDevice device) {
+     return backendDevice->GetMTLDevice();
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/MultiDrawEncoder.h b/src/dawn/native/metal/MultiDrawEncoder.h
+index 5d8cefd50..51948aa2f 100644
+--- a/src/dawn/native/metal/MultiDrawEncoder.h
++++ b/src/dawn/native/metal/MultiDrawEncoder.h
+@@ -38,7 +38,12 @@
+ #include "src/dawn/native/metal/DeviceMTL.h"
+ #include "src/utils/non_copyable.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // This is a class that encloses the pipeline and argument encoder for the multi-draw converter
+ // compute pass. It acts as a cache for the pipeline and the argument encoder, so that they are
+@@ -73,5 +78,6 @@ ResultOrError<std::vector<MultiDrawExecutionData>> PrepareMultiDraws(
+ 
+ void ExecuteMultiDraw(const MultiDrawExecutionData& data, id<MTLRenderCommandEncoder> encoder);
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ #endif  // SRC_DAWN_NATIVE_METAL_MULTIDRAWENCODER_H_
+diff --git a/src/dawn/native/metal/MultiDrawEncoder.mm b/src/dawn/native/metal/MultiDrawEncoder.mm
+index 42a8dd53d..585872144 100644
+--- a/src/dawn/native/metal/MultiDrawEncoder.mm
++++ b/src/dawn/native/metal/MultiDrawEncoder.mm
+@@ -197,7 +197,12 @@ static constexpr uint8_t kTriangleStrip = 4;
+ 
+ }  // anonymous namespace
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ static uint8_t GetPrimitiveType(wgpu::PrimitiveTopology primitiveTopology) {
+     switch (primitiveTopology) {
+@@ -397,4 +402,5 @@ void ExecuteMultiDraw(const MultiDrawExecutionData& data, id<MTLRenderCommandEnc
+     [encoder executeCommandsInBuffer:data.mIndirectCommandBuffer.Get()
+                            withRange:NSMakeRange(0, data.mMaxDrawCount)];
+ }
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/PhysicalDeviceMTL.h b/src/dawn/native/metal/PhysicalDeviceMTL.h
+index 348c5ec74..787a35ada 100644
+--- a/src/dawn/native/metal/PhysicalDeviceMTL.h
++++ b/src/dawn/native/metal/PhysicalDeviceMTL.h
+@@ -33,7 +33,12 @@
+ #include "src/dawn/common/NSRef.h"
+ #include "src/dawn/native/PhysicalDevice.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class PhysicalDevice : public PhysicalDeviceBase {
+   public:
+@@ -77,6 +82,7 @@ class PhysicalDevice : public PhysicalDeviceBase {
+     const bool mMetalValidationEnabled;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_PHYSICALDEVICEMTL_H_
+diff --git a/src/dawn/native/metal/PhysicalDeviceMTL.mm b/src/dawn/native/metal/PhysicalDeviceMTL.mm
+index 93781d3fc..e41357291 100644
+--- a/src/dawn/native/metal/PhysicalDeviceMTL.mm
++++ b/src/dawn/native/metal/PhysicalDeviceMTL.mm
+@@ -51,7 +51,12 @@
+ #include <string>
+ #include <vector>
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ 
+@@ -1134,4 +1139,5 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
+         }
+     }
+ }
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/PipelineLayoutMTL.h b/src/dawn/native/metal/PipelineLayoutMTL.h
+index 67154ad0f..943c2b1ec 100644
+--- a/src/dawn/native/metal/PipelineLayoutMTL.h
++++ b/src/dawn/native/metal/PipelineLayoutMTL.h
+@@ -39,7 +39,12 @@
+ #include "src/dawn/native/PerStage.h"
+ #include "src/dawn/native/PipelineLayout.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -100,6 +105,7 @@ class PipelineLayout final : public PipelineLayoutBase {
+     PerStage<uint32_t> mBufferBindingCount;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_PIPELINELAYOUTMTL_H_
+diff --git a/src/dawn/native/metal/PipelineLayoutMTL.mm b/src/dawn/native/metal/PipelineLayoutMTL.mm
+index 1e1998876..f639d89fa 100644
+--- a/src/dawn/native/metal/PipelineLayoutMTL.mm
++++ b/src/dawn/native/metal/PipelineLayoutMTL.mm
+@@ -31,7 +31,12 @@
+ #include "src/dawn/native/BindGroupLayoutInternal.h"
+ #include "src/dawn/native/metal/DeviceMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ Ref<PipelineLayout> PipelineLayout::Create(
+@@ -110,4 +115,5 @@ uint32_t PipelineLayout::GetBufferBindingCount(SingleShaderStage stage) const {
+     return mBufferBindingCount[stage];
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/QuerySetMTL.h b/src/dawn/native/metal/QuerySetMTL.h
+index 44150dbb6..4d27e57a1 100644
+--- a/src/dawn/native/metal/QuerySetMTL.h
++++ b/src/dawn/native/metal/QuerySetMTL.h
+@@ -36,7 +36,12 @@
+ #include "src/dawn/common/NSRef.h"
+ #include "src/dawn/native/QuerySet.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -97,6 +102,7 @@ class QuerySet final : public QuerySetBase {
+     id<MTLCounterSampleBuffer> mCounterSampleBuffer = nullptr;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_QUERYSETMTL_H_
+diff --git a/src/dawn/native/metal/QuerySetMTL.mm b/src/dawn/native/metal/QuerySetMTL.mm
+index 368518db7..07b9ecedc 100644
+--- a/src/dawn/native/metal/QuerySetMTL.mm
++++ b/src/dawn/native/metal/QuerySetMTL.mm
+@@ -32,7 +32,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "src/utils/platform.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ 
+@@ -236,4 +241,5 @@ void QuerySet::DestroyImpl(DestroyReason reason) {
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/QueueMTL.h b/src/dawn/native/metal/QueueMTL.h
+index a4cc45547..ecc73bd68 100644
+--- a/src/dawn/native/metal/QueueMTL.h
++++ b/src/dawn/native/metal/QueueMTL.h
+@@ -42,7 +42,12 @@
+ #include "src/dawn/native/metal/CommandRecordingContext.h"
+ #include "src/dawn/native/metal/SharedFenceMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -100,6 +105,7 @@ class Queue final : public QueueBase {
+     Ref<SharedFence> mSharedFence;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_QUEUEMTL_H_
+diff --git a/src/dawn/native/metal/QueueMTL.mm b/src/dawn/native/metal/QueueMTL.mm
+index 7f990a591..874d5fe34 100644
+--- a/src/dawn/native/metal/QueueMTL.mm
++++ b/src/dawn/native/metal/QueueMTL.mm
+@@ -46,7 +46,12 @@
+ #include "src/dawn/platform/tracing/TraceEvent.h"
+ #include "src/utils/compiler.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ class CommandsScheduledEvent : public EventManager::TrackedEvent {
+@@ -388,4 +393,5 @@ void Queue::ForceEventualFlushOfCommands() {
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/RenderPipelineMTL.h b/src/dawn/native/metal/RenderPipelineMTL.h
+index 62d8a85d7..98282cb8c 100644
+--- a/src/dawn/native/metal/RenderPipelineMTL.h
++++ b/src/dawn/native/metal/RenderPipelineMTL.h
+@@ -33,7 +33,12 @@
+ #include "src/dawn/common/NSRef.h"
+ #include "src/dawn/native/RenderPipeline.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -74,6 +79,7 @@ class RenderPipeline final : public RenderPipelineBase {
+     PerVertexBuffer<uint32_t> mMtlVertexBufferIndices{};
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_RENDERPIPELINEMTL_H_
+diff --git a/src/dawn/native/metal/RenderPipelineMTL.mm b/src/dawn/native/metal/RenderPipelineMTL.mm
+index 651084924..f02a7d448 100644
+--- a/src/dawn/native/metal/RenderPipelineMTL.mm
++++ b/src/dawn/native/metal/RenderPipelineMTL.mm
+@@ -39,7 +39,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "src/dawn/platform/metrics/HistogramMacros.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ MTLVertexFormat VertexFormatType(wgpu::VertexFormat format) {
+@@ -625,4 +630,5 @@ NSRef<MTLDepthStencilDescriptor> RenderPipeline::MakeDepthStencilDesc() {
+     return mtlDepthStencilDescRef;
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/ResourceTableMTL.h b/src/dawn/native/metal/ResourceTableMTL.h
+index ef6cb9f37..48ab6db59 100644
+--- a/src/dawn/native/metal/ResourceTableMTL.h
++++ b/src/dawn/native/metal/ResourceTableMTL.h
+@@ -37,7 +37,12 @@
+ #include "src/dawn/native/ResourceTable.h"
+ #include "src/dawn/native/metal/TextureMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ class CommandRecordingContext;
+@@ -76,6 +81,7 @@ class ResourceTable final : public ResourceTableBase {
+     ityp::vector<ResourceTableSlot, Ref<TextureView>> mTextureViews;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_RESOURCETABLEMTL_H_
+diff --git a/src/dawn/native/metal/ResourceTableMTL.mm b/src/dawn/native/metal/ResourceTableMTL.mm
+index 9c2e72e22..8d4d67540 100644
+--- a/src/dawn/native/metal/ResourceTableMTL.mm
++++ b/src/dawn/native/metal/ResourceTableMTL.mm
+@@ -35,7 +35,12 @@
+ #include "src/dawn/native/metal/SamplerMTL.h"
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ ResultOrError<Ref<ResourceTable>> ResourceTable::Create(Device* device,
+@@ -252,4 +257,5 @@ void ResourceTable::SetLabelImpl() {
+     SetDebugName(GetDevice(), mArgBuffer.Get(), "Dawn_ResourceTable", GetLabel());
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/SamplerMTL.h b/src/dawn/native/metal/SamplerMTL.h
+index 9902fe747..dad331654 100644
+--- a/src/dawn/native/metal/SamplerMTL.h
++++ b/src/dawn/native/metal/SamplerMTL.h
+@@ -33,7 +33,12 @@
+ #include "src/dawn/common/NSRef.h"
+ #include "src/dawn/native/Sampler.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -53,6 +58,7 @@ class Sampler final : public SamplerBase {
+     NSPRef<id<MTLSamplerState>> mMtlSamplerState;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_SAMPLERMTL_H_
+diff --git a/src/dawn/native/metal/SamplerMTL.mm b/src/dawn/native/metal/SamplerMTL.mm
+index 0265dc00c..2004918ab 100644
+--- a/src/dawn/native/metal/SamplerMTL.mm
++++ b/src/dawn/native/metal/SamplerMTL.mm
+@@ -30,7 +30,12 @@
+ #include "src/dawn/native/metal/DeviceMTL.h"
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ MTLSamplerMinMagFilter FilterModeToMinMagFilter(wgpu::FilterMode mode) {
+@@ -137,4 +142,5 @@ id<MTLSamplerState> Sampler::GetMTLSamplerState() {
+     return mMtlSamplerState.Get();
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/ShaderModuleMTL.h b/src/dawn/native/metal/ShaderModuleMTL.h
+index e27bc1c33..54d2040dd 100644
+--- a/src/dawn/native/metal/ShaderModuleMTL.h
++++ b/src/dawn/native/metal/ShaderModuleMTL.h
+@@ -42,7 +42,12 @@ namespace dawn::native {
+ struct ProgrammableStage;
+ }
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ class PipelineLayout;
+@@ -77,6 +82,7 @@ class ShaderModule final : public ShaderModuleBase {
+     ~ShaderModule() override;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_SHADERMODULEMTL_H_
+diff --git a/src/dawn/native/metal/ShaderModuleMTL.mm b/src/dawn/native/metal/ShaderModuleMTL.mm
+index ded0acfbf..22f77ebdf 100644
+--- a/src/dawn/native/metal/ShaderModuleMTL.mm
++++ b/src/dawn/native/metal/ShaderModuleMTL.mm
+@@ -52,7 +52,12 @@
+ #include "src/dawn/platform/metrics/HistogramMacros.h"
+ #include "src/dawn/platform/tracing/TraceEvent.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ namespace {
+ 
+ using OptionalVertexPullingTransformConfig = std::optional<tint::VertexPullingConfig>;
+@@ -97,9 +102,15 @@ DAWN_SERIALIZABLE(struct, MslCompilation, MSL_COMPILATION_MEMBERS) {
+ #undef MSL_COMPILATION_MEMBERS
+ 
+ }  // namespace
+-}  // namespace dawn::native::metal
+-
+-namespace dawn::native::metal {
++}  // namespace metal
++}  // namespace dawn::native
++
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ ResultOrError<Ref<ShaderModule>> ShaderModule::Create(
+@@ -597,4 +608,5 @@ MaybeUnknownError ShaderModule::CreateFunction(SingleShaderStage stage,
+ 
+     return {};
+ }
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/SharedFenceMTL.h b/src/dawn/native/metal/SharedFenceMTL.h
+index 20f354817..3a3c1ea5b 100644
+--- a/src/dawn/native/metal/SharedFenceMTL.h
++++ b/src/dawn/native/metal/SharedFenceMTL.h
+@@ -38,7 +38,12 @@
+ 
+ @protocol MTLSharedEvent;
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ 
+@@ -57,6 +62,7 @@ class SharedFence final : public SharedFenceBase {
+     NSPRef<id> mSharedEvent;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_SHAREDTEXTUREFENCEMTL_H_
+diff --git a/src/dawn/native/metal/SharedFenceMTL.mm b/src/dawn/native/metal/SharedFenceMTL.mm
+index 8815d529a..bdf87ed04 100644
+--- a/src/dawn/native/metal/SharedFenceMTL.mm
++++ b/src/dawn/native/metal/SharedFenceMTL.mm
+@@ -31,7 +31,12 @@
+ #include "src/dawn/native/metal/DeviceMTL.h"
+ #include "src/utils/platform.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ ResultOrUnknownError<Ref<SharedFence>> SharedFence::Create(
+@@ -67,4 +72,5 @@ MaybeValError SharedFence::ExportInfoImpl(UnpackedPtr<SharedFenceExportInfo>& in
+     return {};
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/SharedTextureMemoryMTL.h b/src/dawn/native/metal/SharedTextureMemoryMTL.h
+index f8d8b6435..56dd8937b 100644
+--- a/src/dawn/native/metal/SharedTextureMemoryMTL.h
++++ b/src/dawn/native/metal/SharedTextureMemoryMTL.h
+@@ -40,7 +40,12 @@
+ #include "src/dawn/native/SharedTextureMemory.h"
+ #include "src/dawn/native/Subresource.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ class CommandRecordingContext;
+@@ -87,6 +92,7 @@ class SharedTextureMemory final : public SharedTextureMemoryBase {
+     absl::InlinedVector<NSPRef<id<MTLTexture>>, kMaxPlanesPerFormat> mMtlPlaneTextures;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_SHAREDTEXTUREMEMORYMTL_H_
+diff --git a/src/dawn/native/metal/SharedTextureMemoryMTL.mm b/src/dawn/native/metal/SharedTextureMemoryMTL.mm
+index 63bd5fcc4..2f35ecc07 100644
+--- a/src/dawn/native/metal/SharedTextureMemoryMTL.mm
++++ b/src/dawn/native/metal/SharedTextureMemoryMTL.mm
+@@ -38,7 +38,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "src/utils/compiler.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ ResultOrValError<wgpu::TextureFormat> GetFormatEquivalentToIOSurfaceFormat(uint32_t format) {
+@@ -297,4 +302,5 @@ MaybeError SharedTextureMemory::CreateMtlTextures() {
+     return {};
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/StorageBufferLengthTrackerMTL.h b/src/dawn/native/metal/StorageBufferLengthTrackerMTL.h
+index 5aa65023d..7121c6f05 100644
+--- a/src/dawn/native/metal/StorageBufferLengthTrackerMTL.h
++++ b/src/dawn/native/metal/StorageBufferLengthTrackerMTL.h
+@@ -37,7 +37,12 @@
+ #include "src/dawn/native/metal/PipelineLayoutMTL.h"
+ #include "src/dawn/native/metal/RenderPipelineMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // Metal buffer pointers do not expose their length, so Tint receives storage buffer lengths
+ // through immediate data for arrayLength().
+@@ -113,6 +118,7 @@ struct StorageBufferLengthTracker {
+     size_t mLastImmediateCounts = 0;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_STORAGEBUFFERLENGTHTRACKERMTL_H_
+diff --git a/src/dawn/native/metal/SwapChainMTL.h b/src/dawn/native/metal/SwapChainMTL.h
+index 1229b4369..d40765baf 100644
+--- a/src/dawn/native/metal/SwapChainMTL.h
++++ b/src/dawn/native/metal/SwapChainMTL.h
+@@ -34,7 +34,12 @@
+ @class CAMetalLayer;
+ @protocol CAMetalDrawable;
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class Device;
+ class Texture;
+@@ -63,6 +68,7 @@ class SwapChain final : public SwapChainBase {
+     void DetachFromSurfaceImpl() override;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_SWAPCHAINMTL_H_
+diff --git a/src/dawn/native/metal/SwapChainMTL.mm b/src/dawn/native/metal/SwapChainMTL.mm
+index b9a9d07b3..67a4ec750 100644
+--- a/src/dawn/native/metal/SwapChainMTL.mm
++++ b/src/dawn/native/metal/SwapChainMTL.mm
+@@ -36,7 +36,12 @@
+ #include "src/dawn/native/metal/TextureMTL.h"
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // static
+ ResultOrError<Ref<SwapChain>> SwapChain::Create(Device* device,
+@@ -143,4 +148,5 @@ void SwapChain::DetachFromSurfaceImpl() {
+     }
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/TextureMTL.h b/src/dawn/native/metal/TextureMTL.h
+index 332e9314e..06d115df6 100644
+--- a/src/dawn/native/metal/TextureMTL.h
++++ b/src/dawn/native/metal/TextureMTL.h
+@@ -40,7 +40,12 @@
+ #include "src/dawn/common/NSRef.h"
+ #include "src/dawn/native/Texture.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ class CommandRecordingContext;
+ class Device;
+@@ -129,6 +134,7 @@ class TextureView final : public TextureViewBase {
+     NSPRef<id<MTLTexture>> mMtlTextureView;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_TEXTUREMTL_H_
+diff --git a/src/dawn/native/metal/TextureMTL.mm b/src/dawn/native/metal/TextureMTL.mm
+index 62aff1d78..b31467c3c 100644
+--- a/src/dawn/native/metal/TextureMTL.mm
++++ b/src/dawn/native/metal/TextureMTL.mm
+@@ -46,7 +46,12 @@
+ #include "src/dawn/native/metal/UtilsMetal.h"
+ #include "src/utils/platform.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ 
+@@ -912,4 +917,5 @@ std::optional<MTLTextureSwizzleChannels> TextureView::ComputeMetalSwizzle() {
+     return {};
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/UtilsMetal.h b/src/dawn/native/metal/UtilsMetal.h
+index 3416afc39..5c58dfe5b 100644
+--- a/src/dawn/native/metal/UtilsMetal.h
++++ b/src/dawn/native/metal/UtilsMetal.h
+@@ -47,7 +47,12 @@ struct EntryPointMetadata;
+ enum class SingleShaderStage : uint8_t;
+ }  // namespace dawn::native
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ MTLTextureType MetalTextureViewType(wgpu::TextureViewDimension dimension, bool multisampled);
+ 
+@@ -169,6 +174,7 @@ bool SupportCounterSamplingAtStageBoundary(id<MTLDevice> device);
+ 
+ bool SupportTextureComponentSwizzle(id<MTLDevice> device);
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_UTILSMETAL_H_
+diff --git a/src/dawn/native/metal/UtilsMetal.mm b/src/dawn/native/metal/UtilsMetal.mm
+index 8319377d8..a6135ded3 100644
+--- a/src/dawn/native/metal/UtilsMetal.mm
++++ b/src/dawn/native/metal/UtilsMetal.mm
+@@ -42,7 +42,12 @@
+ #include "src/utils/assert.h"
+ #include "src/utils/numeric.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ namespace {
+ 
+@@ -1026,4 +1031,5 @@ bool SupportTextureComponentSwizzle(id<MTLDevice> device) {
+     return [device supportsFamily:MTLGPUFamilyMac2] || [device supportsFamily:MTLGPUFamilyApple2];
+ }
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+diff --git a/src/dawn/native/metal/VertexBufferTrackerMTL.h b/src/dawn/native/metal/VertexBufferTrackerMTL.h
+index 29f99910a..8284085d1 100644
+--- a/src/dawn/native/metal/VertexBufferTrackerMTL.h
++++ b/src/dawn/native/metal/VertexBufferTrackerMTL.h
+@@ -34,7 +34,12 @@
+ #include "src/dawn/native/metal/BufferMTL.h"
+ #include "src/dawn/native/metal/StorageBufferLengthTrackerMTL.h"
+ 
+-namespace dawn::native::metal {
++namespace dawn::native {
++#if defined(__APPLE__) && defined(__clang__)
++namespace __attribute__((availability(macos, introduced=13.0))) metal {
++#else
++namespace metal {
++#endif
+ 
+ // Keeps track of the dirty vertex buffer values so they can be lazily applied when we know
+ // all the relevant state.
+@@ -105,6 +110,7 @@ class VertexBufferTracker {
+     raw_ptr<StorageBufferLengthTracker> mLengthTracker;
+ };
+ 
+-}  // namespace dawn::native::metal
++}  // namespace metal
++}  // namespace dawn::native
+ 
+ #endif  // SRC_DAWN_NATIVE_METAL_VERTEXBUFFERTRACKERMTL_H_

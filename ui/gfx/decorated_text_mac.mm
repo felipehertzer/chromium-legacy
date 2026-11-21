@@ -32,18 +32,18 @@ NSAttributedString* GetAttributedStringFromDecoratedText(
 
     CTFontRef font = attribute.font.GetCTFont();
     if (font) {
-      attrs[NSFontAttributeName] = base::apple::CFToNSPtrCast(font);
+      [attrs setObject:base::apple::CFToNSPtrCast(font) forKey:NSFontAttributeName];
     }
 
     // NSFont does not have underline as an attribute. Hence handle it
     // separately.
     const bool underline = attribute.font.GetStyle() & gfx::Font::UNDERLINE;
     if (underline) {
-      attrs[NSUnderlineStyleAttributeName] = line_style;
+      [attrs setObject:line_style forKey:NSUnderlineStyleAttributeName];
     }
 
     if (attribute.strike) {
-      attrs[NSStrikethroughStyleAttributeName] = line_style;
+      [attrs setObject:line_style forKey:NSStrikethroughStyleAttributeName];
     }
 
     [str setAttributes:attrs range:range];

@@ -125,6 +125,7 @@ Weight GetFontWeightFromCTFont(CTFontRef font) {
 }
 
 // Converts a Font::Weight value to the corresponding NSFontWeight value.
+NSFontWeight ToNSFontWeight(Weight weight) API_AVAILABLE(macos(10.11));
 NSFontWeight ToNSFontWeight(Weight weight) {
   switch (weight) {
     case Weight::THIN:
@@ -194,6 +195,19 @@ NSInteger ToNSFontManagerWeight(Weight weight) {
     case Weight::BLACK:
       return 11;
   }
+}
+
+NSFont* GetSystemFontWithWeight(CGFloat size, Weight weight) {
+  if (@available(macOS 10.11, *)) {
+    return [NSFont systemFontOfSize:size weight:ToNSFontWeight(weight)];
+  }
+  NSFont* font = [NSFont systemFontOfSize:size];
+  NSFont* weighted = [NSFontManager.sharedFontManager
+      fontWithFamily:font.familyName
+              traits:0
+              weight:ToNSFontManagerWeight(weight)
+                size:size];
+  return weighted ? weighted : font;
 }
 
 std::string GetFamilyNameFromTypeface(sk_sp<SkTypeface> typeface) {
@@ -338,8 +352,7 @@ Font PlatformFontMac::DeriveFont(int size_delta,
   // versions of the macOS.
 
   if (system_font_type_ == SystemFontType::kGeneral) {
-    NSFont* derived = [NSFont systemFontOfSize:font_spec_.size + size_delta
-                                        weight:ToNSFontWeight(weight)];
+    NSFont* derived = GetSystemFontWithWeight(font_spec_.size + size_delta, weight);
     NSFontTraitMask italic_trait_mask =
         (style & Font::ITALIC) ? NSItalicFontMask : NSUnitalicFontMask;
     derived = [NSFontManager.sharedFontManager convertFont:derived
@@ -557,8 +570,7 @@ base::apple::ScopedCFTypeRef<CTFontRef> PlatformFontMac::CTFontWithSpec(
 
   // If that doesn't find a font, whip up a system font to stand in for the
   // specified font.
-  font = [NSFont systemFontOfSize:font_spec.size
-                           weight:ToNSFontWeight(font_spec.weight)];
+  font = GetSystemFontWithWeight(font_spec.size, font_spec.weight);
   font = [font_manager convertFont:font toHaveTrait:traits];
   return base::apple::ScopedCFTypeRef<CTFontRef>(
       base::apple::NSToCFOwnershipCast(font));

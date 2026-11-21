@@ -5,7 +5,6 @@
 #include "ui/base/clipboard/clipboard_format_type.h"
 
 #import <Cocoa/Cocoa.h>
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include "base/apple/bridging.h"
 #include "base/apple/foundation_util.h"
@@ -102,13 +101,13 @@ const ClipboardFormatType& ClipboardFormatType::FilenamesType() {
   // pasteboard approach" and Chromium which has a "one item containing multiple
   // items" concept. This works well enough, though, as `NSPasteboard.types` is
   // a union of all types, and thus will find individual items of this type.
-  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeFileURL);
+  static base::NoDestructor<ClipboardFormatType> type(@"public.file-url");
   return *type;
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::UrlType() {
-  static base::NoDestructor<ClipboardFormatType> type(NSPasteboardTypeURL);
+  static base::NoDestructor<ClipboardFormatType> type(@"public.url");
   return *type;
 }
 
@@ -125,7 +124,7 @@ const ClipboardFormatType& ClipboardFormatType::HtmlType() {
 }
 
 const ClipboardFormatType& ClipboardFormatType::SvgType() {
-  static base::NoDestructor<ClipboardFormatType> type(UTTypeSVG.identifier);
+  static base::NoDestructor<ClipboardFormatType> type(@"public.svg-image");
   return *type;
 }
 

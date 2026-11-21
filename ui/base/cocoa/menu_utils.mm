@@ -4,9 +4,9 @@
 
 #include "ui/base/cocoa/menu_utils.h"
 
-#include <optional>
-
 #import <AppKit/AppKit.h>
+
+#include <optional>
 
 #import "base/mac/scoped_sending_event.h"
 #import "base/message_loop/message_pump_apple.h"
@@ -26,8 +26,11 @@ namespace ui {
 
 NSEvent* EventForPositioningContextMenu(const gfx::Point& anchor,
                                         NSWindow* window) {
+  const NSPoint screen_point = gfx::ScreenPointToNSPoint(anchor);
   NSPoint location_in_window =
-      [window convertPointFromScreen:gfx::ScreenPointToNSPoint(anchor)];
+      [window convertRectFromScreen:NSMakeRect(screen_point.x, screen_point.y,
+                                               0, 0)]
+          .origin;
   return EventForPositioningContextMenuRelativeToWindow(location_in_window,
                                                         window);
 }
@@ -63,8 +66,11 @@ void ShowContextMenu(NSMenu* menu,
                      bool allow_nested_tasks,
                      ElementContext context) {
   CHECK(event);
+  const NSPoint location = event.locationInWindow;
   g_active_menu_location = gfx::ScreenPointFromNSPoint(
-      [event.window convertPointToScreen:event.locationInWindow]);
+      [event.window
+          convertRectToScreen:NSMakeRect(location.x, location.y, 0, 0)]
+          .origin);
 
   // Make sure events can be pumped while the menu is up.
   std::optional<

@@ -468,7 +468,7 @@ void ClipboardMac::ReadURL(const std::optional<DataTransferEndpoint>& data_dst,
 
   std::u16string title =
       base::SysNSStringToUTF16([pb stringForType:kUTTypeUrlName]);
-  NSString* url_string = [pb stringForType:NSPasteboardTypeURL];
+  NSString* url_string = [pb stringForType:@"public.url"];
   std::string url;
   if (url_string) {
     url = base::SysNSStringToUTF8(url_string);
@@ -518,11 +518,16 @@ void ClipboardMac::WritePortableAndPlatformRepresentationsInternal(
   CHECK(CalledOnValidThread(), base::NotFatalUntil::M163);
   CHECK_EQ(buffer, ClipboardBuffer::kCopyPaste, base::NotFatalUntil::M163);
 
-  NSPasteboardContentsOptions pasteboard_options = 0;
-  if (privacy_types & Clipboard::PrivacyTypes::kNoCloudClipboard) {
-    pasteboard_options |= NSPasteboardContentsCurrentHostOnly;
+  if (@available(macOS 10.12, *)) {
+    NSPasteboardContentsOptions pasteboard_options = 0;
+    if (privacy_types & Clipboard::PrivacyTypes::kNoCloudClipboard) {
+      pasteboard_options |= NSPasteboardContentsCurrentHostOnly;
+    }
+    [pasteboard prepareForNewContentsWithOptions:pasteboard_options];
+  } else {
+    // Universal Clipboard was introduced with the options API in 10.12.
+    [pasteboard clearContents];
   }
-  [pasteboard prepareForNewContentsWithOptions:pasteboard_options];
 
   if (privacy_types & Clipboard::PrivacyTypes::kNoLocalClipboardHistory) {
     // One way to not add the pasteboard to the history is to give it an
@@ -540,8 +545,9 @@ void ClipboardMac::WritePortableAndPlatformRepresentationsInternal(
     // expiration" method used here. However, it is not available on all macOS
     // releases that Chromium supports. When Chromium requires macOS 26+, it
     // might be worthwhile looking into whether that is a better choice.
-    [GetPasteboard()
-        _setExpirationDate:[NSDate dateWithTimeIntervalSinceNow:5 * 60]];
+    if ([pasteboard respondsToSelector:@selector(_setExpirationDate:)]) {
+      [pasteboard _setExpirationDate:[NSDate dateWithTimeIntervalSinceNow:5 * 60]];
+    }
   }
 
   if (privacy_types & Clipboard::PrivacyTypes::kNoDisplay) {

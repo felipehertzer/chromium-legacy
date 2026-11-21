@@ -22,7 +22,8 @@
 namespace gl {
 
 struct GLDisplayEGL::ObjCStorage {
-  base::apple::scoped_nsprotocol<id<MTLSharedEvent>> metal_shared_event;
+  // Storage is opaque so an OpenGL display can exist on systems without Metal.
+  base::apple::scoped_nsprotocol<id> metal_shared_event;
   uint64_t metal_signaled_value = 0;
 };
 
@@ -156,8 +157,11 @@ id<MTLDevice> GLDisplayEGL::GetMetalDevice() const {
 }
 
 size_t GLDisplayEGL::GetMetalDeviceAllocatedMemory() const {
-  id<MTLDevice> device = GetMetalDevice();
-  return device ? device.currentAllocatedSize : 0;
+  if (@available(macOS 10.13, iOS 11.0, tvOS 11.0, *)) {
+    id<MTLDevice> device = GetMetalDevice();
+    return device ? device.currentAllocatedSize : 0;
+  }
+  return 0;
 }
 
 void GLDisplayEGL::InitMetalSharedEventStorage() {

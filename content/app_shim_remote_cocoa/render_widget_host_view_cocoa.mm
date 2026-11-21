@@ -3122,17 +3122,17 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
 
 - (id)validRequestorForSendType:(NSString*)sendType
                      returnType:(NSString*)returnType {
-  UTType* sendUTType = ui::UTTypeForServicesType(sendType);
-  UTType* acceptUTType = ui::UTTypeForServicesType(returnType);
+  NSString* sendUTI = ui::UTIForServicesType(sendType);
+  NSString* acceptUTI = ui::UTIForServicesType(returnType);
 
-  const BOOL canSendText = [sendUTType isEqual:UTTypeUTF8PlainText] &&
+  const BOOL canSendText = [sendUTI isEqual:@"public.utf8-plain-text"] &&
                            !_textSelectionRange.is_empty();
-  const BOOL canAcceptText = [acceptUTType isEqual:UTTypeUTF8PlainText] &&
+  const BOOL canAcceptText = [acceptUTI isEqual:@"public.utf8-plain-text"] &&
                              _textInputType != ui::TEXT_INPUT_TYPE_NONE;
 
   // This is a valid requestor if the send/accept types can be fulfilled or if
   // they are `nil` (and therefore not the wrong type).
-  if ((canSendText && !acceptUTType) || (!sendUTType && canAcceptText) ||
+  if ((canSendText && !acceptUTI) || (!sendUTI && canAcceptText) ||
       (canSendText && canAcceptText)) {
     return self;
   }
@@ -3236,11 +3236,11 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
 @implementation RenderWidgetHostViewCocoa (NSServicesRequests)
 
 - (BOOL)writeSelectionToPasteboard:(NSPasteboard*)pboard types:(NSArray*)types {
-  NSSet<UTType*>* typeSet = ui::UTTypesForServicesTypeArray(types);
+  NSSet<NSString*>* typeSet = ui::UTIsForServicesTypeArray(types);
 
   bool wasAbleToWriteAtLeastOneType = false;
 
-  if ([typeSet containsObject:UTTypeUTF8PlainText] &&
+  if ([typeSet containsObject:@"public.utf8-plain-text"] &&
       !_textSelectionRange.is_empty()) {
     NSString* text = base::SysUTF16ToNSString([self selectedText]);
     wasAbleToWriteAtLeastOneType |= [pboard writeObjects:@[ text ]];

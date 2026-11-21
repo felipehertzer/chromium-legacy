@@ -432,11 +432,17 @@ bool IOSurfaceSetColorSpace(IOSurfaceRef io_surface,
       color_space == ColorSpace::CreateREC709()) {
     color_space_name = kCGColorSpaceSRGB;
   } else if (color_space == ColorSpace::CreateDisplayP3D65()) {
-    color_space_name = kCGColorSpaceDisplayP3;
+    if (__builtin_available(macOS 10.11.2, *)) {
+      color_space_name = kCGColorSpaceDisplayP3;
+    }
   } else if (color_space == ColorSpace::CreateExtendedSRGB()) {
-    color_space_name = kCGColorSpaceExtendedSRGB;
+    if (__builtin_available(macOS 10.12, *)) {
+      color_space_name = kCGColorSpaceExtendedSRGB;
+    }
   } else if (color_space == ColorSpace::CreateSRGBLinear()) {
-    color_space_name = kCGColorSpaceExtendedLinearSRGB;
+    if (__builtin_available(macOS 10.12, *)) {
+      color_space_name = kCGColorSpaceExtendedLinearSRGB;
+    }
   }
 
   // The symbols kCGColorSpaceITUR_2020_PQ_EOTF and kCGColorSpaceITUR_2020_HLG
@@ -447,12 +453,14 @@ bool IOSurfaceSetColorSpace(IOSurfaceRef io_surface,
   // also not available in some SDK versions.
   // https://crbug.com/1101041: Introduces the HDR copier.
   // https://crbug.com/1061723: Discussion of issues related to HLG.
-  if (color_space.GetPrimaryID() == ColorSpace::PrimaryID::BT2020 &&
-      color_space.GetMatrixID() == ColorSpace::MatrixID::BT2020_NCL) {
-    if (color_space.GetTransferID() == ColorSpace::TransferID::PQ) {
-      color_space_name = kCGColorSpaceITUR_2100_PQ;
-    } else if (color_space.GetTransferID() == ColorSpace::TransferID::HLG) {
-      color_space_name = kCGColorSpaceITUR_2100_HLG;
+  if (__builtin_available(macOS 11.0, *)) {
+    if (color_space.GetPrimaryID() == ColorSpace::PrimaryID::BT2020 &&
+        color_space.GetMatrixID() == ColorSpace::MatrixID::BT2020_NCL) {
+      if (color_space.GetTransferID() == ColorSpace::TransferID::PQ) {
+        color_space_name = kCGColorSpaceITUR_2100_PQ;
+      } else if (color_space.GetTransferID() == ColorSpace::TransferID::HLG) {
+        color_space_name = kCGColorSpaceITUR_2100_HLG;
+      }
     }
   }
 

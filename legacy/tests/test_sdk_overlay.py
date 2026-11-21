@@ -51,6 +51,22 @@ class SDKOverlayTest(unittest.TestCase):
         self.assertEqual(SDK.add_legacy_sdk_overlay(self.args, self.root / 'out'),
                          arguments)
 
+    def test_coretext_precedes_umbrella_frameworks(self):
+        args = self.args + ['-framework', 'AppKit', '-framework', 'CoreText']
+        result = SDK.add_legacy_sdk_overlay(args, self.root / 'out')
+        self.assertEqual(result[1:3], ['-framework', 'CoreText'])
+        self.assertEqual(result[3:], args)
+
+    def test_detects_coretext_in_response_files(self):
+        nested = self.root / 'nested.rsp'
+        nested.write_text('-framework CoreText')
+        response = self.root / 'input.rsp'
+        response.write_text('-framework AppKit @' + str(nested))
+        args = self.args + ['@' + str(response)]
+        result = SDK.add_legacy_sdk_overlay(args, self.root / 'out')
+        self.assertEqual(result[1:3], ['-framework', 'CoreText'])
+        self.assertEqual(nested.read_text(), '-framework CoreText')
+
     def test_modern_target_uses_sdk_unchanged(self):
         args = ['--target=arm64-apple-macos', '-mmacos-version-min=13.0']
         self.assertIs(SDK.add_legacy_sdk_overlay(args, self.root), args)

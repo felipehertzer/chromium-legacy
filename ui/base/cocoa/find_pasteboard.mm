@@ -43,7 +43,14 @@ NSString* kFindPasteboardChangedNotification =
 }
 
 - (NSPasteboard*)findPasteboard {
-  return [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
+  if (@available(macOS 10.13, *)) {
+    return [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
+  }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101300
+  return [NSPasteboard pasteboardWithName:NSFindPboard];
+#else
+  return nil;
+#endif
 }
 
 - (void)loadTextFromPasteboard:(NSNotification*)notification {

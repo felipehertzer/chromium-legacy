@@ -9,11 +9,14 @@ namespace display {
 NSScreen* GetNSScreenFromDisplayID(CGDirectDisplayID display_id) {
   for (NSScreen* screen in NSScreen.screens) {
     CGDirectDisplayID screen_display_id = kCGNullDirectDisplay;
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
     if (@available(macOS 26, *)) {
       screen_display_id = screen.CGDirectDisplayID;
-    } else {
-      screen_display_id =
-          [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
+    } else
+#endif
+    {
+      screen_display_id = [[screen.deviceDescription
+          objectForKey:@"NSScreenNumber"] unsignedIntValue];
     }
     if (screen_display_id == display_id) {
       return screen;
@@ -27,8 +30,17 @@ base::TimeDelta GetNSScreenRefreshInterval(CGDirectDisplayID display_id) {
   NSScreen* screen = GetNSScreenFromDisplayID(display_id);
   base::TimeDelta interval;
 
-  if (screen) {
-    interval = base::Seconds(1) * screen.minimumRefreshInterval;
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 12.0, *)) {
+    if (screen) {
+      interval = base::Seconds(1) * screen.minimumRefreshInterval;
+    }
+  } else
+#endif
+  {
+    if (screen) {
+      interval = GetCGRefreshInterval(display_id);
+    }
   }
 
   // For ExternalDisplayLinkMac, we start to use a display link before it's
@@ -48,13 +60,20 @@ void GetNSScreenRefreshIntervalRange(CGDirectDisplayID display_id,
                                      base::TimeDelta& granularity) {
   NSScreen* screen = GetNSScreenFromDisplayID(display_id);
 
-  if (screen) {
-    min_interval = base::Seconds(1) * screen.minimumRefreshInterval;
-    max_interval = base::Seconds(1) * screen.maximumRefreshInterval;
-    granularity = base::Seconds(1) * screen.displayUpdateGranularity;
-  } else {
-    min_interval = max_interval = granularity = base::Seconds(1) / 60.0;
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 12.0, *)) {
+    if (screen) {
+      min_interval = base::Seconds(1) * screen.minimumRefreshInterval;
+      max_interval = base::Seconds(1) * screen.maximumRefreshInterval;
+      granularity = base::Seconds(1) * screen.displayUpdateGranularity;
+      return;
+    }
   }
+#endif
+  // Older systems expose only the current mode's fixed refresh interval.
+  const base::TimeDelta interval =
+      screen ? GetCGRefreshInterval(display_id) : base::Hertz(60);
+  min_interval = max_interval = granularity = interval;
 }
 
 base::TimeDelta GetCGRefreshInterval(CGDirectDisplayID display_id) {

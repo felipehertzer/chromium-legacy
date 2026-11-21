@@ -11,6 +11,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shlex
 import tempfile
 
 
@@ -57,6 +58,25 @@ def _legacy_stub(name, data):
     return text.encode('utf-8')
 
 
+def _has_coretext(args, seen=None):
+    seen = set() if seen is None else seen
+    for index, argument in enumerate(args):
+        if (argument == '-framework' and index + 1 < len(args) and
+                args[index + 1] == 'CoreText'):
+            return True
+        if argument == '-Wl,-framework,CoreText':
+            return True
+        if argument.startswith('@'):
+            response = Path(argument[1:]).resolve()
+            if response in seen or not response.is_file():
+                continue
+            seen.add(response)
+            if _has_coretext(shlex.split(response.read_text(encoding='utf-8-sig')),
+                             seen):
+                return True
+    return False
+
+
 def add_legacy_sdk_overlay(args, build_dir=None):
     """Prepend a framework overlay only for the explicit Intel Lion target."""
     if '-mmacos-version-min=10.7' not in args:
@@ -84,4 +104,9 @@ def add_legacy_sdk_overlay(args, build_dir=None):
                fingerprint.hexdigest())
     for name, data in frameworks.items():
         _atomic_write(overlay / (name + '.framework') / (name + '.tbd'), data)
-    return ['-F' + str(overlay.resolve())] + args
+    prefix = ['-F' + str(overlay.resolve())]
+    # Umbrella frameworks can otherwise load the system CoreText stub before
+    # an explicit -framework CoreText, bypassing our legacy install name.
+    if _has_coretext(args):
+        prefix += ['-framework', 'CoreText']
+    return prefix + args

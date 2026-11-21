@@ -1,0 +1,38 @@
+diff --git a/src/runtime.c b/src/runtime.c
+index 00aed41..e492bcc 100644
+--- a/src/runtime.c
++++ b/src/runtime.c
+@@ -20,6 +20,10 @@
+ #include <time.h>
+ #endif
+ 
++#if defined(__MACH__)
++#include <mach/mach_time.h>
++#endif
++
+ #include "include/experimental.h"
+ #include "include/xnnpack.h"
+ #include "src/subgraph/rewrites/cvt_to_fp32.h"
+@@ -1087,7 +1091,21 @@ enum xnn_status xnn_setup_runtime_v2(
+ static xnn_timestamp xnn_read_timer() {
+   xnn_timestamp timestamp;
+ #ifdef __MACH__
+-  timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *)) {
++    timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
++  } else
++#endif
++  {
++    mach_timebase_info_data_t timebase;
++    if (mach_timebase_info(&timebase) != KERN_SUCCESS) {
++      xnn_log_warning("mach_timebase_info failed");
++      return 0;
++    }
++    const uint64_t ticks = mach_absolute_time();
++    timestamp = (ticks / timebase.denom) * timebase.numer +
++                (ticks % timebase.denom) * timebase.numer / timebase.denom;
++  }
+   if (timestamp == 0) {
+     xnn_log_warning("clock_gettime failed: error code %d", errno);
+   }

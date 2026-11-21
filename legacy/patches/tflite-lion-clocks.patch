@@ -1,0 +1,66 @@
+diff --git a/tensorflow/lite/profiling/time.cc b/tensorflow/lite/profiling/time.cc
+index da3d7b8c..85f51ab5 100644
+--- a/tensorflow/lite/profiling/time.cc
++++ b/tensorflow/lite/profiling/time.cc
+@@ -22,6 +22,10 @@ limitations under the License.
+ #include <time.h>
+ #endif
+ 
++#if defined(__APPLE__)
++#include <mach/mach_time.h>
++#endif
++
+ namespace tflite {
+ namespace profiling {
+ namespace time {
+@@ -45,7 +49,19 @@ uint64_t NowMicros() {
+ #if defined(__APPLE__)
+   // Prefer using CLOCK_MONOTONIC_RAW for measuring duration and latency on
+   // macOS.
+-  return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) / 1e3;
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *)) {
++    return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) / 1e3;
++  }
++#endif
++  mach_timebase_info_data_t timebase;
++  if (mach_timebase_info(&timebase) != KERN_SUCCESS) {
++    return 0;
++  }
++  const uint64_t ticks = mach_absolute_time();
++  const uint64_t nanos = (ticks / timebase.denom) * timebase.numer +
++                         (ticks % timebase.denom) * timebase.numer / timebase.denom;
++  return nanos / 1000;
+ #else
+   struct timespec ts;
+   clock_gettime(CLOCK_MONOTONIC, &ts);
+diff --git a/third_party/xla/xla/tsl/platform/default/env_time.cc b/third_party/xla/xla/tsl/platform/default/env_time.cc
+index a25b50f8..7d70b6f7 100644
+--- a/third_party/xla/xla/tsl/platform/default/env_time.cc
++++ b/third_party/xla/xla/tsl/platform/default/env_time.cc
+@@ -22,10 +22,25 @@ namespace tsl {
+ 
+ /* static */
+ uint64_t EnvTime::NowNanos() {
++#if defined(__APPLE__)
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *)) {
++    struct timespec ts;
++    clock_gettime(CLOCK_REALTIME, &ts);
++    return (static_cast<uint64_t>(ts.tv_sec) * kSecondsToNanos +
++            static_cast<uint64_t>(ts.tv_nsec));
++  }
++#endif
++  struct timeval tv = {};
++  gettimeofday(&tv, nullptr);
++  return static_cast<uint64_t>(tv.tv_sec) * kSecondsToNanos +
++         static_cast<uint64_t>(tv.tv_usec) * kMicrosToNanos;
++#else
+   struct timespec ts;
+   clock_gettime(CLOCK_REALTIME, &ts);
+   return (static_cast<uint64_t>(ts.tv_sec) * kSecondsToNanos +
+           static_cast<uint64_t>(ts.tv_nsec));
++#endif
+ }
+ 
+ }  // namespace tsl

@@ -11,7 +11,8 @@ namespace ui {
 
 // The ability to screen capture is restricted and requires a permission
 // authorization. This function returns `true` if screen capture permission was
-// already granted by the user and `false` if it was not.
+// already granted by the user and `false` if it was not. Systems before
+// Catalina have no screen-recording permission gate and return `true`.
 COMPONENT_EXPORT(UI_BASE) bool IsScreenCaptureAllowed();
 
 // Explicitly request from the user permission to capture the screen. Returns

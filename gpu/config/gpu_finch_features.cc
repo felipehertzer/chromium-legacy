@@ -20,6 +20,10 @@
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/gl_utils.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/android_info.h"
 #include "base/android/device_info.h"
@@ -553,7 +557,10 @@ bool NeedThreadSafeAndroidMedia() {
 
 namespace {
 bool IsSkiaGraphiteSupportedByDevice() {
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
+  // The current Dawn Metal backend requires macOS 13. Use Ganesh on older Macs.
+  return base::mac::MacOSMajorVersion() >= 13;
+#elif BUILDFLAG(IS_APPLE)
   return true;
 #elif BUILDFLAG(IS_ANDROID)
   // Graphite on Android uses the Dawn Vulkan backend. Only enable Graphite if
@@ -583,6 +590,11 @@ bool IsSkiaGraphiteSupportedByDevice() {
 }  // namespace
 
 bool IsSkiaGraphiteEnabled(const base::CommandLine* command_line) {
+#if BUILDFLAG(IS_MAC)
+  if (base::mac::MacOSMajorVersion() < 13) {
+    return false;
+  }
+#endif
   // Force disabling graphite if --disable-skia-graphite flag is specified.
   if (command_line->HasSwitch(switches::kDisableSkiaGraphite)) {
     return false;

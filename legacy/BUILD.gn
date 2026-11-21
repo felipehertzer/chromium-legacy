@@ -11,6 +11,7 @@ source_set("platform_support") {
     "apple/clock.h",
     "apple/fd_io.h",
     "apple/file_times.h",
+    "apple/font_cascade.h",
     "apple/product_version.h",
     "apple/remove_all.h",
   ]

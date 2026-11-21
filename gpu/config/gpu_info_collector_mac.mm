@@ -39,6 +39,7 @@ enum class MetalFamilyMac {
   kMaxValue = kMac2,
 };
 
+MetalFamilyMac GetMetalFamilyMac(id<MTLDevice> device) API_AVAILABLE(macos(10.15));
 MetalFamilyMac GetMetalFamilyMac(id<MTLDevice> device) {
   if ([device supportsFamily:MTLGPUFamilyMac2]) {
     return MetalFamilyMac::kMac2;
@@ -55,11 +56,14 @@ void RecordHistograms() {
   // perhaps when running in an environment like VMWare?
   NSUInteger best_tier = 0;
 
-  NSArray<id<MTLDevice>>* devices = MTLCopyAllDevices();
-  for (id<MTLDevice> device in devices) {
-    best_tier = std::max(best_tier, device.readWriteTextureSupport + 1);
-
-    UMA_HISTOGRAM_ENUMERATION("Gpu.Metal.FamilyMac", GetMetalFamilyMac(device));
+  if (@available(macOS 10.13, *)) {
+    NSArray<id<MTLDevice>>* devices = MTLCopyAllDevices();
+    for (id<MTLDevice> device in devices) {
+      best_tier = std::max(best_tier, device.readWriteTextureSupport + 1);
+      if (@available(macOS 10.15, *)) {
+        UMA_HISTOGRAM_ENUMERATION("Gpu.Metal.FamilyMac", GetMetalFamilyMac(device));
+      }
+    }
   }
 
   UMA_HISTOGRAM_ENUMERATION(
@@ -113,6 +117,8 @@ bool IdentifyActiveGPUWithRegistryID(GPUInfo* gpu_info, uint64_t registry_id) {
 // Collects context graphics info from ANGLE's Metal device and EGL display,
 // without creating a GL context. Returns false, without guaranteeing which
 // fields were set, if the Metal device or the GL strings aren't available.
+bool CollectMetalGraphicsInfo(GPUInfo* gpu_info, gl::GLDisplay* display)
+    API_AVAILABLE(macos(10.13));
 bool CollectMetalGraphicsInfo(GPUInfo* gpu_info, gl::GLDisplay* display) {
   TRACE_EVENT0("gpu", "gpu_info_collector::CollectMetalGraphicsInfo");
   gl::GLDisplayEGL* egl_display =
@@ -173,10 +179,12 @@ bool CollectContextGraphicsInfo(GPUInfo* gpu_info) {
 
   RecordHistograms();
 
-  if (gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal &&
-      base::FeatureList::IsEnabled(features::kGpuInitOptimization) &&
-      CollectMetalGraphicsInfo(gpu_info, gl::GetDefaultDisplayEGL())) {
-    return true;
+  if (@available(macOS 10.13, *)) {
+    if (gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal &&
+        base::FeatureList::IsEnabled(features::kGpuInitOptimization) &&
+        CollectMetalGraphicsInfo(gpu_info, gl::GetDefaultDisplayEGL())) {
+      return true;
+    }
   }
   return CollectGraphicsInfoGL(gpu_info, gl::GetDefaultDisplayEGL());
 }

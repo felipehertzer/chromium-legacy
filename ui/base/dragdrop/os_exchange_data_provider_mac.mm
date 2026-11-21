@@ -5,12 +5,14 @@
 #include "ui/base/dragdrop/os_exchange_data_provider_mac.h"
 
 #import <Cocoa/Cocoa.h>
+#include <CoreServices/CoreServices.h>
 #include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <algorithm>
 #include <optional>
 #include <string_view>
 
+#include "base/apple/bridging.h"
 #include "base/apple/foundation_util.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
@@ -299,7 +301,7 @@ bool OSExchangeDataProviderMac::HasURL(FilenameToURLPolicy policy) const {
 }
 
 bool OSExchangeDataProviderMac::HasFile() const {
-  return [GetPasteboard().types containsObject:NSPasteboardTypeFileURL];
+  return [GetPasteboard().types containsObject:@"public.file-url"];
 }
 
 bool OSExchangeDataProviderMac::HasCustomFormat(
@@ -322,14 +324,27 @@ OSExchangeDataProviderMac::GetFileContents() const {
 
   NSArray* types = [pboard types];
   for (NSString* type in types) {
-    UTType* utType = [UTType typeWithIdentifier:type];
-    if ([utType conformsToType:UTTypeImage]) {
+    bool is_image = false;
+    NSString* ext = nil;
+    if (@available(macOS 11.0, *)) {
+      UTType* utType = [UTType typeWithIdentifier:type];
+      is_image = [utType conformsToType:UTTypeImage];
+      ext = utType.preferredFilenameExtension;
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 110000
+    else {
+      CFStringRef uti = base::apple::NSToCFPtrCast(type);
+      is_image = UTTypeConformsTo(uti, kUTTypeImage);
+      ext = CFBridgingRelease(
+          UTTypeCopyPreferredTagWithClass(uti, kUTTagClassFilenameExtension));
+    }
+#endif
+    if (is_image) {
       NSData* data = [pboard dataForType:type];
       if (data) {
         base::span<const uint8_t> span = base::apple::NSDataToSpan(data);
         std::vector<uint8_t> file_contents(span.begin(), span.end());
         base::FilePath filename;
-        NSString* ext = utType.preferredFilenameExtension;
         if (ext) {
           filename = base::FilePath(base::SysNSStringToUTF8(ext));
         }
@@ -349,8 +364,18 @@ bool OSExchangeDataProviderMac::HasFileContents() const {
 
   NSArray* types = [pboard types];
   for (NSString* type in types) {
-    UTType* utType = [UTType typeWithIdentifier:type];
-    if ([utType conformsToType:UTTypeImage]) {
+    bool is_image = false;
+    if (@available(macOS 11.0, *)) {
+      UTType* utType = [UTType typeWithIdentifier:type];
+      is_image = [utType conformsToType:UTTypeImage];
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 110000
+    else {
+      CFStringRef uti = base::apple::NSToCFPtrCast(type);
+      is_image = UTTypeConformsTo(uti, kUTTypeImage);
+    }
+#endif
+    if (is_image) {
       return true;
     }
   }
@@ -404,8 +429,8 @@ NSArray* OSExchangeDataProviderMac::SupportedPasteboardTypes() {
     kUTTypeChromiumInitiatedDrag, kUTTypeChromiumPrivilegedInitiatedDrag,
     kUTTypeChromiumRendererInitiatedDrag, kUTTypeChromiumDataTransferCustomData,
     kUTTypeChromiumDragId, kUTTypeWebKitWebUrlsWithTitles,
-    kUTTypeChromiumSourceUrl, NSPasteboardTypeFileURL, NSPasteboardTypeHTML,
-    NSPasteboardTypeRTF, NSPasteboardTypeString, NSPasteboardTypeURL
+    kUTTypeChromiumSourceUrl, @"public.file-url", NSPasteboardTypeHTML,
+    NSPasteboardTypeRTF, NSPasteboardTypeString, @"public.url"
   ];
 }
 

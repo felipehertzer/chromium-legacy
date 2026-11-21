@@ -1638,19 +1638,19 @@ SEL EditingActionForKeyEquivalent(NSEvent* event) {
 
 - (id)validRequestorForSendType:(NSString*)sendType
                      returnType:(NSString*)returnType {
-  UTType* sendUTType = ui::UTTypeForServicesType(sendType);
-  UTType* acceptUTType = ui::UTTypeForServicesType(returnType);
+  NSString* sendUTI = ui::UTIForServicesType(sendType);
+  NSString* acceptUTI = ui::UTIForServicesType(returnType);
 
   const BOOL hasTextInputClient = [self hasTextInputClient];
-  const BOOL canSendText = [sendUTType isEqual:UTTypeUTF8PlainText] &&
+  const BOOL canSendText = [sendUTI isEqual:@"public.utf8-plain-text"] &&
                            hasTextInputClient &&
                            [self selectedRange].length > 0;
   const BOOL canAcceptText =
-      [acceptUTType isEqual:UTTypeUTF8PlainText] && hasTextInputClient;
+      [acceptUTI isEqual:@"public.utf8-plain-text"] && hasTextInputClient;
 
   // This is a valid requestor if the send/accept types can be fulfilled or if
   // they are `nil` (and therefore not the wrong type).
-  if ((canSendText && !acceptUTType) || (!sendUTType && canAcceptText) ||
+  if ((canSendText && !acceptUTI) || (!sendUTI && canAcceptText) ||
       (canSendText && canAcceptText)) {
     return self;
   }
@@ -1660,15 +1660,16 @@ SEL EditingActionForKeyEquivalent(NSEvent* event) {
 // NSServicesMenuRequestor protocol
 
 - (BOOL)writeSelectionToPasteboard:(NSPasteboard*)pboard types:(NSArray*)types {
-  NSSet<UTType*>* typeSet = ui::UTTypesForServicesTypeArray(types);
+  NSSet<NSString*>* typeSet = ui::UTIsForServicesTypeArray(types);
 
   bool wasAbleToWriteAtLeastOneType = false;
 
-  if ([typeSet containsObject:UTTypeUTF8PlainText]) {
+  if ([typeSet containsObject:@"public.utf8-plain-text"]) {
     bool result = false;
     std::u16string selection_text;
-    if (_bridge)
+    if (_bridge) {
       _bridge->text_input_host()->GetSelectionText(&result, &selection_text);
+    }
 
     if (result) {
       NSString* text = base::SysUTF16ToNSString(selection_text);

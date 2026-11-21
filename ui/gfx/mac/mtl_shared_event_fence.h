@@ -36,9 +36,11 @@ class COMPONENT_EXPORT(GFX) MTLSharedEventFence {
       std::vector<MTLSharedEventFence> fences);
 
 #if defined(__OBJC__)
-  MTLSharedEventFence(id<MTLSharedEvent> shared_event, uint64_t fence_value);
+  MTLSharedEventFence(id<MTLSharedEvent> shared_event, uint64_t fence_value)
+      API_AVAILABLE(macos(10.14), ios(12.0), tvos(12.0));
 
-  id<MTLSharedEvent> GetSharedEvent() const;
+  id<MTLSharedEvent> GetSharedEvent() const
+      API_AVAILABLE(macos(10.14), ios(12.0), tvos(12.0));
 #endif
 
   uint64_t fence_value() const { return fence_value_; }

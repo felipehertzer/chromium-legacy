@@ -15,37 +15,39 @@ using AppKitUtilsTest = testing::Test;
 // Note that Chromium currently only supports plain text for services, but test
 // both plain text and RTF to ensure that these functions work in the general
 // case, not just the specific case.
-TEST_F(AppKitUtilsTest, UTTypeForServicesTypeTest) {
+TEST_F(AppKitUtilsTest, UTIForServicesTypeTest) {
   // nil input must yield a nil output; nil is a valid parameter for the
   // services API calls, and it's easier to early-return in the compatibility
   // shim.
-  EXPECT_NSEQ(nil, UTTypeForServicesType(nil));
+  EXPECT_NSEQ(nil, UTIForServicesType(nil));
 
   // Round-trip actual identifiers.
-  EXPECT_NSEQ(UTTypeUTF8PlainText,
-              UTTypeForServicesType(UTTypeUTF8PlainText.identifier));
-  EXPECT_NSEQ(UTTypeRTF, UTTypeForServicesType(UTTypeRTF.identifier));
+  EXPECT_NSEQ(@"public.utf8-plain-text",
+              UTIForServicesType(@"public.utf8-plain-text"));
+  EXPECT_NSEQ(@"public.rtf", UTIForServicesType(@"public.rtf"));
 
   // Technically speaking, the values of these constants are the same as the
   // identifiers above, but in theory these constants are what the services APIs
   // should be passing in.
-  EXPECT_NSEQ(UTTypeUTF8PlainText,
-              UTTypeForServicesType(NSPasteboardTypeString));
-  EXPECT_NSEQ(UTTypeRTF, UTTypeForServicesType(NSPasteboardTypeRTF));
+  EXPECT_NSEQ(@"public.utf8-plain-text",
+              UTIForServicesType(NSPasteboardTypeString));
+  EXPECT_NSEQ(@"public.rtf", UTIForServicesType(NSPasteboardTypeRTF));
 
   // And these obsolete values are what are actually passed into the services
   // APIs no matter what Chromium returns.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  EXPECT_NSEQ(UTTypeUTF8PlainText, UTTypeForServicesType(NSStringPboardType));
-  EXPECT_NSEQ(UTTypeRTF, UTTypeForServicesType(NSRTFPboardType));
+  EXPECT_NSEQ(@"public.utf8-plain-text",
+              UTIForServicesType(NSStringPboardType));
+  EXPECT_NSEQ(@"public.rtf", UTIForServicesType(NSRTFPboardType));
 #pragma clang diagnostic pop
 }
 
-TEST_F(AppKitUtilsTest, UTTypesForServicesTypeArrayTest) {
+TEST_F(AppKitUtilsTest, UTIsForServicesTypeArrayTest) {
   // Verify that individual items are converted.
-  NSSet* expected_1 = [NSSet setWithArray:@[ UTTypeUTF8PlainText, UTTypeRTF ]];
-  NSSet* actual_1 = UTTypesForServicesTypeArray(
+  NSSet* expected_1 =
+      [NSSet setWithArray:@[ @"public.utf8-plain-text", @"public.rtf" ]];
+  NSSet* actual_1 = UTIsForServicesTypeArray(
       @[ NSPasteboardTypeString, NSPasteboardTypeRTF ]);
   EXPECT_NSEQ(expected_1, actual_1);
 
@@ -53,9 +55,9 @@ TEST_F(AppKitUtilsTest, UTTypesForServicesTypeArrayTest) {
   // just one entry.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  NSSet* expected_2 = [NSSet setWithArray:@[ UTTypeUTF8PlainText ]];
-  NSSet* actual_2 = UTTypesForServicesTypeArray(
-      @[ NSPasteboardTypeString, NSStringPboardType ]);
+  NSSet* expected_2 = [NSSet setWithArray:@[ @"public.utf8-plain-text" ]];
+  NSSet* actual_2 =
+      UTIsForServicesTypeArray(@[ NSPasteboardTypeString, NSStringPboardType ]);
   EXPECT_NSEQ(expected_2, actual_2);
 #pragma clang diagnostic pop
 }

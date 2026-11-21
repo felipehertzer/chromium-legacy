@@ -7,7 +7,6 @@
 
 #ifdef __OBJC__
 #import <Cocoa/Cocoa.h>
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #endif  // __OBJC__
 
 #include "base/component_export.h"
@@ -45,15 +44,15 @@ COMPONENT_EXPORT(UI_BASE) bool PasteMightBlockWithPrivacyAlert();
 
 #ifdef __OBJC__
 // Converts a single string value of either a modern pasteboard type or an
-// obsolete PBoard type to the corresponding UTType. Returns nil if nil is
-// specified as the type, or if the type cannot be found.
-COMPONENT_EXPORT(UI_BASE) UTType* UTTypeForServicesType(NSString* type);
+// obsolete PBoard type to the corresponding UTI identifier. Returns nil if nil
+// is specified as the type, or if the type cannot be found.
+COMPONENT_EXPORT(UI_BASE) NSString* UTIForServicesType(NSString* type);
 
 // Converts an array of string values of either modern pasteboard types or
-// obsolete PBoard types to a set of the corresponding UTType values. Invalid
+// obsolete PBoard types to a set of the corresponding UTI identifiers. Invalid
 // values are dropped, as NSArrays/NSSets cannot contain nils.
 COMPONENT_EXPORT(UI_BASE)
-NSSet<UTType*>* UTTypesForServicesTypeArray(NSArray* types);
+NSSet<NSString*>* UTIsForServicesTypeArray(NSArray* types);
 #endif  // __OBJC__
 
 }  // namespace ui

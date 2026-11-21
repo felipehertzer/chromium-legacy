@@ -10,38 +10,42 @@
 namespace gfx {
 
 struct MTLSharedEventFence::ObjCStorage {
-  explicit ObjCStorage(id<MTLSharedEvent> shared_event)
-      : shared_event(shared_event) {}
+  explicit ObjCStorage(id shared_event) : shared_event(shared_event) {}
 
-  id<MTLSharedEvent> __strong shared_event;
+  id __strong shared_event;
 };
 
 MTLSharedEventFence::MTLSharedEventFence() = default;
 MTLSharedEventFence::~MTLSharedEventFence() = default;
 
 MTLSharedEventFence::MTLSharedEventFence(MTLSharedEventFence&&) = default;
-MTLSharedEventFence& MTLSharedEventFence::operator=(
-    MTLSharedEventFence&&) = default;
+MTLSharedEventFence& MTLSharedEventFence::operator=(MTLSharedEventFence&&) =
+    default;
 
 MTLSharedEventFence::MTLSharedEventFence(id<MTLSharedEvent> shared_event,
-                                             uint64_t fence_value)
+                                         uint64_t fence_value)
     : objc_storage_(std::make_unique<ObjCStorage>(shared_event)),
       fence_value_(fence_value) {}
 
 std::vector<MTLSharedEventFence> MTLSharedEventFence::Reduce(
     std::vector<MTLSharedEventFence> fences) {
-  std::vector<MTLSharedEventFence> reduced;
-  base::flat_map<id<MTLSharedEvent>, uint64_t> shared_events;
-  for (const auto& fence : fences) {
-    if (id<MTLSharedEvent> shared_event = fence.GetSharedEvent()) {
-      shared_events[shared_event] =
-          std::max(shared_events[shared_event], fence.fence_value());
+  if (@available(macOS 10.14, iOS 12.0, tvOS 12.0, *)) {
+    std::vector<MTLSharedEventFence> reduced;
+    base::flat_map<id<MTLSharedEvent>, uint64_t> shared_events;
+    for (const auto& fence : fences) {
+      if (id<MTLSharedEvent> shared_event = fence.GetSharedEvent()) {
+        shared_events[shared_event] =
+            std::max(shared_events[shared_event], fence.fence_value());
+      }
     }
+    for (const auto& [shared_event, fence_value] : shared_events) {
+      reduced.emplace_back(shared_event, fence_value);
+    }
+    return reduced;
   }
-  for (const auto& [shared_event, fence_value] : shared_events) {
-    reduced.emplace_back(shared_event, fence_value);
-  }
-  return reduced;
+  // Old systems cannot produce Metal events; never discard a pending fence.
+  CHECK(fences.empty());
+  return {};
 }
 
 id<MTLSharedEvent> MTLSharedEventFence::GetSharedEvent() const {
@@ -50,9 +54,13 @@ id<MTLSharedEvent> MTLSharedEventFence::GetSharedEvent() const {
 }
 
 bool MTLSharedEventFence::HasSignaled() const {
-  if (id<MTLSharedEvent> shared_event = GetSharedEvent()) {
-    return shared_event.signaledValue >= fence_value_;
+  if (@available(macOS 10.14, iOS 12.0, tvOS 12.0, *)) {
+    if (id<MTLSharedEvent> shared_event = GetSharedEvent()) {
+      return shared_event.signaledValue >= fence_value_;
+    }
+    return true;
   }
+  CHECK(!objc_storage_);
   return true;
 }
 

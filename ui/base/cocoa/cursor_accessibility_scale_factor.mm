@@ -42,8 +42,13 @@
               .empty());
 
     _observers = [[NSMutableDictionary alloc] init];
-    _defaults =
-        [[NSUserDefaults alloc] initWithSuiteName:@"com.apple.universalaccess"];
+    if (@available(macOS 10.9, *)) {
+      _defaults =
+          [[NSUserDefaults alloc] initWithSuiteName:@"com.apple.universalaccess"];
+    } else {
+      _defaults = [[NSUserDefaults alloc] init];
+      [_defaults addSuiteNamed:@"com.apple.universalaccess"];
+    }
     [_defaults addObserver:self
                 forKeyPath:@"mouseDriverCursorSize"
                    options:NSKeyValueObservingOptionNew |
@@ -62,7 +67,7 @@
   // observation method will be called with NSNull, so the following code must
   // handle that case.
   NSNumber* defaultsValue =
-      base::apple::ObjCCast<NSNumber>(change[NSKeyValueChangeNewKey]);
+      base::apple::ObjCCast<NSNumber>([change objectForKey:NSKeyValueChangeNewKey]);
   _scaleFactor = std::clamp(defaultsValue.floatValue, 1.0f, 4.0f);
   for (void (^observer)() in _observers.allValues) {
     observer();
@@ -76,7 +81,7 @@
   // quick and easy and compares differently to other values. A wrapped
   // incrementing number will do.
   id<NSObject, NSCopying> token = @(++sequence);
-  _observers[token] = observer;
+  [_observers setObject:observer forKey:token];
 
   return token;
 }

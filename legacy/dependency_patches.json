@@ -30,6 +30,41 @@
       "path": "third_party/skia",
       "revision": "8a65fa27c104d1bb5a58df5ec3e0c1655053fcf6",
       "patch": "patches/skia-lion-fonts-colors.patch"
+    },
+    {
+      "path": "third_party/angle",
+      "revision": "0f0b90f0b5bf61cc630870d5d4bf0c07d906e975",
+      "patch": "patches/angle-lion-platform.patch"
+    },
+    {
+      "path": "third_party/libvpx/source/libvpx",
+      "revision": "fb0a26ad923b58c3663aaa9523992cf779b1563b",
+      "patch": "patches/libvpx-lion-timer.patch"
+    },
+    {
+      "path": "third_party/webrtc",
+      "revision": "a9a462f4232b49f63ed3b22b0ff57725c82625ec",
+      "patch": "patches/webrtc-lion-gcd.patch"
+    },
+    {
+      "path": "third_party/pthreadpool/src",
+      "revision": "15a6644ba1c45f1acc16ac1e883efc3e56c6bed2",
+      "patch": "patches/pthreadpool-lion-atomics.patch"
+    },
+    {
+      "path": "third_party/tflite/src",
+      "revision": "961c96e7a721bed97b432b220c91ee567532dd58",
+      "patch": "patches/tflite-lion-clocks.patch"
+    },
+    {
+      "path": "third_party/xnnpack/src",
+      "revision": "82be86388c131862c3673c177d9dbcd5d3e3844d",
+      "patch": "patches/xnnpack-lion-timer.patch"
+    },
+    {
+      "path": "third_party/dawn",
+      "revision": "69bfa246b5d7369f73c807d37648e25370f4db40",
+      "patch": "patches/dawn-lion-metal-gating.patch"
     }
   ]
 }

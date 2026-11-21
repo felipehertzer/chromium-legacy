@@ -5,6 +5,7 @@
 #include "ui/base/clipboard/clipboard_util_mac.h"
 
 #include <AppKit/AppKit.h>
+#include <CoreServices/CoreServices.h>
 #include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <string>
@@ -47,6 +48,30 @@ namespace ui {
 
 namespace {
 
+bool FileConformsToUTI(NSURL* file_url, NSString* identifier) {
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 11.0, *)) {
+    UTType* type = nil;
+    if (![file_url getResourceValue:&type forKey:NSURLContentTypeKey error:nil]) {
+      return false;
+    }
+    return [type conformsToType:[UTType typeWithIdentifier:identifier]];
+  }
+#endif
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 110000 || \
+    defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  NSString* type = nil;
+  if (![file_url getResourceValue:&type forKey:NSURLTypeIdentifierKey error:nil] ||
+      !type) {
+    return false;
+  }
+  return UTTypeConformsTo(base::apple::NSToCFPtrCast(type),
+                         base::apple::NSToCFPtrCast(identifier));
+#else
+  return false;
+#endif
+}
+
 // Reads the "WebKitWebURLsWithTitles" type put onto the pasteboard by Safari
 // and returns the URLs/titles found within.
 NSArray<URLAndTitle*>* ReadWebURLsWithTitlesPboardType(NSPasteboard* pboard) {
@@ -60,9 +85,9 @@ NSArray<URLAndTitle*>* ReadWebURLsWithTitlesPboardType(NSPasteboard* pboard) {
   }
 
   NSArray<NSString*>* urls_array =
-      base::apple::ObjCCast<NSArray>(bookmark_pairs[0]);
+      base::apple::ObjCCast<NSArray>([bookmark_pairs objectAtIndex:0]);
   NSArray<NSString*>* titles_array =
-      base::apple::ObjCCast<NSArray>(bookmark_pairs[1]);
+      base::apple::ObjCCast<NSArray>([bookmark_pairs objectAtIndex:1]);
 
   if (!urls_array || !titles_array) {
     return [NSArray array];
@@ -87,8 +112,8 @@ NSArray<URLAndTitle*>* ReadWebURLsWithTitlesPboardType(NSPasteboard* pboard) {
 
   NSMutableArray<URLAndTitle*>* result = [NSMutableArray array];
   for (NSUInteger i = 0; i < urls_array.count; ++i) {
-    [result addObject:[URLAndTitle URLAndTitleWithURL:urls_array[i]
-                                                title:titles_array[i]]];
+    [result addObject:[URLAndTitle URLAndTitleWithURL:[urls_array objectAtIndex:i]
+                                                title:[titles_array objectAtIndex:i]]];
   }
 
   return result;
@@ -136,7 +161,7 @@ NSString* DeriveTitleFromFilename(NSURL* file_url, bool strip_extension) {
 // automatically turn .webloc file drags into standard URL types, .webloc file
 // drags are also handled by this function.
 URLAndTitle* ExtractStandardURLAndTitle(NSPasteboardItem* item) {
-  NSString* url = [item stringForType:NSPasteboardTypeURL];
+  NSString* url = [item stringForType:@"public.url"];
   if (!url) {
     return nil;
   }
@@ -147,7 +172,7 @@ URLAndTitle* ExtractStandardURLAndTitle(NSPasteboardItem* item) {
     // If there is no title on the drag, check to see if it's a URL drag
     // reconstituted from a Finder .webloc. If so, use the name of the file as
     // the title.
-    NSString* file = [item stringForType:NSPasteboardTypeFileURL];
+    NSString* file = [item stringForType:@"public.file-url"];
     if (file) {
       NSURL* file_url = [NSURL URLWithString:file].filePathURL;
 
@@ -155,13 +180,7 @@ URLAndTitle* ExtractStandardURLAndTitle(NSPasteboardItem* item) {
       // there is no official constant for that. However, that type does conform
       // to the generic "internet location" type (aka .inetloc), so check for
       // that.
-      UTType* type;
-      if (![file_url getResourceValue:&type
-                               forKey:NSURLContentTypeKey
-                                error:nil]) {
-        return nil;
-      }
-      if (![type conformsToType:UTTypeInternetLocation]) {
+      if (!FileConformsToUTI(file_url, @"com.apple.internet-location")) {
         return nil;
       }
 
@@ -180,7 +199,7 @@ URLAndTitle* ExtractStandardURLAndTitle(NSPasteboardItem* item) {
 // Returns a URL and title if the pasteboard item is of a standard Microsoft
 // Windows IShellLink-style .url file.
 URLAndTitle* ExtractURLFromURLFile(NSPasteboardItem* item) {
-  NSString* file = [item stringForType:NSPasteboardTypeFileURL];
+  NSString* file = [item stringForType:@"public.file-url"];
   if (!file) {
     return nil;
   }
@@ -188,20 +207,18 @@ URLAndTitle* ExtractURLFromURLFile(NSPasteboardItem* item) {
 
   NSDictionary* resource_values;
   resource_values =
-      [file_url resourceValuesForKeys:@[ NSURLFileSizeKey, NSURLContentTypeKey ]
-                                error:nil];
+      [file_url resourceValuesForKeys:@[ NSURLFileSizeKey ] error:nil];
   if (!resource_values) {
     return nil;
   }
 
-  NSNumber* file_size = resource_values[NSURLFileSizeKey];
+  NSNumber* file_size = [resource_values objectForKey:NSURLFileSizeKey];
   if (file_size.unsignedLongValue >
       clipboard_util::internal::kMaximumParsableFileSize) {
     return nil;
   }
 
-  UTType* type = resource_values[NSURLContentTypeKey];
-  if (![type conformsToType:UTTypeInternetShortcut]) {
+  if (!FileConformsToUTI(file_url, @"com.microsoft.internet-shortcut")) {
     return nil;
   }
 
@@ -267,7 +284,7 @@ URLAndTitle* ExtractURLFromStringValue(NSPasteboardItem* item,
 // If there is a file URL on the pasteboard, returns that file as the URL. For
 // compatibility with other platforms, return no title.
 URLAndTitle* ExtractFileURL(NSPasteboardItem* item) {
-  NSString* file = [item stringForType:NSPasteboardTypeFileURL];
+  NSString* file = [item stringForType:@"public.file-url"];
   if (!file) {
     return nil;
   }
@@ -333,16 +350,16 @@ NSArray<NSPasteboardItem*>* PasteboardItemsFromUrls(
   for (NSUInteger i = 0; i < urls.count; ++i) {
     NSPasteboardItem* item = [[NSPasteboardItem alloc] init];
 
-    NSString* url_string = urls[i];
-    NSString* title = titles[i];
+    NSString* url_string = [urls objectAtIndex:i];
+    NSString* title = [titles objectAtIndex:i];
 
     NSURL* url = [NSURL URLWithString:url_string];
     if (url.isFileURL && [url checkResourceIsReachableAndReturnError:nil]) {
-      [item setString:url_string forType:NSPasteboardTypeFileURL];
+      [item setString:url_string forType:@"public.file-url"];
     }
 
     [item setString:url_string forType:NSPasteboardTypeString];
-    [item setString:url_string forType:NSPasteboardTypeURL];
+    [item setString:url_string forType:@"public.url"];
     if (title.length) {
       [item setString:title forType:kUTTypeUrlName];
     }
@@ -387,7 +404,7 @@ NSArray<URLAndTitle*>* URLsAndTitlesFromPasteboard(NSPasteboard* pboard,
 std::vector<FileInfo> FilesFromPasteboard(NSPasteboard* pboard) {
   std::vector<FileInfo> results;
   for (NSPasteboardItem* item in pboard.pasteboardItems) {
-    NSString* file_url_string = [item stringForType:NSPasteboardTypeFileURL];
+    NSString* file_url_string = [item stringForType:@"public.file-url"];
     if (!file_url_string) {
       continue;
     }
@@ -415,7 +432,7 @@ void WriteFilesToPasteboard(NSPasteboard* pboard,
   for (const auto& file : files) {
     NSURL* url = base::apple::FilePathToNSURL(file.path);
     NSPasteboardItem* item = [[NSPasteboardItem alloc] init];
-    [item setString:url.absoluteString forType:NSPasteboardTypeFileURL];
+    [item setString:url.absoluteString forType:@"public.file-url"];
     [items addObject:item];
   }
 
@@ -426,10 +443,24 @@ NSPasteboard* PasteboardFromBuffer(ClipboardBuffer buffer) {
   NSString* buffer_type = nil;
   switch (buffer) {
     case ClipboardBuffer::kCopyPaste:
-      buffer_type = NSPasteboardNameGeneral;
+      if (@available(macOS 10.13, *)) {
+        buffer_type = NSPasteboardNameGeneral;
+      }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101300
+      else {
+        buffer_type = NSGeneralPboard;
+      }
+#endif
       break;
     case ClipboardBuffer::kDrag:
-      buffer_type = NSPasteboardNameDrag;
+      if (@available(macOS 10.13, *)) {
+        buffer_type = NSPasteboardNameDrag;
+      }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101300
+      else {
+        buffer_type = NSDragPboard;
+      }
+#endif
       break;
     case ClipboardBuffer::kSelection:
       NOTREACHED();

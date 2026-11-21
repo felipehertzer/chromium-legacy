@@ -7,6 +7,7 @@
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
 #include <Foundation/Foundation.h>
+#include <IOKit/graphics/IOGraphicsLib.h>
 #include <QuartzCore/CVDisplayLink.h>
 #include <stdint.h>
 
@@ -29,12 +30,13 @@
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
 #include "components/viz/common/resources/shared_image_format.h"
+#include "skia/ext/color_profile.h"
 #include "ui/display/display.h"
 #include "ui/display/display_change_notifier.h"
 #include "ui/display/mac/screen_mac_headless.h"
+#include "ui/display/mac/screen_utils_mac.h"
 #include "ui/display/util/display_util.h"
 #include "ui/gfx/geometry/point.h"
-#include "skia/ext/color_profile.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
 #include "ui/gfx/native_ui_types.h"
 #include "ui/gfx/switches.h"
@@ -85,8 +87,8 @@ DisplayMac BuildDisplayForScreen(NSScreen* screen) {
   TRACE_EVENT0("ui", "BuildDisplayForScreen");
   NSRect frame = screen.frame;
 
-  CGDirectDisplayID display_id =
-      [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
+  CGDirectDisplayID display_id = [[screen.deviceDescription
+      objectForKey:@"NSScreenNumber"] unsignedIntValue];
 
   Display display(display_id, gfx::Rect(frame));
   NSRect visible_frame = screen.visibleFrame;
@@ -112,23 +114,25 @@ DisplayMac BuildDisplayForScreen(NSScreen* screen) {
   // Examine the presence of HDR.
   bool enable_hdr = false;
   float hdr_max_lum_relative = 1.f;
-  const float max_potential_edr_value =
-      screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
-  const float max_edr_value =
-      screen.maximumExtendedDynamicRangeColorComponentValue;
-  if (max_potential_edr_value > 1.f) {
-    enable_hdr = true;
+  if (@available(macOS 10.15, *)) {
+    const float max_potential_edr_value =
+        screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
+    const float max_edr_value =
+        screen.maximumExtendedDynamicRangeColorComponentValue;
+    if (max_potential_edr_value > 1.f) {
+      enable_hdr = true;
 #if defined(ARCH_CPU_X86_64)
-    // Disable HDR on Intel laptop screens because performance is unacceptably
-    // bad.
-    // https://crbug.com/1402882
-    if (CGDisplayIsBuiltin(display_id) && max_potential_edr_value <= 2.f) {
-      enable_hdr = false;
-    }
+      // Disable HDR on Intel laptop screens because performance is unacceptably
+      // bad.
+      // https://crbug.com/1402882
+      if (CGDisplayIsBuiltin(display_id) && max_potential_edr_value <= 2.f) {
+        enable_hdr = false;
+      }
 #endif
-    if (enable_hdr) {
-      hdr_max_lum_relative =
-          std::max(kMinHDRCapableMaxLuminanceRelative, max_edr_value);
+      if (enable_hdr) {
+        hdr_max_lum_relative =
+            std::max(kMinHDRCapableMaxLuminanceRelative, max_edr_value);
+      }
     }
   }
 
@@ -137,8 +141,15 @@ DisplayMac BuildDisplayForScreen(NSScreen* screen) {
   {
     CGColorSpaceRef cg_color_space = screen.colorSpace.CGColorSpace;
     if (cg_color_space) {
-      base::apple::ScopedCFTypeRef<CFDataRef> cf_icc_profile(
-          CGColorSpaceCopyICCData(cg_color_space));
+      base::apple::ScopedCFTypeRef<CFDataRef> cf_icc_profile;
+      if (@available(macOS 10.12, *)) {
+        cf_icc_profile.reset(CGColorSpaceCopyICCData(cg_color_space));
+      }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
+      else {
+        cf_icc_profile.reset(CGColorSpaceCopyICCProfile(cg_color_space));
+      }
+#endif
       if (cf_icc_profile) {
         if (auto color_profile = skia::ColorProfile::Make(
                 base::apple::CFDataToSpan(cf_icc_profile.get()))) {
@@ -186,9 +197,14 @@ DisplayMac BuildDisplayForScreen(NSScreen* screen) {
   // Query the display's refresh rate. To get a float number such as 59.95Hz,
   // use 1.0/screen.minimumRefreshInterval instead of
   // screen.maximumFramesPerSecond, which is an integer.
-  float refresh_rate = (screen.minimumRefreshInterval > 0)
-                           ? (1.0 / screen.minimumRefreshInterval)
-                           : screen.maximumFramesPerSecond;
+  float refresh_rate = 0;
+  if (@available(macOS 12.0, *)) {
+    refresh_rate = (screen.minimumRefreshInterval > 0)
+                       ? (1.0 / screen.minimumRefreshInterval)
+                       : screen.maximumFramesPerSecond;
+  } else {
+    refresh_rate = 1.0 / GetCGRefreshInterval(display_id).InSecondsF();
+  }
   display.set_display_frequency(refresh_rate);
 
   // CGDisplayRotation returns a double. Display::SetRotationAsDegree will
@@ -201,7 +217,21 @@ DisplayMac BuildDisplayForScreen(NSScreen* screen) {
     SetInternalDisplayIds({display_id});
   }
 
-  display.set_label(base::SysNSStringToUTF8(screen.localizedName));
+  if (@available(macOS 10.15, *)) {
+    display.set_label(base::SysNSStringToUTF8(screen.localizedName));
+  }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101500
+  else {
+    base::apple::ScopedCFTypeRef<CFDictionaryRef> info(
+        IODisplayCreateInfoDictionary(CGDisplayIOServicePort(display_id),
+                                      kIODisplayOnlyPreferredName));
+    if (info) {
+      NSDictionary* names = [base::apple::CFToNSPtrCast(info.get())
+          objectForKey:@kDisplayProductName];
+      display.set_label(base::SysNSStringToUTF8(names.allValues.firstObject));
+    }
+  }
+#endif
 
   return DisplayMac{display, screen};
 }
@@ -232,8 +262,8 @@ std::vector<DisplayMac> BuildDisplaysFromQuartz() {
   ScreenIdsToScreensMap screen_ids_to_screens;
   for (NSScreen* screen in NSScreen.screens) {
     NSDictionary* screen_device_description = [screen deviceDescription];
-    CGDirectDisplayID screen_id =
-        [screen_device_description[@"NSScreenNumber"] unsignedIntValue];
+    CGDirectDisplayID screen_id = [[screen_device_description
+        objectForKey:@"NSScreenNumber"] unsignedIntValue];
     screen_ids_to_screens[screen_id] = screen;
   }
 
@@ -401,7 +431,7 @@ class ScreenMac : public Screen {
     }
 
     NSPoint ns_point = point.ToCGPoint();
-    NSScreen* primary = screens[0];
+    NSScreen* primary = [screens objectAtIndex:0];
     ns_point.y = NSMaxY(primary.frame) - ns_point.y;
     for (NSScreen* screen in screens) {
       if (NSMouseInRect(ns_point, screen.frame, NO)) {

@@ -133,7 +133,7 @@ NSCursor* CustomNSCursor(const ui::Cursor& cursor) {
   // size of a representation is not the same as pixelsWide or pixelsHigh.
   NSImage* cursor_image = skia::SkBitmapToNSImage(cursor.custom_bitmap());
   cursor_image.size = dip_size;
-  cursor_image.representations[0].size = dip_size;
+  [cursor_image.representations objectAtIndex:0].size = dip_size;
 
   return [[NSCursor alloc] initWithImage:cursor_image hotSpot:dip_hotspot];
 }

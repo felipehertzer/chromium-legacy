@@ -27,7 +27,11 @@ namespace {
 const int kSystemDefinedEventMediaKeysSubtype = 8;
 
 IOHIDAccessType CheckPostEventAccess() {
-  return IOHIDCheckAccess(kIOHIDRequestTypePostEvent);
+  if (__builtin_available(macOS 10.15, *)) {
+    return IOHIDCheckAccess(kIOHIDRequestTypePostEvent);
+  }
+  // The pre-Catalina event tap reports access errors when it is created.
+  return kIOHIDAccessTypeGranted;
 }
 
 KeyboardCode MediaKeyCodeToKeyboardCode(int key_code) {

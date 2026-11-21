@@ -1,0 +1,344 @@
+diff --git a/BUILD.gn b/BUILD.gn
+index 5e8714b..db0ac01 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -613,7 +613,7 @@ template("angle_common_lib") {
+     }
+ 
+     if (is_apple) {
+-      frameworks = [ "Metal.framework" ]
++      weak_frameworks = [ "Metal.framework" ]
+     }
+   }
+ }
+diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_utils.mm
+index 635abb6..31dce4b 100644
+--- a/src/common/apple_platform_utils.mm
++++ b/src/common/apple_platform_utils.mm
+@@ -98,6 +98,11 @@ bool IsMetalRendererAvailable()
+     static bool gpuFamilySufficient = []() -> bool {
+         ANGLE_APPLE_OBJC_SCOPE
+         {
++#if defined(ANGLE_PLATFORM_MACOS)
++            // Mac GPU family 2 requires the 10.15 family-query API.
++            if (@available(macOS 10.15, *))
++            {
++#endif
+             auto device = [MTLCreateSystemDefaultDevice() ANGLE_APPLE_AUTORELEASE];
+             if (!device)
+             {
+@@ -113,6 +118,10 @@ bool IsMetalRendererAvailable()
+             // Devices starting with A9 onwards are supported. Simulator is supported as per
+             // definition that running simulator on Mac Family 1 devices is not supported.
+             return true;
++#endif
++#if defined(ANGLE_PLATFORM_MACOS)
++            }
++            return false;
+ #endif
+         }
+     }();
+@@ -123,7 +132,7 @@ bool IsMetalRendererAvailable()
+ bool GetMacosMachineModel(std::string *outMachineModel)
+ {
+     io_service_t platformExpert = IOServiceGetMatchingService(
+-        kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
++        MACH_PORT_NULL, IOServiceMatching("IOPlatformExpertDevice"));
+ 
+     if (platformExpert == IO_OBJECT_NULL)
+     {
+diff --git a/src/common/debug.cpp b/src/common/debug.cpp
+index 0195eef..6c8e78f 100644
+--- a/src/common/debug.cpp
++++ b/src/common/debug.cpp
+@@ -275,37 +275,42 @@ void Trace(LogSeverity severity, const char *message)
+ #endif
+ 
+ #if defined(ANGLE_PLATFORM_APPLE)
+-        os_log_type_t apple_log_type = OS_LOG_TYPE_DEFAULT;
+-        switch (severity)
++        if (__builtin_available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *))
+         {
+-            case LOG_INFO:
+-            case LOG_EVENT:
+-                apple_log_type = OS_LOG_TYPE_INFO;
+-                break;
+-            case LOG_WARN:
+-                apple_log_type = OS_LOG_TYPE_DEFAULT;
+-                break;
+-            case LOG_ERR:
+-                apple_log_type = OS_LOG_TYPE_ERROR;
+-                break;
+-            case LOG_FATAL:
+-                // OS_LOG_TYPE_FAULT is too severe - grabs the entire process tree.
+-                apple_log_type = OS_LOG_TYPE_ERROR;
+-                break;
+-            default:
+-                UNREACHABLE();
++            os_log_type_t apple_log_type = OS_LOG_TYPE_DEFAULT;
++            switch (severity)
++            {
++                case LOG_INFO:
++                case LOG_EVENT:
++                    apple_log_type = OS_LOG_TYPE_INFO;
++                    break;
++                case LOG_WARN:
++                    apple_log_type = OS_LOG_TYPE_DEFAULT;
++                    break;
++                case LOG_ERR:
++                    apple_log_type = OS_LOG_TYPE_ERROR;
++                    break;
++                case LOG_FATAL:
++                    // OS_LOG_TYPE_FAULT is too severe - grabs the entire process tree.
++                    apple_log_type = OS_LOG_TYPE_ERROR;
++                    break;
++                default:
++                    UNREACHABLE();
++            }
++
++    #    pragma GCC diagnostic push
++    #    pragma GCC diagnostic ignored "-Wignored-attributes"
++            ANGLE_UNSAFE_TODO(os_log_with_type(OS_LOG_DEFAULT, apple_log_type, "ANGLE: %s: %s\n",
++                                               LogSeverityName(severity), str.c_str()));
++    #    pragma GCC diagnostic pop
+         }
+-
+-#    pragma GCC diagnostic push
+-#    pragma GCC diagnostic ignored "-Wignored-attributes"
+-        ANGLE_UNSAFE_TODO(os_log_with_type(OS_LOG_DEFAULT, apple_log_type, "ANGLE: %s: %s\n",
+-                                           LogSeverityName(severity), str.c_str()));
+-#    pragma GCC diagnostic pop
+-#else
+-        // Note: we use fprintf because <iostream> includes static initializers.
+-        ANGLE_UNSAFE_TODO(fprintf((severity >= LOG_WARN) ? stderr : stdout, "%s: %s\n",
+-                                  LogSeverityName(severity), str.c_str()));
++        else
+ #endif
++        {
++            // Note: we use fprintf because <iostream> includes static initializers.
++            ANGLE_UNSAFE_TODO(fprintf((severity >= LOG_WARN) ? stderr : stdout, "%s: %s\n",
++                                      LogSeverityName(severity), str.c_str()));
++        }
+     }
+ 
+ #if defined(ANGLE_PLATFORM_WINDOWS) && \
+diff --git a/src/gpu_info_util/SystemInfo_macos.mm b/src/gpu_info_util/SystemInfo_macos.mm
+index 40c5ec9..d061570 100644
+--- a/src/gpu_info_util/SystemInfo_macos.mm
++++ b/src/gpu_info_util/SystemInfo_macos.mm
+@@ -65,7 +65,7 @@ void GetIORegistryDevices(std::vector<GPUDeviceInfo> *devices)
+             ANGLE_UNSAFE_TODO(IOServiceMatching(kServiceNames[i]));
+ 
+         io_iterator_t entryIterator;
+-        if (IOServiceGetMatchingServices(kIOMainPortDefault, matchDictionary, &entryIterator) !=
++        if (IOServiceGetMatchingServices(MACH_PORT_NULL, matchDictionary, &entryIterator) !=
+             kIOReturnSuccess)
+         {
+             continue;
+@@ -160,7 +160,7 @@ void ForceGPUSwitchIndex(SystemInfo *info)
+         return;
+ 
+     CFMutableDictionaryRef matchDictionary = IORegistryEntryIDMatching(gpuID);
+-    io_service_t gpuEntry = IOServiceGetMatchingService(kIOMainPortDefault, matchDictionary);
++    io_service_t gpuEntry = IOServiceGetMatchingService(MACH_PORT_NULL, matchDictionary);
+ 
+     if (gpuEntry == IO_OBJECT_NULL)
+     {
+@@ -196,12 +196,15 @@ uint64_t GetGpuIDFromDisplayID(uint32_t displayID)
+ {
+     // First attempt to use query the registryID from a Metal device before falling back to CGL.
+     // This avoids loading the OpenGL framework when possible.
+-    id<MTLDevice> device = CGDirectDisplayCopyCurrentMetalDevice(displayID);
+-    if (device)
++    if (@available(macOS 10.13, *))
+     {
+-        uint64_t registryId = [device registryID];
+-        [device release];
+-        return registryId;
++        id<MTLDevice> device = CGDirectDisplayCopyCurrentMetalDevice(displayID);
++        if (device)
++        {
++            uint64_t registryId = [device registryID];
++            [device release];
++            return registryId;
++        }
+     }
+ #if ANGLE_ENABLE_CGL
+     return GetGpuIDFromOpenGLDisplayMask(CGDisplayIDToOpenGLDisplayMask(displayID));
+@@ -267,7 +270,7 @@ VendorID GetVendorIDFromMetalDeviceRegistryID(uint64_t registryID)
+     // IOServiceGetMatchingService will consume the reference on the matching dictionary,
+     // so we don't need to release the dictionary.
+     io_registry_entry_t acceleratorEntry =
+-        IOServiceGetMatchingService(kIOMainPortDefault, matchingDict);
++        IOServiceGetMatchingService(MACH_PORT_NULL, matchingDict);
+     if (acceleratorEntry == IO_OBJECT_NULL)
+     {
+         return 0;
+diff --git a/src/libANGLE/renderer/driver_utils_mac.mm b/src/libANGLE/renderer/driver_utils_mac.mm
+index a81ede2..26640fa 100644
+--- a/src/libANGLE/renderer/driver_utils_mac.mm
++++ b/src/libANGLE/renderer/driver_utils_mac.mm
+@@ -18,12 +18,32 @@ OSVersion GetMacOSVersion()
+ {
+     OSVersion result;
+ 
+-    NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
+-    result.majorVersion              = static_cast<int>(version.majorVersion);
+-    result.minorVersion              = static_cast<int>(version.minorVersion);
+-    result.patchVersion              = static_cast<int>(version.patchVersion);
++    NSOperatingSystemVersion version = {};
++    if (@available(macOS 10.10, *))
++    {
++        version = [[NSProcessInfo processInfo] operatingSystemVersion];
++    }
++    else
++    {
++        NSDictionary *info = [NSDictionary
++            dictionaryWithContentsOfFile:@"/System/Library/CoreServices/SystemVersion.plist"];
++        NSString *text     = [info objectForKey:@"ProductVersion"];
++        NSArray *parts     = [text componentsSeparatedByString:@"."];
++        if (parts.count >= 2)
++        {
++            version.majorVersion = [[parts objectAtIndex:0] integerValue];
++            version.minorVersion = [[parts objectAtIndex:1] integerValue];
++            if (parts.count >= 3)
++            {
++                version.patchVersion = [[parts objectAtIndex:2] integerValue];
++            }
++        }
++    }
++    result.majorVersion = static_cast<int>(version.majorVersion);
++    result.minorVersion = static_cast<int>(version.minorVersion);
++    result.patchVersion = static_cast<int>(version.patchVersion);
+ 
+     return result;
+ }
+ #endif
+-}
++}  // namespace rx
+diff --git a/src/libANGLE/renderer/metal/mtl_utils.mm b/src/libANGLE/renderer/metal/mtl_utils.mm
+index 6912d1c..fcf46b7 100644
+--- a/src/libANGLE/renderer/metal/mtl_utils.mm
++++ b/src/libANGLE/renderer/metal/mtl_utils.mm
+@@ -981,14 +981,23 @@ angle::ObjCPtr<id<MTLLibrary>> CreateShaderLibraryFromStaticBinary(
+     angle::ObjCPtr<id<MTLLibrary>> result;
+     ANGLE_MTL_OBJC_SCOPE
+     {
+-        NSError *nsError = nil;
++        NSError *nsError       = nil;
+         dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0);
++#if OS_OBJECT_USE_OBJC
+         angle::ObjCPtr binaryData =
+             angle::adoptObjCPtr(dispatch_data_create(data.data(), data.size_bytes(), queue,
+                                                      ^{
+                                                      }));
+-        result    = angle::adoptObjCPtr([metalDevice newLibraryWithData:binaryData.get()
++        result = angle::adoptObjCPtr([metalDevice newLibraryWithData:binaryData.get()
+                                                                error:&nsError]);
++#else
++        // Before 10.8, dispatch objects use C retain/release rather than Objective-C.
++        dispatch_data_t binaryData = dispatch_data_create(data.data(), data.size_bytes(), queue,
++                                                          ^{
++                                                          });
++        result = angle::adoptObjCPtr([metalDevice newLibraryWithData:binaryData error:&nsError]);
++        dispatch_release(binaryData);
++#endif
+         *errorOut = std::move(nsError);
+     }
+     return result;
+diff --git a/src/libANGLE/renderer/vulkan/mac/WindowSurfaceVkMac.mm b/src/libANGLE/renderer/vulkan/mac/WindowSurfaceVkMac.mm
+index ec1c5f8..8bcaa06 100644
+--- a/src/libANGLE/renderer/vulkan/mac/WindowSurfaceVkMac.mm
++++ b/src/libANGLE/renderer/vulkan/mac/WindowSurfaceVkMac.mm
+@@ -31,31 +31,37 @@ WindowSurfaceVkMac::~WindowSurfaceVkMac()
+ 
+ angle::Result WindowSurfaceVkMac::createSurfaceVk(vk::ErrorContext *context)
+ {
+-    mMetalDevice = MTLCreateSystemDefaultDevice();
+-
+-    CALayer *layer = reinterpret_cast<CALayer *>(mNativeWindowType);
+-
+-    mMetalLayer        = [[CAMetalLayer alloc] init];
+-    mMetalLayer.frame  = CGRectMake(0, 0, layer.frame.size.width, layer.frame.size.height);
+-    mMetalLayer.device = mMetalDevice;
+-    mMetalLayer.drawableSize =
+-        CGSizeMake(mMetalLayer.bounds.size.width * mMetalLayer.contentsScale,
+-                   mMetalLayer.bounds.size.height * mMetalLayer.contentsScale);
+-    mMetalLayer.framebufferOnly  = NO;
+-    mMetalLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+-    mMetalLayer.contentsScale    = layer.contentsScale;
+-
+-    [layer addSublayer:mMetalLayer];
+-
+-    VkMetalSurfaceCreateInfoEXT createInfo = {};
+-    createInfo.sType                       = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+-    createInfo.flags                       = 0;
+-    createInfo.pNext                       = nullptr;
+-    createInfo.pLayer                      = mMetalLayer;
+-    ANGLE_VK_TRY(context, VK_CALL(vkCreateMetalSurfaceEXT, context->getRenderer()->getInstance(),
+-                                  &createInfo, nullptr, &mSurface));
+-
+-    return angle::Result::Continue;
++    if (@available(macOS 10.11, *))
++    {
++        mMetalDevice = MTLCreateSystemDefaultDevice();
++
++        CALayer *layer = reinterpret_cast<CALayer *>(mNativeWindowType);
++
++        mMetalLayer        = [[CAMetalLayer alloc] init];
++        mMetalLayer.frame  = CGRectMake(0, 0, layer.frame.size.width, layer.frame.size.height);
++        mMetalLayer.device = mMetalDevice;
++        mMetalLayer.drawableSize =
++            CGSizeMake(mMetalLayer.bounds.size.width * mMetalLayer.contentsScale,
++                       mMetalLayer.bounds.size.height * mMetalLayer.contentsScale);
++        mMetalLayer.framebufferOnly  = NO;
++        mMetalLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
++        mMetalLayer.contentsScale    = layer.contentsScale;
++
++        [layer addSublayer:mMetalLayer];
++
++        VkMetalSurfaceCreateInfoEXT createInfo = {};
++        createInfo.sType                       = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
++        createInfo.flags                       = 0;
++        createInfo.pNext                       = nullptr;
++        createInfo.pLayer                      = mMetalLayer;
++        ANGLE_VK_TRY(context,
++                     VK_CALL(vkCreateMetalSurfaceEXT, context->getRenderer()->getInstance(),
++                             &createInfo, nullptr, &mSurface));
++
++        return angle::Result::Continue;
++    }
++    ANGLE_VK_CHECK(context, false, VK_ERROR_FEATURE_NOT_PRESENT);
++    return angle::Result::Stop;
+ }
+ 
+ angle::Result WindowSurfaceVkMac::getCurrentWindowSize(vk::ErrorContext *context,
+diff --git a/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.h b/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.h
+index a73930f..71a8f13 100644
+--- a/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.h
++++ b/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.h
+@@ -17,7 +17,7 @@
+ 
+ namespace rx
+ {
+-class WindowSurfaceWgpuMetalLayer : public WindowSurfaceWgpu
++class API_AVAILABLE(macos(10.11)) WindowSurfaceWgpuMetalLayer : public WindowSurfaceWgpu
+ {
+   public:
+     WindowSurfaceWgpuMetalLayer(const egl::SurfaceState &surfaceState, EGLNativeWindowType window);
+diff --git a/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.mm b/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.mm
+index 684123c..1bed227 100644
+--- a/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.mm
++++ b/src/libANGLE/renderer/wgpu/mac/WindowSurfaceWgpuMetalLayer.mm
+@@ -98,6 +98,10 @@ angle::Result WindowSurfaceWgpuMetalLayer::getCurrentWindowSize(const egl::Displ
+ WindowSurfaceWgpu *CreateWgpuWindowSurface(const egl::SurfaceState &surfaceState,
+                                            EGLNativeWindowType window)
+ {
+-    return new WindowSurfaceWgpuMetalLayer(surfaceState, window);
++    if (@available(macOS 10.11, *))
++    {
++        return new WindowSurfaceWgpuMetalLayer(surfaceState, window);
++    }
++    return nullptr;
+ }
+ }  // namespace rx

@@ -18,6 +18,7 @@
 #import "base/strings/sys_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/icu/source/common/unicode/uchar.h"
+#include "legacy/apple/font_cascade.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/font_fallback_skia_impl.h"
 #include "ui/gfx/platform_font.h"
@@ -46,7 +47,7 @@ std::vector<Font> GetFallbackFonts(const Font& font) {
       [NSUserDefaults.standardUserDefaults stringArrayForKey:@"AppleLanguages"];
   CFArrayRef languages_cf = base::apple::NSToCFPtrCast(languages);
   base::apple::ScopedCFTypeRef<CFArrayRef> cascade_list(
-      CTFontCopyDefaultCascadeListForLanguages(font.GetCTFont(), languages_cf));
+      chromium_legacy::CopyFontCascade(font.GetCTFont(), languages_cf));
 
   std::vector<Font> fallback_fonts;
   if (!cascade_list)

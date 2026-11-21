@@ -279,6 +279,7 @@ component("gfx") {
       "scoped_ns_graphics_context_save_gstate_mac.h",
       "scoped_ns_graphics_context_save_gstate_mac.mm",
     ]
+    deps += [ "//legacy:platform_support" ]
     frameworks += [
       "AppKit.framework",
       "CoreFoundation.framework",

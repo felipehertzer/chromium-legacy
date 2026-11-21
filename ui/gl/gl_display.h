@@ -17,6 +17,7 @@
 
 #if BUILDFLAG(IS_APPLE)
 #if __OBJC__
+#include <Availability.h>
 @protocol MTLDevice;
 @protocol MTLSharedEvent;
 #endif  // __OBJC__
@@ -144,10 +145,13 @@ class GL_EXPORT GLDisplayEGL : public GLDisplay {
 #if BUILDFLAG(IS_APPLE)
 #if __OBJC__
   bool CreateMetalSharedEvent(id<MTLSharedEvent>* shared_event_out,
-                              uint64_t* signal_value_out);
+                              uint64_t* signal_value_out)
+      API_AVAILABLE(macos(10.14), ios(12.0), tvos(12.0));
   void WaitForMetalSharedEvent(id<MTLSharedEvent> shared_event,
-                               uint64_t signal_value);
-  id<MTLDevice> GetMetalDevice() const;
+                               uint64_t signal_value)
+      API_AVAILABLE(macos(10.14), ios(12.0), tvos(12.0));
+  id<MTLDevice> GetMetalDevice() const
+      API_AVAILABLE(macos(10.11), ios(8.0), tvos(9.0));
 #endif  // __OBJC__
   size_t GetMetalDeviceAllocatedMemory() const;
 

@@ -612,12 +612,14 @@ component("base") {
       "Accelerate.framework",
       "AppKit.framework",
       "AudioUnit.framework",
-      "AVFAudio.framework",
       "Carbon.framework",
+      "CoreServices.framework",
       "CoreVideo.framework",
       "Foundation.framework",
       "IOKit.framework",
       "QuartzCore.framework",
+    ]
+    weak_frameworks = [
       "ScreenCaptureKit.framework",
       "UniformTypeIdentifiers.framework",
     ]
@@ -1137,10 +1139,8 @@ test("ui_base_unittests") {
       "l10n/l10n_util_mac_unittest.mm",
       "test/view_tree_validator_unittest.mm",
     ]
-    frameworks = [
-      "Foundation.framework",
-      "UniformTypeIdentifiers.framework",
-    ]
+    frameworks = [ "Foundation.framework" ]
+    weak_frameworks = [ "UniformTypeIdentifiers.framework" ]
   }
 
   if (is_ios) {

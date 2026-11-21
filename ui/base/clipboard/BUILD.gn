@@ -60,7 +60,7 @@ component("clipboard_types") {
   if (is_mac) {
     frameworks += [
       "AppKit.framework",
-      "UniformTypeIdentifiers.framework",
+      "CoreServices.framework",
     ]
   }
 }
@@ -217,9 +217,10 @@ component("clipboard") {
     deps += [ ":url_file_parser" ]
     frameworks = [
       "AppKit.framework",
+      "CoreServices.framework",
       "CoreFoundation.framework",
-      "UniformTypeIdentifiers.framework",
     ]
+    weak_frameworks = [ "UniformTypeIdentifiers.framework" ]
   }
 }
 

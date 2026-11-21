@@ -103,11 +103,19 @@ void CaptureScreenshot() {
 }  // namespace
 
 bool IsScreenCaptureAllowed() {
+  if (@available(macOS 10.15, *)) {
     return CGPreflightScreenCaptureAccess();
+  }
+  // The screen-recording TCC permission was introduced in Catalina.
+  // Earlier systems still enforce their normal WindowServer access rules.
+  return true;
 }
 
 bool TryPromptUserForScreenCapture() {
+  if (@available(macOS 10.15, *)) {
     return CGRequestScreenCaptureAccess();
+  }
+  return true;
 }
 
 void WarmScreenCapture() {

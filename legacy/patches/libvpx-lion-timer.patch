@@ -1,0 +1,70 @@
+diff --git a/vpx_ports/vpx_timer.h b/vpx_ports/vpx_timer.h
+index 55e7891..3169cc8 100644
+--- a/vpx_ports/vpx_timer.h
++++ b/vpx_ports/vpx_timer.h
+@@ -32,6 +32,10 @@
+  * POSIX specific includes
+  */
+ #include <time.h>
++#if defined(__APPLE__)
++#include <mach/mach_time.h>
++#include <stdlib.h>
++#endif
+ 
+ /* timersub is not provided by msys at this time. */
+ #ifndef timersub_ns
+@@ -47,6 +51,31 @@
+ #endif
+ #endif
+ 
++#if !defined(_WIN32)
++static INLINE void vpx_read_timer(struct timespec *result) {
++#if defined(__APPLE__)
++#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++  if (__builtin_available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *)) {
++    clock_gettime(CLOCK_MONOTONIC_RAW, result);
++    return;
++  }
++#endif
++  mach_timebase_info_data_t timebase;
++  uint64_t ticks, nanoseconds;
++  if (mach_timebase_info(&timebase) != KERN_SUCCESS || !timebase.denom) abort();
++  ticks = mach_absolute_time();
++  nanoseconds = (ticks / timebase.denom) * timebase.numer +
++                (ticks % timebase.denom) * timebase.numer / timebase.denom;
++  result->tv_sec = nanoseconds / 1000000000;
++  result->tv_nsec = nanoseconds % 1000000000;
++#elif defined(CLOCK_MONOTONIC_RAW)
++  clock_gettime(CLOCK_MONOTONIC_RAW, result);
++#else
++  clock_gettime(CLOCK_MONOTONIC, result);
++#endif
++}
++#endif
++
+ struct vpx_usec_timer {
+ #if defined(_WIN32)
+   LARGE_INTEGER begin, end;
+@@ -58,20 +87,16 @@ struct vpx_usec_timer {
+ static INLINE void vpx_usec_timer_start(struct vpx_usec_timer *t) {
+ #if defined(_WIN32)
+   QueryPerformanceCounter(&t->begin);
+-#elif defined(CLOCK_MONOTONIC_RAW)
+-  clock_gettime(CLOCK_MONOTONIC_RAW, &t->begin);
+ #else
+-  clock_gettime(CLOCK_MONOTONIC, &t->begin);
++  vpx_read_timer(&t->begin);
+ #endif
+ }
+ 
+ static INLINE void vpx_usec_timer_mark(struct vpx_usec_timer *t) {
+ #if defined(_WIN32)
+   QueryPerformanceCounter(&t->end);
+-#elif defined(CLOCK_MONOTONIC_RAW)
+-  clock_gettime(CLOCK_MONOTONIC_RAW, &t->end);
+ #else
+-  clock_gettime(CLOCK_MONOTONIC, &t->end);
++  vpx_read_timer(&t->end);
+ #endif
+ }
+ 

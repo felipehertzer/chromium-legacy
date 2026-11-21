@@ -52,6 +52,23 @@ or replaces a Chromium 159 dependency.
 - Skia's font/ICC helpers, Crashpad's clocks and audit tokens, and network/UI
   calls have additional availability guards. Optional modern frameworks are
   weak-linked; old certificate-chain and CSSM signing paths retain OS keys.
+- macOS Services exchange stable UTI strings. Big Sur and newer use the modern
+  UTType implementation; Lion through Catalina use LaunchServices, including
+  obsolete pasteboard aliases and canonical type identifiers. Context menus use
+  the original rectangle-based window/screen conversion APIs.
+- Font fallback uses Lion's original CoreText cascade API when the language-list
+  API is unavailable. Display discovery uses old dictionary selectors, fixed-mode
+  refresh queries, and original ICC profile/name APIs on older systems.
+- Current Dawn Metal source compiles behind a macOS 13 capability gate. Older
+  Macs do not discover Dawn Metal adapters or enable Graphite; the remaining
+  Ganesh/OpenGL path still needs full-browser validation. ANGLE retains its
+  separate Metal capability checks and uses C ownership for old dispatch objects.
+- libvpx, TensorFlow Lite/XLA, and XNNPACK timers retain modern clock APIs when
+  available and use Mach clocks or gettimeofday on old macOS. pthreadpool retains
+  cache-line-aligned storage and C11 atomics with naturally aligned pointer types.
+- Clipboard and drag/drop use stable UTI strings and LaunchServices on older
+  macOS. Clipboard integration checks use an isolated pasteboard. Old screen
+  capture uses fresh CGImage snapshots when display streams are unavailable.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -77,16 +94,23 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Base/Crypto integration | 23 checks passed | 23 checks passed |
 | Base with forced event-queue fallback | 23 checks passed | 23 checks passed |
 | SDK Foundation subclass/CoreText probe | passed | passed |
+| Services types/font cascades, normal and forced legacy paths | 18 checks each | 18 checks each |
+| libvpx timer, normal and forced legacy paths | 4 checks each, Intel and ARM | 4 checks each |
+| pthreadpool C11 atomics, including contention | 12 checks, Intel and ARM | 12 checks passed |
+| TensorFlow Lite/XLA clocks, normal and forced legacy paths | 3 checks each | 3 checks each |
+| Isolated clipboard URL/file integration, normal and forced legacy paths | 12 checks each | 12 checks each |
+| Display ID/refresh queries, normal and forced legacy paths | 8 checks each | 8 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
 process cwd inheritance. It does not test a TLS handshake or the browser.
-Twenty-five Python tests cover the port inventory, pinned dependency/Rust patch
+Twenty-seven Python tests cover the port inventory, pinned dependency/Rust patch
 application, SDK overlay preservation, and Mach-O audit behavior.
 
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
-Base/Crypto, SDK, and forced C++ runtime probes have no missing required symbols
+Base/Crypto, SDK, Services/fonts, clipboard, displays, timers, atomics, and forced C++
+runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
@@ -98,7 +122,15 @@ Only the Catalina Mac is available for physical-machine tests.
 legacy/test_os_version.sh
 legacy/test_mach_port.sh
 legacy/test_platform.sh
+legacy/test_appkit.sh
+legacy/test_vpx_timer.sh
+legacy/test_pthreadpool_atomics.sh
+python3 legacy/test_ml_clocks.py
+# Requires the integration objects and a retained base_probe.rsp:
+python3 legacy/test_clipboard.py
+python3 legacy/test_display.py
 python3 legacy/apply_dependency_patches.py --check
+python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v
 python3 legacy/audit_port.py --output /tmp/chromium-port-audit.json
 ```
@@ -128,7 +160,7 @@ python3 legacy/build_rust_compiler.py \
 cp legacy/args/lion.gn out/Lion/args.gn
 cat ../rust-lion-compiler.gni >> out/Lion/args.gn
 buildtools/mac/gn gen out/Lion --fail-on-unused-args
-ninja -C out/Lion -j4 runtime_probe rust_probe base_probe sdk_probe
+ninja -C out/Lion -j4 -d keeprsp runtime_probe rust_probe base_probe sdk_probe
 out/Lion/runtime_probe
 out/Lion/rust_probe
 out/Lion/base_probe

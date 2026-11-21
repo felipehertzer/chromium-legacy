@@ -18,13 +18,25 @@ namespace {
 // Returns a 16x16 red NSImage to visually show when a NSImage cannot be
 // created from PNG data.
 NSImage* GetErrorNSImage() {
-  return [NSImage imageWithSize:NSMakeSize(16, 16)
-                        flipped:NO
-                 drawingHandler:^(NSRect rect) {
-                   [NSColor.redColor set];
-                   NSRectFill(rect);
-                   return YES;
-                 }];
+  if (@available(macOS 10.8, *)) {
+    return [NSImage imageWithSize:NSMakeSize(16, 16)
+                          flipped:NO
+                   drawingHandler:^(NSRect rect) {
+                     [NSColor.redColor set];
+                     NSRectFill(rect);
+                     return YES;
+                   }];
+  }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 1080
+  NSImage* image = [[NSImage alloc] initWithSize:NSMakeSize(16, 16)];
+  [image lockFocus];
+  [NSColor.redColor set];
+  NSRectFill(NSMakeRect(0, 0, 16, 16));
+  [image unlockFocus];
+  return image;
+#else
+  return nil;
+#endif
 }
 
 }  // namespace
