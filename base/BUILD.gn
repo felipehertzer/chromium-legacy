@@ -2222,6 +2222,8 @@ component("base") {
       "mac/launchd.h",
       "mac/login_util.cc",
       "mac/login_util.h",
+      "mac/legacy_os_compat.h",
+      "mac/legacy_os_compat.mm",
       "mac/mac_util.h",
       "mac/mac_util.mm",
       "mac/os_crash_dumps.cc",

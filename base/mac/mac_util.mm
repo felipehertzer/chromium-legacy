@@ -27,6 +27,7 @@
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
+#include "base/mac/legacy_os_compat.h"
 #include "base/mac/scoped_aedesc.h"
 #include "base/mac/scoped_ioobject.h"
 #include "base/posix/sysctl.h"
@@ -297,14 +298,16 @@ void SetFileTags(const FilePath& file_path,
   if (file_tags.empty()) {
     return;
   }
+  // Finder tags were added in Mavericks.
+  if (@available(macOS 10.9, *)) {
+    NSMutableArray* tag_array = [NSMutableArray array];
+    for (const auto& tag : file_tags) {
+      [tag_array addObject:SysUTF8ToNSString(tag)];
+    }
 
-  NSMutableArray* tag_array = [NSMutableArray array];
-  for (const auto& tag : file_tags) {
-    [tag_array addObject:SysUTF8ToNSString(tag)];
+    NSURL* file_url = apple::FilePathToNSURL(file_path);
+    [file_url setResourceValue:tag_array forKey:NSURLTagNamesKey error:nil];
   }
-
-  NSURL* file_url = apple::FilePathToNSURL(file_path);
-  [file_url setResourceValue:tag_array forKey:NSURLTagNamesKey error:nil];
 }
 
 namespace {
@@ -367,16 +370,32 @@ int ParseOSProductVersionForTesting(const std::string_view& version) {
 }
 
 int MacOSVersion() {
-  static int macos_version = ParseOSProductVersion(
-      StringSysctlByName("kern.osproductversion").value());
+  static const int macos_version = [] {
+    auto version = StringSysctlByName("kern.osproductversion");
+    if (version.has_value()) {
+      return ParseOSProductVersion(*version);
+    }
 
+    // Lion and other older macOS versions lack kern.osproductversion.
+    NSString* product_version = ReadLegacyProductVersion(
+        @"/System/Library/CoreServices/SystemVersion.plist");
+    CHECK(product_version) << "Cannot determine the macOS product version";
+    return ParseOSProductVersion(SysNSStringToUTF8(product_version));
+  }();
   return macos_version;
 }
 
 bool IsVirtualMachine() {
   int ret;
   size_t size = sizeof(ret);
-  PCHECK(sysctlbyname("kern.hv_vmm_present", &ret, &size, nullptr, 0) != -1);
+  if (sysctlbyname("kern.hv_vmm_present", &ret, &size, nullptr, 0) == -1) {
+    // This sysctl is absent on older kernels. An unsupported VM query must
+    // not prevent an otherwise supported legacy system from starting.
+    if (errno == ENOENT || errno == ENOTSUP) {
+      return false;
+    }
+    PCHECK(false);
+  }
   return ret;
 }
 

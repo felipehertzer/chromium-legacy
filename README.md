@@ -1,3 +1,14 @@
+# Experimental Chromium Legacy port
+
+This fork targets current Chromium on **OS X Lion 10.7 and later (Intel)**.
+The `codex/current-chromium-lion` branch starts from Chromium **159.0.8154.13**.
+The complete browser has **not been built or validated on Lion**.
+
+See [legacy/README.md](legacy/README.md) for the implemented compatibility fixes,
+focused tests, pinned revisions, patch inventory, and remaining work.
+
+---
+
 # ![Logo](chrome/app/theme/chromium/product_logo_64.png) Chromium
 
 Chromium is an open-source browser project that aims to build a safer, faster,
