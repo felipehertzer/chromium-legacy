@@ -2,6 +2,9 @@
 # Keep warnings and link errors visible while auditing unavailable OS APIs.
 target_os = "mac"
 target_cpu = "x64"
+
+# ARM build hosts execute the Intel snapshot tools through Rosetta.
+v8_snapshot_toolchain = "//build/toolchain/mac:clang_x64"
 is_debug = false
 is_component_build = false
 is_official_build = false

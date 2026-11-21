@@ -80,6 +80,10 @@ or replaces a Chromium 159 dependency.
   existing libyuv converter for NV12/I420. Actual camera capture remains untested.
 - Current V8 thread setup uses per-thread background priority where QoS classes
   are absent. Modern QoS behavior is unchanged.
+- CoreAnimation uses shape masks for corner combinations that old CALayer
+  cannot clip directly. Lion uses ordinary CALayers instead of the 10.8 video
+  display layer. Protected video promotion is rejected before capture protection
+  exists. HDR copying requires 10.15 and a Metal device.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -113,22 +117,29 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Display ID/refresh queries, normal and forced legacy paths | 8 checks each | 8 checks each |
 | CoreVideo/GCD ownership, normal and forced legacy paths | 16 checks each, Intel and ARM | 16 checks each |
 | Original Chromium Rust/C++ interoperability tests | 5 tests passed | 5 tests passed |
+| Actual compositor clipping, normal and forced legacy paths | 13 checks each | 13 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
 process cwd inheritance. It does not test a TLS handshake or the browser.
-Thirty Python tests cover the port inventory, pinned dependency/Rust patch
+Thirty-three Python tests cover the port inventory, pinned dependency/Rust patch
 application, SDK overlay preservation, and Mach-O audit behavior.
 
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
-timers, atomics, and forced C++
+compositor clipping, timers, atomics, and forced C++
 runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
 Only the Catalina Mac is available for physical-machine tests.
+The installer recovery system omits AVFoundation. Its original framework was
+extracted from the same installer's Essentials.pkg for the compositor audit.
+`audit_macho.py --supplemental-root PATH` fills absent libraries from that
+extraction; existing primary-root libraries retain precedence, and malformed
+libraries still fail the audit.
+
 
 ## Run the focused checks
 
@@ -144,6 +155,7 @@ python3 legacy/test_ml_clocks.py
 # Requires the integration objects and a retained base_probe.rsp:
 python3 legacy/test_clipboard.py
 python3 legacy/test_display.py
+python3 legacy/test_core_animation.py
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v
@@ -160,6 +172,10 @@ Its 491-path report is a review queue, not a completion count.
 
 Use a modern build Mac with Xcode, the upstream `depot_tools` setup, and at least
 150 GiB of working space. `src` must be a real directory inside the workspace.
+On Apple Silicon, Rosetta must be installed: the Intel snapshot tools run on the
+build host. This keeps the normal context snapshots while sharing the target's
+compiled Blink/V8 libraries instead of compiling Blink for a second architecture.
+
 
 ```sh
 mkdir chromium-build && cd chromium-build

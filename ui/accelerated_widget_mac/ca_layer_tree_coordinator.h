@@ -68,7 +68,7 @@ class ACCELERATED_WIDGET_MAC_EXPORT CALayerTreeCoordinator {
   CALayerTreeCoordinator(bool allow_av_sample_buffer_display_layer,
                          BufferPresentedCallback buffer_presented_callback,
                          GLMakeCurrentCallback gl_make_current_callback,
-                         id<MTLDevice> metal_device);
+                         id metal_device);
 
   CALayerTreeCoordinator(const CALayerTreeCoordinator&) = delete;
   CALayerTreeCoordinator& operator=(const CALayerTreeCoordinator&) = delete;
@@ -140,7 +140,8 @@ class ACCELERATED_WIDGET_MAC_EXPORT CALayerTreeCoordinator {
 
   // This is needed to ensure synchronization between the display compositor and
   // the HDRCopierLayer. See https://crbug.com/1372898
-  id<MTLDevice> __strong metal_device_;
+  // Opaque ownership keeps the GL coordinator usable before Metal exists.
+  id __strong metal_device_;
 
   // The frame that is currently under construction. It has had planes
   // scheduled, but has not had Present() called yet. When Present() is called,

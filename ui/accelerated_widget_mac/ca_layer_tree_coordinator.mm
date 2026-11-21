@@ -33,7 +33,7 @@ CALayerTreeCoordinator::CALayerTreeCoordinator(
     bool allow_av_sample_buffer_display_layer,
     BufferPresentedCallback buffer_presented_callback,
     GLMakeCurrentCallback gl_make_current_callback,
-    id<MTLDevice> metal_device)
+    id metal_device)
     : allow_remote_layers_(ui::RemoteLayerAPISupported()),
       allow_av_sample_buffer_display_layer_(
           allow_av_sample_buffer_display_layer),

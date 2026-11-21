@@ -7,7 +7,9 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include <CoreVideo/CoreVideo.h>
 #include <Metal/Metal.h>
-#include <MetalKit/MetalKit.h>
+#include <QuartzCore/CAEDRMetadata.h>
+#include <QuartzCore/CAMetalLayer.h>
+#include <simd/matrix_types.h>
 
 #include <array>
 
@@ -25,7 +27,7 @@
 #include "ui/gfx/hdr_metadata_mac.h"
 #include "ui/gfx/mac/io_surface.h"
 
-namespace {
+namespace __attribute__((availability(macos, introduced = 10.15))) {
 
 // If true, then use the HDRCopierLayer for all HLG video content.
 BASE_FEATURE(kMacHlgUseHdrCopier, base::FEATURE_DISABLED_BY_DEFAULT);
@@ -276,6 +278,7 @@ id<MTLRenderPipelineState> CreateRenderPipelineState(id<MTLDevice> device) {
 
 }  // namespace
 
+API_AVAILABLE(macos(10.15), ios(16.0), tvos(16.0))
 @interface HDRCopierLayer : CAMetalLayer
 - (id)init;
 - (void)setHDRContents:(IOSurfaceRef)buffer
@@ -519,7 +522,10 @@ id<MTLRenderPipelineState> CreateRenderPipelineState(id<MTLDevice> device) {
 namespace metal {
 
 CALayer* MakeHDRCopierLayer() {
-  return [[HDRCopierLayer alloc] init];
+  if (@available(macOS 10.15, iOS 16.0, tvOS 16.0, *)) {
+    return [[HDRCopierLayer alloc] init];
+  }
+  return nil;
 }
 
 void UpdateHDRCopierLayer(CALayer* layer,
@@ -541,47 +547,51 @@ void UpdateHDRCopierLayer(CALayer* layer,
 bool ShouldUseHDRCopier(IOSurfaceRef buffer,
                         const gfx::HDRMetadata& hdr_metadata,
                         const gfx::ColorSpace& color_space) {
-  // Only some transfer functions are supported.
-  if (!GetTransferFunctionIndex(color_space)) {
-    return false;
-  }
-
-  // Only some pixel formats are supported.
-  bool is_unorm = false;
-  uint32_t num_planes = 0;
-  std::array<MTLPixelFormat, 2> format = {MTLPixelFormatInvalid,
-                                          MTLPixelFormatInvalid};
-  if (!IOSurfaceGetMTLPixelFormat(buffer, num_planes, format, is_unorm)) {
-    return false;
-  }
-
-  // If this is a video frame (is multi-planar), then only override the default
-  // behavior for HLG content.
-  if (num_planes == 2) {
-    if (color_space.GetTransferID() != gfx::ColorSpace::TransferID::HLG) {
+  if (@available(macOS 10.15, iOS 16.0, tvOS 16.0, *)) {
+    // Only some transfer functions are supported.
+    if (!GetTransferFunctionIndex(color_space) ||
+        !MTLCreateSystemDefaultDevice()) {
       return false;
     }
-    if (!base::FeatureList::IsEnabled(kMacHlgUseHdrCopier)) {
+
+    // Only some pixel formats are supported.
+    bool is_unorm = false;
+    uint32_t num_planes = 0;
+    std::array<MTLPixelFormat, 2> format = {MTLPixelFormatInvalid,
+                                            MTLPixelFormatInvalid};
+    if (!IOSurfaceGetMTLPixelFormat(buffer, num_planes, format, is_unorm)) {
       return false;
     }
-  }
 
-  if (color_space.IsToneMappedByDefault()) {
-    return true;
-  }
+    // If this is a video frame (is multi-planar), then only override the
+    // default behavior for HLG content.
+    if (num_planes == 2) {
+      if (color_space.GetTransferID() != gfx::ColorSpace::TransferID::HLG) {
+        return false;
+      }
+      if (!base::FeatureList::IsEnabled(kMacHlgUseHdrCopier)) {
+        return false;
+      }
+    }
 
-  if (hdr_metadata.HasAgtm()) {
-    return true;
-  }
+    if (color_space.IsToneMappedByDefault()) {
+      return true;
+    }
 
-  // Rasterized tiles and the primary plane specify a color space of SRGB_HDR
-  // LINEAR_HDR, or CUSTOM_HDR, with no extended range metadata.
-  // TODO(crbug.com/40268540): Use extended range metadata instead of
-  // the SDR_HDR color space to indicate this.
-  if (color_space.IsHDR()) {
-    return !is_unorm;
-  }
+    if (hdr_metadata.HasAgtm()) {
+      return true;
+    }
 
+    // Rasterized tiles and the primary plane specify a color space of SRGB_HDR
+    // LINEAR_HDR, or CUSTOM_HDR, with no extended range metadata.
+    // TODO(crbug.com/40268540): Use extended range metadata instead of
+    // the SDR_HDR color space to indicate this.
+    if (color_space.IsHDR()) {
+      return !is_unorm;
+    }
+
+    return false;
+  }
   return false;
 }
 

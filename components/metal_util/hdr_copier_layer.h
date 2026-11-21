@@ -6,6 +6,7 @@
 #define COMPONENTS_METAL_UTIL_HDR_COPIER_LAYER_H_
 
 #include <IOSurface/IOSurfaceRef.h>
+#include <os/availability.h>
 
 #include <optional>
 
@@ -41,7 +42,8 @@ UpdateHDRCopierLayer(CALayer* layer,
                      id<MTLDevice> device,
                      float screen_hdr_headroom,
                      const gfx::ColorSpace& color_space,
-                     const gfx::HDRMetadata& hdr_metadata);
+                     const gfx::HDRMetadata& hdr_metadata)
+    API_AVAILABLE(macos(10.15), ios(16.0), tvos(16.0));
 
 }  // namespace metal
 

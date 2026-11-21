@@ -94,6 +94,39 @@ class MachOAuditTests(unittest.TestCase):
                                       libraries=[('/usr/lib/link.dylib', AUDIT.LOAD)]))
         self.assertEqual(AUDIT.audit(self.binary, self.root)['missing_required'], [])
 
+    def test_supplemental_installer_library_fills_missing_framework(self):
+        supplemental = self.root / 'supplemental'
+        path = supplemental / 'usr/lib/extra.dylib'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(image(exports=['_extra']))
+        self.binary.write_bytes(image(imports=[('_extra', 1, False)],
+                                      libraries=[('/usr/lib/extra.dylib', AUDIT.LOAD)]))
+        result = AUDIT.audit(self.binary, self.root, [supplemental])
+        self.assertEqual(result['missing_required'], [])
+        self.assertEqual(result['incomplete_libraries'], [])
+        self.assertEqual(result['supplemental_roots'], [str(supplemental)])
+
+    def test_supplemental_root_does_not_replace_primary_exports(self):
+        self.library('/usr/lib/extra.dylib', image(exports=['_primary']))
+        supplemental = self.root / 'supplemental'
+        path = supplemental / 'usr/lib/extra.dylib'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(image(exports=['_secondary']))
+        self.binary.write_bytes(image(imports=[('_secondary', 1, False)],
+                                      libraries=[('/usr/lib/extra.dylib', AUDIT.LOAD)]))
+        result = AUDIT.audit(self.binary, self.root, [supplemental])
+        self.assertEqual(result['missing_required'][0]['symbol'], '_secondary')
+
+    def test_supplemental_root_cannot_hide_malformed_primary_library(self):
+        self.library('/usr/lib/extra.dylib', b'malformed')
+        supplemental = self.root / 'supplemental'
+        path = supplemental / 'usr/lib/extra.dylib'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(image(exports=['_secondary']))
+        self.binary.write_bytes(image(libraries=[('/usr/lib/extra.dylib', AUDIT.LOAD)]))
+        result = AUDIT.audit(self.binary, self.root, [supplemental])
+        self.assertEqual(len(result['incomplete_libraries']), 1)
+
     def test_universal_slice_and_truncation(self):
         thin = image(exports=['_guest'])
         fat = struct.pack('>7I', 0xCAFEBABE, 1, AUDIT.CPU_X86_64, 3,

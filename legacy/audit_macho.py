@@ -128,8 +128,9 @@ def resolve_in_root(root, path):
 
 
 class SystemExports:
-    def __init__(self, root):
+    def __init__(self, root, supplemental_roots=()):
         self.root = root
+        self.roots = (root, *supplemental_roots)
         self.cache = {}
         self.incomplete = set()
 
@@ -143,7 +144,14 @@ class SystemExports:
             self.incomplete.add(path)
             return set()
         try:
-            image = read_image(resolve_in_root(self.root, path).read_bytes())
+            for index, root in enumerate(self.roots):
+                try:
+                    data = resolve_in_root(root, path).read_bytes()
+                    break
+                except FileNotFoundError:
+                    if index + 1 == len(self.roots):
+                        raise
+            image = read_image(data)
         except OSError as error:
             if not optional:
                 self.incomplete.add(f'{path}: {error}')
@@ -162,9 +170,9 @@ class SystemExports:
         return exports
 
 
-def audit(binary, system_root):
+def audit(binary, system_root, supplemental_roots=()):
     image = read_image(binary.read_bytes())
-    system = SystemExports(system_root)
+    system = SystemExports(system_root, supplemental_roots)
     missing, weak_missing, unknown = [], [], []
     for name, ordinal, weak in image.imports:
         if not 1 <= ordinal <= len(image.libraries):
@@ -182,6 +190,7 @@ def audit(binary, system_root):
         'schema_version': 1,
         'binary': str(binary),
         'system_root': str(system_root),
+        'supplemental_roots': [str(root) for root in supplemental_roots],
         'checked_imports': len(image.imports),
         'missing_required': missing,
         'missing_weak': weak_missing,
@@ -194,9 +203,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('binary', type=Path)
     parser.add_argument('--system-root', required=True, type=Path)
+    parser.add_argument('--supplemental-root', type=Path, action='append',
+                        default=[], help='Additional unmodified libraries from the same OS build')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
-    report = audit(args.binary, args.system_root)
+    report = audit(args.binary, args.system_root, args.supplemental_root)
     text = json.dumps(report, indent=2) + '\n'
     if args.output:
         args.output.write_text(text)

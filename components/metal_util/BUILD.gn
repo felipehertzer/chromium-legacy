@@ -28,16 +28,17 @@ component("metal_util") {
 
   frameworks = [
     "IOSurface.framework",
-    "Metal.framework",
-    "MetalKit.framework",
     "QuartzCore.framework",
   ]
 
   if (is_mac) {
+    weak_frameworks = [ "Metal.framework" ]
     sources += [
       "device_removal.h",
       "device_removal.mm",
     ]
     frameworks += [ "Cocoa.framework" ]
+  } else {
+    frameworks += [ "Metal.framework" ]
   }
 }

@@ -72,6 +72,7 @@ bool UseCALayerContentsHeadroom() {
 // radius on a subset of corners with the remaining corners square). Returns
 // false if `rrect` has elliptical corners or multiple distinct non-zero corner
 // radii.
+API_AVAILABLE(macos(10.13), ios(11.0), tvos(11.0))
 bool GetCALayerCornerRadius(const gfx::RRectF& rrect,
                             float* corner_radius,
                             CACornerMask* corner_mask) {
@@ -117,22 +118,33 @@ bool GetCALayerCornerRadius(const gfx::RRectF& rrect,
 bool ApplyCornerRadiusToCALayer(CALayer* layer,
                                 const gfx::RRectF& rrect,
                                 float scale_factor) {
-  float corner_radius = 0.0f;
-  CACornerMask corner_mask = 0;
-  if (!GetCALayerCornerRadius(rrect, &corner_radius, &corner_mask)) {
-    return false;
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 10.13, iOS 11.0, tvOS 11.0, *)) {
+    float corner_radius = 0.0f;
+    CACornerMask corner_mask = 0;
+    if (!GetCALayerCornerRadius(rrect, &corner_radius, &corner_mask)) {
+      return false;
+    }
+    layer.cornerRadius = corner_radius / scale_factor;
+    layer.maskedCorners = corner_mask;
+    return true;
   }
-  layer.cornerRadius = corner_radius / scale_factor;
-  layer.maskedCorners = corner_mask;
-  return true;
+#endif
+  if (rrect.GetType() <= gfx::RRectF::Type::kSingle) {
+    layer.cornerRadius = rrect.GetSimpleRadius() / scale_factor;
+    return true;
+  }
+  return false;
 }
+
+base::apple::ScopedCFTypeRef<CGPathRef> CreatePathForRRect(gfx::RRectF rrect,
+                                                           float scale_factor);
 
 // Clips CALayer `layer`'s to `rrect` using `scale_factor`. Sets all clipping,
 // transform, and corner properties necessary to ensure a correct clip.
 //
-// Fails on any `rrect` which is not compatible with CALayer's rendering
-// capabilities (this should have been detected earlier and sent through a
-// different rendering pathway).
+// Older systems use a shape mask when CALayer cannot represent the corners
+// directly.
 void ClipCALayerToRRectF(CALayer* layer,
                          const gfx::RRectF& rrect,
                          float scale_factor) {
@@ -147,7 +159,14 @@ void ClipCALayerToRRectF(CALayer* layer,
   layer.sublayerTransform = CATransform3DMakeTranslation(
       -dip_rounded_corner_bounds.x(), -dip_rounded_corner_bounds.y(), 0);
 
-  CHECK(ApplyCornerRadiusToCALayer(layer, rrect, scale_factor));
+  if (ApplyCornerRadiusToCALayer(layer, rrect, scale_factor)) {
+    layer.mask = nil;
+  } else {
+    CAShapeLayer* mask = [[CAShapeLayer alloc] init];
+    mask.path = CreatePathForRRect(rrect, scale_factor).get();
+    layer.mask = mask;
+    layer.cornerRadius = 0.0f;
+  }
 }
 
 base::apple::ScopedCFTypeRef<CGPathRef> CreatePathForRRect(gfx::RRectF rrect,
@@ -217,6 +236,7 @@ class ComparatorSkColor4f {
 
 // This will enqueue |io_surface| to be drawn by |av_layer|. This will
 // retain |cv_pixel_buffer| until it is no longer being displayed.
+API_AVAILABLE(macos(10.8), ios(8.0), tvos(10.2))
 bool AVSampleBufferDisplayLayerEnqueueCVPixelBuffer(
     AVSampleBufferDisplayLayer* av_layer,
     CVPixelBufferRef cv_pixel_buffer) {
@@ -266,30 +286,36 @@ bool AVSampleBufferDisplayLayerEnqueueCVPixelBuffer(
                        kCMSampleAttachmentKey_DisplayImmediately,
                        kCFBooleanTrue);
 
-  AVQueuedSampleBufferRenderingStatus status;
-  NSError* error;
-  if (@available(macOS 14, iOS 17, *)) {
-    AVSampleBufferVideoRenderer* renderer = av_layer.sampleBufferRenderer;
-    [renderer enqueueSampleBuffer:sample_buffer.get()];
-    status = renderer.status;
-    error = renderer.error;
+  if (@available(macOS 10.10, iOS 8.0, tvOS 10.2, *)) {
+    AVQueuedSampleBufferRenderingStatus status;
+    NSError* error;
+    if (@available(macOS 14, iOS 17, *)) {
+      AVSampleBufferVideoRenderer* renderer = av_layer.sampleBufferRenderer;
+      [renderer enqueueSampleBuffer:sample_buffer.get()];
+      status = renderer.status;
+      error = renderer.error;
+    } else {
+      [av_layer enqueueSampleBuffer:sample_buffer.get()];
+      status = av_layer.status;
+      error = av_layer.error;
+    }
+
+    switch (status) {
+      case AVQueuedSampleBufferRenderingStatusUnknown:
+        LOG(ERROR)
+            << "AVSampleBufferDisplayLayer has status unknown, but should "
+               "be rendering.";
+        return false;
+      case AVQueuedSampleBufferRenderingStatusFailed:
+        LOG(ERROR) << "AVSampleBufferDisplayLayer has status failed, error: "
+                   << base::SysNSStringToUTF8(error.description);
+        return false;
+      case AVQueuedSampleBufferRenderingStatusRendering:
+        break;
+    }
+
   } else {
     [av_layer enqueueSampleBuffer:sample_buffer.get()];
-    status = av_layer.status;
-    error = av_layer.error;
-  }
-
-  switch (status) {
-    case AVQueuedSampleBufferRenderingStatusUnknown:
-      LOG(ERROR) << "AVSampleBufferDisplayLayer has status unknown, but should "
-                    "be rendering.";
-      return false;
-    case AVQueuedSampleBufferRenderingStatusFailed:
-      LOG(ERROR) << "AVSampleBufferDisplayLayer has status failed, error: "
-                 << base::SysNSStringToUTF8(error.description);
-      return false;
-    case AVQueuedSampleBufferRenderingStatusRendering:
-      break;
   }
 
   return true;
@@ -298,6 +324,7 @@ bool AVSampleBufferDisplayLayerEnqueueCVPixelBuffer(
 // This will enqueue |io_surface| to be drawn by |av_layer| by wrapping
 // |io_surface| in a CVPixelBuffer. This will increase the in-use count
 // of and retain |io_surface| until it is no longer being displayed.
+API_AVAILABLE(macos(10.8), ios(8.0), tvos(10.2))
 bool AVSampleBufferDisplayLayerEnqueueIOSurface(
     AVSampleBufferDisplayLayer* av_layer,
     IOSurfaceRef io_surface,
@@ -314,51 +341,56 @@ bool AVSampleBufferDisplayLayerEnqueueIOSurface(
     return false;
   }
 
-  if (io_surface_color_space.GetPrimaryID() ==
-          gfx::ColorSpace::PrimaryID::BT2020 &&
-      io_surface_color_space.GetMatrixID() ==
-          gfx::ColorSpace::MatrixID::BT2020_NCL &&
-      (io_surface_color_space.GetTransferID() ==
-           gfx::ColorSpace::TransferID::PQ ||
-       io_surface_color_space.GetTransferID() ==
-           gfx::ColorSpace::TransferID::HLG)) {
-    CVBufferSetAttachment(cv_pixel_buffer.get(),
-                          kCVImageBufferColorPrimariesKey,
-                          kCVImageBufferColorPrimaries_ITU_R_2020,
-                          kCVAttachmentMode_ShouldPropagate);
-    CVBufferSetAttachment(cv_pixel_buffer.get(), kCVImageBufferYCbCrMatrixKey,
-                          kCVImageBufferYCbCrMatrix_ITU_R_2020,
-                          kCVAttachmentMode_ShouldPropagate);
+  if (@available(macOS 10.13, iOS 11.0, tvOS 11.0, *)) {
+    if (io_surface_color_space.GetPrimaryID() ==
+            gfx::ColorSpace::PrimaryID::BT2020 &&
+        io_surface_color_space.GetMatrixID() ==
+            gfx::ColorSpace::MatrixID::BT2020_NCL &&
+        (io_surface_color_space.GetTransferID() ==
+             gfx::ColorSpace::TransferID::PQ ||
+         io_surface_color_space.GetTransferID() ==
+             gfx::ColorSpace::TransferID::HLG)) {
+      CVBufferSetAttachment(cv_pixel_buffer.get(),
+                            kCVImageBufferColorPrimariesKey,
+                            kCVImageBufferColorPrimaries_ITU_R_2020,
+                            kCVAttachmentMode_ShouldPropagate);
+      CVBufferSetAttachment(cv_pixel_buffer.get(), kCVImageBufferYCbCrMatrixKey,
+                            kCVImageBufferYCbCrMatrix_ITU_R_2020,
+                            kCVAttachmentMode_ShouldPropagate);
 
-    switch (io_surface_color_space.GetTransferID()) {
-      case gfx::ColorSpace::TransferID::HLG:
-        CVBufferSetAttachment(cv_pixel_buffer.get(),
-                              kCVImageBufferTransferFunctionKey,
-                              kCVImageBufferTransferFunction_ITU_R_2100_HLG,
-                              kCVAttachmentMode_ShouldPropagate);
-        CVBufferSetAttachment(cv_pixel_buffer.get(),
-                              kCVImageBufferAmbientViewingEnvironmentKey,
-                              gfx::GenerateAmbientViewingEnvironment().get(),
-                              kCVAttachmentMode_ShouldPropagate);
-        break;
-      case gfx::ColorSpace::TransferID::PQ:
-        CVBufferSetAttachment(cv_pixel_buffer.get(),
-                              kCVImageBufferTransferFunctionKey,
-                              kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
-                              kCVAttachmentMode_ShouldPropagate);
-        CVBufferSetAttachment(cv_pixel_buffer.get(),
-                              kCVImageBufferMasteringDisplayColorVolumeKey,
-                              gfx::GenerateMasteringDisplayColorVolume(
-                                  hdr_metadata, /*fallback_to_defaults=*/true)
-                                  .get(),
-                              kCVAttachmentMode_ShouldPropagate);
-        CVBufferSetAttachment(
-            cv_pixel_buffer.get(), kCVImageBufferContentLightLevelInfoKey,
-            gfx::GenerateContentLightLevelInfo(hdr_metadata).get(),
-            kCVAttachmentMode_ShouldPropagate);
-        break;
-      default:
-        break;
+      switch (io_surface_color_space.GetTransferID()) {
+        case gfx::ColorSpace::TransferID::HLG:
+          CVBufferSetAttachment(cv_pixel_buffer.get(),
+                                kCVImageBufferTransferFunctionKey,
+                                kCVImageBufferTransferFunction_ITU_R_2100_HLG,
+                                kCVAttachmentMode_ShouldPropagate);
+          if (@available(macOS 12.0, iOS 15.0, tvOS 15.0, *)) {
+            CVBufferSetAttachment(
+                cv_pixel_buffer.get(),
+                kCVImageBufferAmbientViewingEnvironmentKey,
+                gfx::GenerateAmbientViewingEnvironment().get(),
+                kCVAttachmentMode_ShouldPropagate);
+          }
+          break;
+        case gfx::ColorSpace::TransferID::PQ:
+          CVBufferSetAttachment(cv_pixel_buffer.get(),
+                                kCVImageBufferTransferFunctionKey,
+                                kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
+                                kCVAttachmentMode_ShouldPropagate);
+          CVBufferSetAttachment(cv_pixel_buffer.get(),
+                                kCVImageBufferMasteringDisplayColorVolumeKey,
+                                gfx::GenerateMasteringDisplayColorVolume(
+                                    hdr_metadata, /*fallback_to_defaults=*/true)
+                                    .get(),
+                                kCVAttachmentMode_ShouldPropagate);
+          CVBufferSetAttachment(
+              cv_pixel_buffer.get(), kCVImageBufferContentLightLevelInfoKey,
+              gfx::GenerateContentLightLevelInfo(hdr_metadata).get(),
+              kCVAttachmentMode_ShouldPropagate);
+          break;
+        default:
+          break;
+      }
     }
   }
 
@@ -481,9 +513,13 @@ CARendererLayerTree::SolidColorContents::GetMap() {
 CARendererLayerTree::CARendererLayerTree(
     bool allow_av_sample_buffer_display_layer,
     bool allow_solid_color_layers,
-    id<MTLDevice> metal_device)
-    : allow_av_sample_buffer_display_layer_(
-          allow_av_sample_buffer_display_layer),
+    id metal_device)
+    : allow_av_sample_buffer_display_layer_([&] {
+        if (@available(macOS 10.8, iOS 8.0, tvOS 10.2, *)) {
+          return allow_av_sample_buffer_display_layer;
+        }
+        return false;
+      }()),
       allow_solid_color_layers_(allow_solid_color_layers),
       metal_device_(metal_device) {}
 CARendererLayerTree::~CARendererLayerTree() = default;
@@ -491,6 +527,10 @@ CARendererLayerTree::~CARendererLayerTree() = default;
 bool CARendererLayerTree::ScheduleCALayer(const CARendererLayerParams& params) {
   if (has_committed_) {
     DLOG(ERROR) << "ScheduleCALayer called after CommitScheduledCALayers.";
+    return false;
+  }
+  if (@available(macOS 10.15, iOS 13.0, tvOS 13.0, *)) {
+  } else if (params.protected_video_type != gfx::ProtectedVideoType::kClear) {
     return false;
   }
   if (!params.backdrop_filters.empty()) {
@@ -915,24 +955,24 @@ CARendererLayerTree::ContentLayer::ContentLayer(
   // top edge on-screen.
   // https://crbug.com/567946
   if (params.edge_aa_mask & CALayerEdge::kLayerEdgeLeft) {
-    ca_edge_aa_mask_ |= kCALayerLeftEdge;
+    ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 0);
   }
   if (params.edge_aa_mask & CALayerEdge::kLayerEdgeRight) {
-    ca_edge_aa_mask_ |= kCALayerRightEdge;
+    ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 1);
   }
   if (io_surface_ || solid_color_contents_) {
     if (params.edge_aa_mask & CALayerEdge::kLayerEdgeTop) {
-      ca_edge_aa_mask_ |= kCALayerBottomEdge;
+      ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 2);
     }
     if (params.edge_aa_mask & CALayerEdge::kLayerEdgeBottom) {
-      ca_edge_aa_mask_ |= kCALayerTopEdge;
+      ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 3);
     }
   } else {
     if (params.edge_aa_mask & CALayerEdge::kLayerEdgeTop) {
-      ca_edge_aa_mask_ |= kCALayerTopEdge;
+      ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 3);
     }
     if (params.edge_aa_mask & CALayerEdge::kLayerEdgeBottom) {
-      ca_edge_aa_mask_ |= kCALayerBottomEdge;
+      ca_edge_aa_mask_ |= static_cast<CAEdgeAntialiasingMask>(1u << 2);
     }
   }
 
@@ -1296,9 +1336,11 @@ void CARendererLayerTree::ContentLayer::CommitToCA(
     update_backdrop_filter_bounds =
         old_layer_->backdrop_filter_bounds_ != backdrop_filter_bounds_;
     update_backdrop_filter = old_layer_->backdrop_filters_ != backdrop_filters_;
-    if (type_ == CALayerType::kVideo) {
-      av_layer_.preventsCapture =
-          protected_video_type_ != gfx::ProtectedVideoType::kClear;
+    if (@available(macOS 10.15, iOS 13.0, tvOS 13.0, *)) {
+      if (type_ == CALayerType::kVideo) {
+        ((AVSampleBufferDisplayLayer*)av_layer_).preventsCapture =
+            protected_video_type_ != gfx::ProtectedVideoType::kClear;
+      }
     }
   } else {
     switch (type_) {
@@ -1306,18 +1348,23 @@ void CARendererLayerTree::ContentLayer::CommitToCA(
         ca_layer_ = metal::MakeHDRCopierLayer();
         break;
       case CALayerType::kVideo:
-        av_layer_ = [[AVSampleBufferDisplayLayer alloc] init];
-        // Workaround for https://crbug.com/398425794. The documentation for
-        // geometryFlipped specifies that "The value of this property does not
-        // affect the rendering of the layer’s content." If this is not
-        // specified, then AVSampleBufferDisplayLayer, when rendering HDR
-        // content that is transformed (by, e.g, a 90 degree rotation), will
-        // be flipped vertically.
-        av_layer_.geometryFlipped = YES;
-        ca_layer_ = av_layer_;
-        av_layer_.videoGravity = AVLayerVideoGravityResize;
-        if (protected_video_type_ != gfx::ProtectedVideoType::kClear) {
-          av_layer_.preventsCapture = true;
+        if (@available(macOS 10.8, iOS 8.0, tvOS 10.2, *)) {
+          av_layer_ = [[AVSampleBufferDisplayLayer alloc] init];
+          // Workaround for https://crbug.com/398425794. The documentation for
+          // geometryFlipped specifies that "The value of this property does not
+          // affect the rendering of the layer’s content." If this is not
+          // specified, then AVSampleBufferDisplayLayer, when rendering HDR
+          // content that is transformed (by, e.g, a 90 degree rotation), will
+          // be flipped vertically.
+          av_layer_.geometryFlipped = YES;
+          ca_layer_ = av_layer_;
+          ((AVSampleBufferDisplayLayer*)av_layer_).videoGravity = AVLayerVideoGravityResize;
+          if (@available(macOS 10.15, iOS 13.0, tvOS 13.0, *)) {
+            ((AVSampleBufferDisplayLayer*)av_layer_).preventsCapture =
+                protected_video_type_ != gfx::ProtectedVideoType::kClear;
+          }
+        } else {
+          NOTREACHED();
         }
         break;
       case CALayerType::kBackdropFilter:
@@ -1371,7 +1418,10 @@ void CARendererLayerTree::ContentLayer::CommitToCA(
         background_color_.fA,
     };
     base::apple::ScopedCFTypeRef<CGColorSpaceRef> color_space(
-        CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB));
+        CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
+    if (@available(macOS 10.12, iOS 10.0, tvOS 10.0, *)) {
+      color_space.reset(CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB));
+    }
     base::apple::ScopedCFTypeRef<CGColorRef> srgb_background_color(
         CGColorCreate(color_space.get(), rgba_color_components));
     ca_layer_.backgroundColor = srgb_background_color.get();
@@ -1396,27 +1446,35 @@ void CARendererLayerTree::ContentLayer::CommitContentsToCA(
   if (update_contents) {
     switch (type_) {
       case CALayerType::kHDRCopier:
-        metal::UpdateHDRCopierLayer(ca_layer_, io_surface_.get(),
-                                    tree()->metal_device_,
-                                    tree()->display_hdr_headroom_,
-                                    io_surface_color_space_, hdr_metadata_);
+        if (@available(macOS 10.15, iOS 16.0, tvOS 16.0, *)) {
+          metal::UpdateHDRCopierLayer(ca_layer_, io_surface_.get(),
+                                      tree()->metal_device_,
+                                      tree()->display_hdr_headroom_,
+                                      io_surface_color_space_, hdr_metadata_);
+        } else {
+          NOTREACHED();
+        }
         break;
       case CALayerType::kVideo: {
-        bool result = false;
-        if (cv_pixel_buffer_) {
-          result = AVSampleBufferDisplayLayerEnqueueCVPixelBuffer(
-              av_layer_, cv_pixel_buffer_.get());
-          if (!result) {
-            LOG(ERROR)
-                << "AVSampleBufferDisplayLayerEnqueueCVPixelBuffer failed";
+        if (@available(macOS 10.8, iOS 8.0, tvOS 10.2, *)) {
+          bool result = false;
+          if (cv_pixel_buffer_) {
+            result = AVSampleBufferDisplayLayerEnqueueCVPixelBuffer(
+                (AVSampleBufferDisplayLayer*)av_layer_, cv_pixel_buffer_.get());
+            if (!result) {
+              LOG(ERROR)
+                  << "AVSampleBufferDisplayLayerEnqueueCVPixelBuffer failed";
+            }
+          } else {
+            result = AVSampleBufferDisplayLayerEnqueueIOSurface(
+                (AVSampleBufferDisplayLayer*)av_layer_, io_surface_.get(),
+                io_surface_color_space_, hdr_metadata_);
+            if (!result) {
+              LOG(ERROR) << "AVSampleBufferDisplayLayerEnqueueIOSurface failed";
+            }
           }
         } else {
-          result = AVSampleBufferDisplayLayerEnqueueIOSurface(
-              av_layer_, io_surface_.get(), io_surface_color_space_,
-              hdr_metadata_);
-          if (!result) {
-            LOG(ERROR) << "AVSampleBufferDisplayLayerEnqueueIOSurface failed";
-          }
+          NOTREACHED();
         }
         // TODO(ccameron): Recreate the AVSampleBufferDisplayLayer on failure.
         // This is not being done yet, to determine if this happens concurrently
@@ -1517,7 +1575,9 @@ void CARendererLayerTree::ContentLayer::CommitBackdropFilterToCA(
         ca_layer_.mask = backdrop_mask_ca_layer_;
       }
       ca_layer_.cornerRadius = 0.0f;
-      ca_layer_.maskedCorners = 0;
+      if (@available(macOS 10.13, iOS 11.0, tvOS 11.0, *)) {
+        ca_layer_.maskedCorners = 0;
+      }
     }
   }
 }

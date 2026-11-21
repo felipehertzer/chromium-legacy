@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_METAL_UTIL_DEVICE_H_
 #define COMPONENTS_METAL_UTIL_DEVICE_H_
 
+#include <os/availability.h>
+
 #include "components/metal_util/metal_util_export.h"
 
 @protocol MTLDevice;
@@ -13,7 +15,8 @@ namespace metal {
 
 // Return a low-power device, if one exists, otherwise return the system default
 // device.
-id<MTLDevice> METAL_UTIL_EXPORT GetDefaultDevice();
+id<MTLDevice> METAL_UTIL_EXPORT GetDefaultDevice()
+    API_AVAILABLE(macos(10.11), ios(8.0), tvos(9.0));
 
 }  // namespace metal
 

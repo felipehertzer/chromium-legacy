@@ -30,7 +30,6 @@
 #include "ui/gfx/video_types.h"
 #include "ui/gl/ca_renderer_layer_params.h"
 
-@class AVSampleBufferDisplayLayer;
 @class CAShapeLayer;
 
 namespace ui {
@@ -57,7 +56,7 @@ class ACCELERATED_WIDGET_MAC_EXPORT CARendererLayerTree {
  public:
   CARendererLayerTree(bool allow_av_sample_buffer_display_layer,
                       bool allow_solid_color_layers,
-                      id<MTLDevice> metal_device = nil);
+                      id metal_device = nil);
 
   CARendererLayerTree(const CARendererLayerTree&) = delete;
   CARendererLayerTree& operator=(const CARendererLayerTree&) = delete;
@@ -298,7 +297,8 @@ class ACCELERATED_WIDGET_MAC_EXPORT CARendererLayerTree {
 
     // If this layer's contents can be represented as an
     // AVSampleBufferDisplayLayer, then |ca_layer| will point to |av_layer|.
-    AVSampleBufferDisplayLayer* __strong av_layer_;
+    // The optional AV subclass is only accessed inside availability checks.
+    CALayer* __strong av_layer_;
 
     // Layer used to colorize content when it updates, if borders are
     // enabled.
@@ -327,7 +327,8 @@ class ACCELERATED_WIDGET_MAC_EXPORT CARendererLayerTree {
 
   // This is needed to ensure synchronization between the display compositor and
   // the HDRCopierLayer. See https://crbug.com/1372898
-  id<MTLDevice> __strong metal_device_;
+  // Opaque ownership keeps this renderer usable before Metal exists.
+  id __strong metal_device_;
 
   // Map of content IOSurface.
   CALayerMap ca_layer_map_;
