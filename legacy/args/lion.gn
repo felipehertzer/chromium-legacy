@@ -1,0 +1,18 @@
+# Experimental port settings. A generated build is not proof of Lion support.
+# Keep warnings and link errors visible while auditing unavailable OS APIs.
+target_os = "mac"
+target_cpu = "x64"
+is_debug = false
+is_component_build = false
+is_official_build = false
+is_chrome_branded = false
+symbol_level = 0
+blink_symbol_level = 0
+v8_symbol_level = 0
+chrome_pgo_phase = 0
+use_custom_libcxx = true
+use_remoteexec = false
+mac_deployment_target = "10.7"
+mac_min_system_version = "10.7"
+treat_warnings_as_errors = true
+fatal_linker_warnings = true

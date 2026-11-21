@@ -1,0 +1,2472 @@
+{
+  "comparison": "Legacy delta against the unmodified target upstream; not a port completion report",
+  "revisions": {
+    "legacy_base": "bead720c07bfebff9a2601e1bcca70dc63b89e65",
+    "legacy_port": "9938ec7216f0c08c45f0cef4a007d887095aca79",
+    "target": "4d790f9eb4c8abe65b8aaa3feba664e7c734ba56"
+  },
+  "summary": {
+    "legacy_addition": 43,
+    "upstream_changed": 366,
+    "upstream_removed": 33,
+    "upstream_unchanged": 49
+  },
+  "total_files": 491,
+  "files": [
+    {
+      "path": ".github/FUNDING.yml",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/crash-report.md",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": ".gitmodules",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "README.ja.md",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "README.md",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/page_allocator_internals_posix.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_base/logging.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_base/rand_util_posix.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_config.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/spinning_mutex.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/allocator/partition_allocator/src/partition_alloc/spinning_mutex.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/apple/backup_util.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/apple/bridging.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/apple/scoped_mach_port.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/check_op.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/enterprise_util.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/enterprise_util_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/logging.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/logging.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/mac/launch_application.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/mac/launch_services_spi.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/mac/mac_util.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/mac/mac_util.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/mac/mach_port_rendezvous.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "base/message_loop/message_pump_apple.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/message_loop/message_pump_kqueue.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/message_loop/message_pump_kqueue.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/native_library.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "base/native_library.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/native_library_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "base/power_monitor/battery_level_provider_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/power_monitor/power_monitor_device_source_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/process/launch_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/process/process_info_mac.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "base/process/process_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/profiler/frame_pointer_unwinder.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/rand_util_posix.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/scoped_native_library.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/scoped_native_library.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "base/synchronization/waitable_event.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/synchronization/waitable_event.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/synchronization/waitable_event_apple.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/synchronization/waitable_event_watcher_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/system/sys_info_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/task/sequence_manager/thread_controller_with_message_pump_impl.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/task/thread_pool/thread_group_native_mac.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "base/threading/atomic.c",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "base/threading/platform_thread_apple.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "base/time/time_apple.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "build/config/compiler/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "build/config/compiler/pgo/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "build/toolchain/apple/filter_libtool.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "build/toolchain/apple/toolchain.gni",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "build_overrides/partition_alloc.gni",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/chrome_exe_main_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/chrome_main.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/chrome_main_delegate.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/chrome_main_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/chrome_main_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app/helper-entitlements.plist",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "chrome/app_shim/app_mode_loader_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/app_shim/app_shim_controller.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/app_controller_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/apps/app_shim/code_signature_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/apps/app_shim/mach_bootstrap_acceptor.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/apps/link_capturing/mac_intent_picker_helpers.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/background/background_contents_service.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/chrome_content_browser_client.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/device_reauth/mac/authenticator_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/device_reauth/mac/device_authenticator_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/download/download_status_updater_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/enterprise/connectors/device_trust/key_management/core/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/flag_descriptions.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/focus_ring_browsertest_mac.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "chrome/browser/focus_ring_browsertest_mac.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "chrome/browser/google/google_brand_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/image_editor/event_capture_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/mac/auth_session_request.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/mac/auth_session_request.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/mac/dock.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/media/webrtc/media_authorization_wrapper_mac.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/media/webrtc/system_media_capture_permissions_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/media/webrtc/system_media_capture_permissions_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/media/webrtc/system_media_capture_permissions_stats_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/metrics/power/power_metrics_provider_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/browser/obsolete_system/obsolete_system_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/platform_util.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/platform_util_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/renderer_context_menu/render_view_context_menu.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/renderer_host/chrome_render_widget_host_view_mac_delegate.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/renderer_host/chrome_render_widget_host_view_mac_history_swiper.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/resources/settings/about_page/about_page.html",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/resources/settings/about_page/about_page.ts",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/shell_integration_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/shortcuts/chrome_webloc_file.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/browser/ui/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/autofill/autofill_popup_controller_impl_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/autofill/autofill_popup_controller_impl_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/browser_window_command_handler.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/confirm_quit_panel_controller.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/dock_icon.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/first_run_dialog_controller.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/fullscreen/fullscreen_menubar_tracker.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/share_menu_controller.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/simple_message_box_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/tab_menu_bridge.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/task_manager_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/browser_window_default_touch_bar.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/browser_window_default_touch_bar.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/browser_window_touch_bar_controller.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/credit_card_autofill_touch_bar_controller.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/credit_card_autofill_touch_bar_controller.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/touchbar/web_textfield_touch_bar_controller.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/browser/ui/cocoa/window_size_autosaver.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/color/chrome_color_id.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/color/chrome_color_mixer.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/content_settings/media_authorization_wrapper_test.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/content_settings/media_authorization_wrapper_test.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/browser/ui/media_router/media_router_ui_helper.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/bookmarks/bookmark_drag_drop_views.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/bookmarks/saved_tab_groups/saved_tab_group_drag_data.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/extensions/browser_action_drag_data.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/eye_dropper/eye_dropper_view_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_frame_mac.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_frame_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_non_client_frame_view_mac.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_non_client_frame_view_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_root_view.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/frame/browser_view.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/omnibox/omnibox_view_views.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/views/toolbar/home_button.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/ui/webui/version/version_ui.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/browser/web_applications/os_integration/web_app_shortcut_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/browser/webauthn/chrome_authenticator_request_delegate_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/common/chrome_features.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/common/printing/printer_capabilities_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/installer/gcapi_mac/gcapi.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/installer/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/installer/mac/signing/parts.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/installer/mac/signing/signing.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/mac_notification_provider_impl.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/notification_category_manager.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "chrome/services/mac_notifications/notification_category_manager.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/notification_test_utils_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/unnotification_metrics.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/mac_notifications/unnotification_metrics.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/services/speech/soda/soda_client.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/tools/build/mac/verify_dynamic_libraries.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/tools/build/mac/verify_order.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/updater/mac/setup/keystone.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/updater/mac/setup/setup.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "chrome/utility/importer/safari_importer.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "chrome/utility/safe_browsing/mac/crdmg.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/autofill/core/browser/autofill_experiments.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "components/autofill/core/browser/autofill_experiments.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "components/bookmarks/browser/bookmark_node_data_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/bookmarks/browser/bookmark_pasteboard_helper_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/cross_device/nearby/system_clock.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/eye_dropper/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/eye_dropper/eye_dropper_view.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/eye_dropper/eye_dropper_view.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/handoff/handoff_manager.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/live_caption/caption_util.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/metal_util/device_removal.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/metal_util/hdr_copier_layer.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/mirroring/service/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/named_mojo_ipc_server/named_mojo_server_endpoint_connector_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/network_session_configurator/browser/network_session_configurator.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/policy/core/common/policy_loader_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/power_metrics/energy_impact_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/power_metrics/resource_coalition_internal_types_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/alert.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/bridged_content_view.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/bridged_content_view_touch_bar.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/browser_native_widget_window_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/immersive_mode_controller_cocoa.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/immersive_mode_controller_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/immersive_mode_tabbed_controller_cocoa.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/immersive_mode_tabbed_controller_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/menu_controller_cocoa_delegate_impl.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/native_widget_mac_nswindow.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/select_file_dialog_bridge.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/views_nswindow_delegate.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/views_nswindow_delegate.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/window_move_loop.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/app_shim/window_touch_bar_delegate.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/remote_cocoa/browser/window.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/remote_cocoa/browser/window.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/services/quarantine/common_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/soda/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/now_playing_info_center_delegate.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/now_playing_info_center_delegate.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/now_playing_info_center_delegate_cocoa.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/now_playing_info_center_delegate_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/remote_command_center_delegate.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/remote_command_center_delegate_cocoa.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "components/system_media_controls/mac/system_media_controls_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/system_media_controls/mac/system_media_controls_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/update_client/crx_downloader_factory.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "components/version_ui/resources/about_version.html",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "components/version_ui/version_handler_helper.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "components/viz/common/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app/aperitif_mac.cc",
+      "change": "A",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/render_widget_host_view_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_contents_occlusion_checker_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_contents_view_cocoa.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_contents_view_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_drag_source_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_drag_source_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/app_shim_remote_cocoa/web_menu_runner_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/accessibility/browser_accessibility_manager_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "content/browser/accessibility/browser_accessibility_state_impl_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/cocoa/system_hotkey_helper_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "content/browser/form_controls_browsertest_mac.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "content/browser/form_controls_browsertest_mac.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "content/browser/renderer_host/clipboard_host_impl.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/renderer_host/file_utilities_host_impl.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/renderer_host/file_utilities_host_impl.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/renderer_host/media/in_process_video_capture_device_launcher.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/theme_helper_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/web_contents/web_contents_view_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/web_contents/web_drag_dest_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/browser/web_contents/web_drag_dest_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/common/font_list_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/common/input/web_input_event_builders_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "content/common/mac/attributed_string_type_converters.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "content/renderer/theme_helper_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/test/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/test/gpu/gpu_tests/fake_win_amd_gpu_info.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "content/utility/services.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "crypto/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "crypto/apple_keychain_v2.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "crypto/apple_keychain_v2.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "crypto/unexportable_key_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "device/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_adapter_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_adapter_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_adapter_mac_metrics.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_low_energy_advertisement_manager_mac.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_low_energy_advertisement_manager_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_low_energy_device_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_low_energy_device_watcher_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/bluetooth/bluetooth_low_energy_discovery_manager_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/cable/fido_cable_discovery.cc",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "device/fido/mac/authenticator.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/authenticator.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/credential_store.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/credential_store.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/fake_touch_id_context.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "device/fido/mac/get_assertion_operation.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/make_credential_operation.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/touch_id_context.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "device/fido/mac/touch_id_context.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/util.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/fido/mac/util.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "device/gamepad/game_controller_data_fetcher_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/feature_info.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/gles2_cmd_decoder.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/gles2_cmd_decoder_unittest_programs.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/program_manager.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/program_manager.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/program_manager_unittest.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/renderbuffer_manager.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/test_helper.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/command_buffer/service/test_helper.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/gpu_driver_bug_list.json",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/gpu_feature_type.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/gpu_info_collector_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/gpu_workaround_list.txt",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/process_json.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "gpu/config/software_rendering_list.json",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "infra/config/generated/builders/ci/Mac10.11 Tests/properties.json",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "infra/config/generated/builders/ci/Mac10.12 Tests/properties.json",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "infra/config/generated/builders/try/mac_chromium_10.11_rel_ng/properties.json",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "infra/config/generated/builders/try/mac_chromium_10.12_rel_ng/properties.json",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "media/audio/apple/audio_manager_apple.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "media/audio/mac/audio_manager_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/base/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/base/mac/video_capture_device_avfoundation_helpers.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/base/supported_types.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/capture/video/apple/pixel_buffer_pool.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "media/capture/video/apple/pixel_buffer_transferer.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "media/capture/video/apple/sample_buffer_transformer.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/capture/video/apple/video_capture_device_avfoundation.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/capture/video/apple/video_capture_device_avfoundation.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/filters/mac/audio_toolbox_audio_decoder.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/gpu/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/gpu/mac/video_toolbox_video_decoder.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/gpu/mac/vt_config_util.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "media/gpu/mac/vt_video_decode_accelerator_mac.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "media/gpu/mac/vt_video_encode_accelerator_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/base/file_stream_context.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/base/file_stream_context_posix.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/base/platform_mime_util_apple.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/cert/internal/trust_store_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/dns/notify_watcher_mac.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "net/socket/udp_socket_posix.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/ssl/client_cert_store_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "net/ssl/ssl_platform_key_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "printing/backend/print_backend_cups.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/desktop_display_info_loader_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/disconnect_window_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/installer/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/installer/mac/ChromotingHost.pkgproj",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "remoting/host/installer/mac/uninstaller/remoting_uninstaller_app.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/it2me/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/it2me/it2me_native_messaging_host_main.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/mac/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/mac/constants_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/mac/host_service_main.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/mac/permission_utils.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/mac/permission_utils.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "remoting/host/remoting_me2me_host.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/mac/sandbox_logging.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/mac/system_services.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "sandbox/policy/mac/audio.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/common.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/gpu.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/nacl_loader.sb",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "sandbox/policy/mac/network.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/on_device_model_execution.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/renderer.sb",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "sandbox/policy/mac/sandbox_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/device/public/cpp/device_features.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/device/public/cpp/geolocation/system_geolocation_source_apple.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/resource_coordinator/memory_instrumentation/queued_request_dispatcher.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics_mac.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/shape_detection/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_impl_mac.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_impl_mac.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_impl_mac_vision.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_impl_mac_vision.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_impl_mac_vision_api.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/shape_detection/barcode_detection_provider_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "services/shape_detection/detection_utils_mac.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "services/shape_detection/face_detection_impl_mac_vision.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "services/shape_detection/face_detection_impl_mac_vision.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "services/shape_detection/face_detection_provider_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "services/shape_detection/text_detection_impl_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "skia/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "skia/ext/skia_utils_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "skia/ext/test_fonts_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "third_party/abseil-cpp/absl/base/config.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/apple_apsl/README.chromium",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/apple_apsl/cssmapplePriv.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/blink/public/mojom/file/file_utilities.mojom",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "third_party/blink/renderer/build/scripts/gperf.py",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/controller/memory_usage_monitor_mac.cc",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "third_party/blink/renderer/core/editing/substring_util.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/core/layout/layout_theme_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/modules/file_system_access/file_system_access_regular_file_delegate.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/modules/file_system_access/file_system_access_regular_file_delegate.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/mac/core_text_font_format_support.cc",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/mac/core_text_font_format_support.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/mac/font_cache_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/mac/font_matcher_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/mac/font_platform_data_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/fonts/web_font_typeface_factory.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/blink/renderer/platform/graphics/paint/ref_counted_property_tree_state.h",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "third_party/crashpad/crashpad/util/posix/spawn_subprocess.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "third_party/mozilla/BUILD.gn",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/DEPS",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/DIR_METADATA",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/LICENSE",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/MozillaExport.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSPasteboard+Utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSPasteboard+Utils.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSString+Utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSString+Utils.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSURL+Utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSURL+Utils.m",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSWorkspace+Utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/NSWorkspace+Utils.m",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/OWNERS",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "third_party/mozilla/README.chromium",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/accelerated_widget_mac/ca_renderer_layer_tree.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/accelerated_widget_mac/ca_transaction_observer.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/accelerated_widget_mac/ca_transaction_observer.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/accessibility/platform/ax_platform_node_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/accessibility/platform/ax_platform_node_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/accessibility/platform/ax_private_attributes_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/accelerators/accelerator.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_android.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_android.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_constants.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_constants_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_content_type.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_data.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_data.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_format_type.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_format_type_aura.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_format_type_ios.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_format_type_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_format_type_win.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_ios.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_ios.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_non_backed.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_non_backed.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_ozone.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_ozone.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_test_template.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_util_mac.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_util_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_util_win.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_util_win.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_win.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/clipboard_win.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/custom_data_helper.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/custom_data_helper.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/clipboard/file_info.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/file_info.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/clipboard/file_info_fuzzer.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/scoped_clipboard_writer.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/scoped_clipboard_writer.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/test/test_clipboard.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/test/test_clipboard.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/url_file_parser.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/clipboard/url_file_parser.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/clipboard/url_file_parser_fuzzer.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/base_view.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/cocoa_base_utils.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/cocoa_base_utils.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/command_dispatcher.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/controls/button_utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/cocoa/controls/button_utils.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/cocoa/controls/textfield_utils.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/cocoa/controls/textfield_utils.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/cocoa/cursor_accessibility_scale_factor_observer.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "ui/base/cocoa/cursor_utils.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/find_pasteboard.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/cocoa/find_pasteboard.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/menu_controller.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "ui/base/cocoa/menu_utils.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/cocoa/permissions_utils.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/cocoa/permissions_utils.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/dragdrop/cocoa_dnd_util.h",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/dragdrop/cocoa_dnd_util.mm",
+      "change": "A",
+      "disposition": "legacy_addition"
+    },
+    {
+      "path": "ui/base/dragdrop/os_exchange_data.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/dragdrop/os_exchange_data.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/dragdrop/os_exchange_data_provider.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/dragdrop/os_exchange_data_provider_mac.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/dragdrop/os_exchange_data_provider_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/test/ui_controls_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/test/view_tree_validator.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/base/ui_base_features.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/base/ui_base_features.h",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/color/mac/native_color_mixers_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/display/mac/screen_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/display/mac/test/virtual_display_util_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/animation/animation_mac.mm",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/gfx/font_fallback_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/image/image_util_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/mac/color_space_util.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/mac/display_icc_profiles.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/mac/io_surface.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/platform_font_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/gfx/range/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/native_theme/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/native_theme/caption_style_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/native_theme/native_theme_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/shell_dialogs/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/BUILD.gn",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/accessibility/view_ax_platform_node_delegate_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/badge_painter.h",
+      "change": "M",
+      "disposition": "upstream_unchanged"
+    },
+    {
+      "path": "ui/views/cocoa/drag_drop_client_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/cocoa/native_window_tracker_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_removed"
+    },
+    {
+      "path": "ui/views/controls/menu/menu_runner_impl_cocoa.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/controls/textfield/textfield.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/style/typography_provider.cc",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/test/event_generator_delegate_mac.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    },
+    {
+      "path": "ui/views/widget/native_widget_mac_unittest.mm",
+      "change": "M",
+      "disposition": "upstream_changed"
+    }
+  ]
+}

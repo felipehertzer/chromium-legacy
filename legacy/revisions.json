@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "minimum_macos": "10.7",
+  "architecture": "x64",
+  "target": {
+    "version": "159.0.8154.13",
+    "revision": "4d790f9eb4c8abe65b8aaa3feba664e7c734ba56",
+    "channel": "Mac Stable",
+    "checked_on": "2026-11-21",
+    "source": "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Mac&num=1"
+  },
+  "legacy_base": {
+    "version": "127.0.6494.0",
+    "revision": "bead720c07bfebff9a2601e1bcca70dc63b89e65",
+    "repository": "https://github.com/chromium/chromium.git"
+  },
+  "legacy_port": {
+    "revision": "9938ec7216f0c08c45f0cef4a007d887095aca79",
+    "tag": "1303823",
+    "repository": "https://github.com/blueboxd/chromium-legacy.git"
+  },
+  "legacy_dependencies": [
+    {
+      "name": "skia",
+      "path": "third_party/skia",
+      "repository": "https://github.com/blueboxd/skia.git",
+      "revision": "37374e40dd2d18ddea6db306027723ec54e69ed0",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "angle",
+      "path": "third_party/angle",
+      "repository": "https://github.com/blueboxd/angle.git",
+      "revision": "4a79a903f668090a9e22cf883d7f927a930f8c25",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "dawn",
+      "path": "third_party/dawn",
+      "repository": "https://github.com/blueboxd/dawn.git",
+      "revision": "7527065847a27c9ddabe4a0b481bba4be38313af",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "swiftshader",
+      "path": "third_party/swiftshader",
+      "repository": "https://github.com/blueboxd/swiftshader.git",
+      "revision": "5be5b24517c99dc89afd26daeb2fe37583eabd30",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "vulkan",
+      "path": "third_party/vulkan_memory_allocator",
+      "repository": "https://github.com/blueboxd/vulkan_memory_allocator.git",
+      "revision": "7d4301b4f92f3f770b307ad3fac743cea2a44701",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "webrtc",
+      "path": "third_party/webrtc",
+      "repository": "https://github.com/blueboxd/webrtc.git",
+      "revision": "ef113f3085639aa86279e32cae7df32abd59a063",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "libcxx",
+      "path": "third_party/libc++/src",
+      "repository": "https://github.com/blueboxd/libcxx.git",
+      "revision": "21184a5987c0a871f7a6722658dfac0ca93de98e",
+      "status": "reference_only_not_ported_to_159"
+    },
+    {
+      "name": "boringssl",
+      "path": "third_party/boringssl/src",
+      "repository": "https://github.com/blueboxd/boringssl.git",
+      "revision": "d34dfb3be6ee12c36d505c9abe0787809d3da044",
+      "status": "reference_only_not_ported_to_159"
+    }
+  ]
+}
