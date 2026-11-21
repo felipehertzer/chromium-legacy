@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "patches": [
+    {
+      "path": "third_party/libc++/src",
+      "revision": "def01bd012f56d2fd8f5e2dc75dc28a846ab9cdb",
+      "patch": "patches/libcxx-aligned-allocation.patch"
+    }
+  ]
+}

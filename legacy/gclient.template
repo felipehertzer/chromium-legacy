@@ -1,0 +1,17 @@
+solutions = [
+  {
+    "name": "src",
+    "url": "https://github.com/felipehertzer/chromium-legacy.git",
+    "deps_file": "DEPS",
+    "managed": False,
+    "custom_deps": {},
+    "custom_vars": {
+      "checkout_configuration": "small",
+      "checkout_pgo_profiles": False,
+      "checkout_js_coverage_modules": False,
+    },
+  },
+]
+target_os = ["mac"]
+target_os_only = True
+target_cpu = ["x64"]

@@ -4,6 +4,7 @@
 
 #include "base/apple/scoped_mach_port.h"
 
+#include "base/apple/legacy_mach_port.h"
 #include "base/apple/mach_logging.h"
 
 namespace base::apple {
@@ -37,19 +38,24 @@ void PortSetTraits::Free(mach_port_t port) {
 bool CreateMachPort(ScopedMachReceiveRight* receive,
                     ScopedMachSendRight* send,
                     std::optional<mach_port_msgcount_t> queue_limit) {
-  mach_port_options_t options{};
-  options.flags = (send != nullptr ? MPO_INSERT_SEND_RIGHT : 0);
-
-  if (queue_limit.has_value()) {
-    options.flags |= MPO_QLIMIT;
-    options.mpl.mpl_qlimit = *queue_limit;
+  kern_return_t kr;
+  if (mach_port_construct) {
+    mach_port_options_t options{};
+    options.flags = (send != nullptr ? MPO_INSERT_SEND_RIGHT : 0);
+    if (queue_limit.has_value()) {
+      options.flags |= MPO_QLIMIT;
+      options.mpl.mpl_qlimit = *queue_limit;
+    }
+    kr = mach_port_construct(mach_task_self(), &options, 0,
+                             ScopedMachReceiveRight::Receiver(*receive).get());
+  } else {
+    kr = internal::CreateLegacyMachPort(
+        mach_task_self(), send != nullptr,
+        queue_limit.has_value() ? &*queue_limit : nullptr,
+        ScopedMachReceiveRight::Receiver(*receive).get());
   }
-
-  kern_return_t kr =
-      mach_port_construct(mach_task_self(), &options, 0,
-                          ScopedMachReceiveRight::Receiver(*receive).get());
   if (kr != KERN_SUCCESS) {
-    MACH_LOG(ERROR, kr) << "mach_port_construct";
+    MACH_LOG(ERROR, kr) << "CreateMachPort";
     return false;
   }
 

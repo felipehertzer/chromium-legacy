@@ -30,9 +30,9 @@
 #include <cerrno>
 #endif
 
-#if PA_BUILDFLAG(IS_APPLE)
+#if PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
 #include <os/lock.h>
-#endif  // PA_BUILDFLAG(IS_APPLE)
+#endif  // PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
 
 #if PA_BUILDFLAG(IS_FUCHSIA)
 #include <lib/sync/mutex.h>
@@ -65,7 +65,7 @@ class LockMetricsRecorderInterface;
 // benchmarks. Instead this implements a simple non-recursive mutex on top of:
 // - Linux   : futex()
 // - Windows : SRWLock
-// - MacOS   : os_unfair_lock
+// - MacOS   : os_unfair_lock (pthread mutexes for pre-10.12 targets)
 // - POSIX   : pthread_mutex_trylock()
 //
 // The main difference between this and a libc implementation is that it only
@@ -143,7 +143,7 @@ class PA_LOCKABLE PA_COMPONENT_EXPORT(PARTITION_ALLOC) SpinningMutex {
 #endif  // PA_BUILDFLAG(ENABLE_PARTITION_LOCK_PRIORITY_INHERITANCE)
 #elif PA_BUILDFLAG(IS_WIN)
   PA_CHROME_SRWLOCK lock_ = SRWLOCK_INIT;
-#elif PA_BUILDFLAG(IS_APPLE)
+#elif PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
   os_unfair_lock unfair_lock_ = OS_UNFAIR_LOCK_INIT;
 #elif PA_BUILDFLAG(IS_POSIX)
   pthread_mutex_t lock_ = PTHREAD_MUTEX_INITIALIZER;
@@ -275,7 +275,7 @@ PA_ALWAYS_INLINE void SpinningMutex::Release() {
   ::ReleaseSRWLockExclusive(reinterpret_cast<PSRWLOCK>(&lock_));
 }
 
-#elif PA_BUILDFLAG(IS_APPLE)
+#elif PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
 
 PA_ALWAYS_INLINE bool SpinningMutex::Try() {
   return os_unfair_lock_trylock(&unfair_lock_);

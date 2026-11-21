@@ -1,0 +1,18 @@
+diff --git a/src/include/aligned_alloc.h b/src/include/aligned_alloc.h
+index 2b69a34..af064a5 100644
+--- a/src/include/aligned_alloc.h
++++ b/src/include/aligned_alloc.h
+@@ -30,8 +30,11 @@ inline _LIBCPP_HIDE_FROM_ABI void* __libcpp_aligned_alloc(std::size_t __alignmen
+ #  ifdef _WIN32
+   return ::_aligned_malloc(__size, __alignment);
+ 
+-// Android only provides aligned_alloc when targeting API 28 or higher.
+-#  elif !defined(__ANDROID__) || __ANDROID_API__ >= 28
++// Android provides aligned_alloc from API 28, macOS from 10.15. Older
++// deployment targets use posix_memalign, including legacy binaries on new Macs.
++#  elif (!defined(__ANDROID__) || __ANDROID_API__ >= 28) &&                              \
++      (!defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) ||                       \
++       __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101500)
+   // aligned_alloc() requires that __size is a multiple of __alignment,
+   // but for C++ [new.delete.general], only states "if the value of an
+   // alignment argument passed to any of these functions is not a valid

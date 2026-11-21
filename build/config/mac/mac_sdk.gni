@@ -37,6 +37,10 @@ declare_args() {
   # `mac_deployment_target` version.
   mac_min_system_version = "13.0"
 
+  # Native tools run only on the build host and are not shipped. During an
+  # Intel legacy cross-build, keep ARM host tools on Chromium's supported ABI.
+  mac_host_deployment_target = "13.0"
+
   # Path to a specific version of the Mac SDK, not including a slash at the end.
   # If empty, the path to the lowest version greater than or equal to
   # `mac_sdk_min` is used.

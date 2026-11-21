@@ -62,7 +62,10 @@ config("runtime_library") {
 
   # TODO(https://crbug.com/442128549): see if we can convince upstream rust to
   # add an -isysroot flag instead.
-  rustenv = [ "SDKROOT=" + rebase_path(sysroot, root_build_dir) ]
+  rustenv = [
+    "SDKROOT=" + rebase_path(sysroot, root_build_dir),
+    "MACOSX_DEPLOYMENT_TARGET=$mac_deployment_target",
+  ]
 }
 
 # On Mac, this is used for everything except static libraries.

@@ -54,6 +54,16 @@ static_assert(sizeof(void*) != 8, "");
   (PA_BUILDFLAG(IS_LINUX) || PA_BUILDFLAG(IS_CHROMEOS) || \
    PA_BUILDFLAG(IS_ANDROID))
 
+// Legacy macOS builds use the allocation-free POSIX mutex implementation.
+// Keep the unfair-lock ABI for targets that can rely on macOS 10.12 or later.
+#if PA_BUILDFLAG(IS_APPLE) &&                                   \
+    (!defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) || \
+     __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200)
+#define PA_CONFIG_USE_APPLE_UNFAIR_LOCK() 1
+#else
+#define PA_CONFIG_USE_APPLE_UNFAIR_LOCK() 0
+#endif
+
 // Need TLS support.
 #define PA_CONFIG_THREAD_CACHE_SUPPORTED() \
   (PA_BUILDFLAG(IS_POSIX) || PA_BUILDFLAG(IS_WIN) || PA_BUILDFLAG(IS_FUCHSIA))

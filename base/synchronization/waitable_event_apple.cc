@@ -26,17 +26,9 @@ WaitableEvent::WaitableEvent(ResetPolicy reset_policy,
                              InitialState initial_state)
     : policy_(reset_policy),
       signal_estimate_(initial_state == InitialState::SIGNALED) {
-  mach_port_options_t options{};
-  options.flags = MPO_INSERT_SEND_RIGHT;
-  options.mpl.mpl_qlimit = 1;
-
-  mach_port_t name;
-  kern_return_t kr =
-      mach_port_construct(mach_task_self(), &options, /*context=*/0, &name);
-  MACH_CHECK(kr == KERN_SUCCESS, kr) << "mach_port_construct";
-
-  receive_right_ = new ReceiveRight(name);
-  send_right_.reset(name);
+  apple::ScopedMachReceiveRight receive;
+  CHECK(apple::CreateMachPort(&receive, &send_right_, /*queue_limit=*/1));
+  receive_right_ = new ReceiveRight(receive.release());
 
   if (initial_state == InitialState::SIGNALED) {
     Signal();

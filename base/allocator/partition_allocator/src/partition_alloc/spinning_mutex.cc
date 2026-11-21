@@ -101,12 +101,15 @@ void SpinningMutex::SetLockMetricsRecorderForTesting(
 }
 
 void SpinningMutex::Reinit() {
-#if !PA_BUILDFLAG(IS_APPLE)
+#if PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
+  unfair_lock_ = OS_UNFAIR_LOCK_INIT;
+#elif PA_BUILDFLAG(IS_APPLE)
+  // A forked child must not inherit a mutex owned by a parent thread.
+  lock_ = PTHREAD_MUTEX_INITIALIZER;
+#else
   // On most platforms, no need to re-init the lock, can just unlock it.
   Release();
-#else
-  unfair_lock_ = OS_UNFAIR_LOCK_INIT;
-#endif  // PA_BUILDFLAG(IS_APPLE)
+#endif
 }
 
 void SpinningMutex::AcquireSpinThenBlock() {
@@ -296,7 +299,7 @@ void SpinningMutex::LockSlow() {
   ::AcquireSRWLockExclusive(reinterpret_cast<PSRWLOCK>(&lock_));
 }
 
-#elif PA_BUILDFLAG(IS_APPLE)
+#elif PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
 
 // TODO(verwaest): We should use the constants from the header, but they aren't
 // exposed until macOS 15. See their definition here:
@@ -311,9 +314,9 @@ void SpinningMutex::LockSlow() {
 typedef uint32_t os_unfair_lock_options_t;
 
 extern "C" {
-void __attribute__((weak))
-os_unfair_lock_lock_with_options(os_unfair_lock* lock,
-                                 os_unfair_lock_options_t);
+void __attribute__((weak)) os_unfair_lock_lock_with_options(
+    os_unfair_lock* lock,
+    os_unfair_lock_options_t);
 }
 
 void SpinningMutex::LockSlow() {

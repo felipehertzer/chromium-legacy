@@ -2140,6 +2140,8 @@ component("base") {
       "apple/dispatch_source.h",
       "apple/foundation_util.h",
       "apple/foundation_util.mm",
+      "apple/legacy_mach_port.cc",
+      "apple/legacy_mach_port.h",
       "apple/mach_logging.cc",
       "apple/mach_logging.h",
       "apple/osstatus_logging.h",

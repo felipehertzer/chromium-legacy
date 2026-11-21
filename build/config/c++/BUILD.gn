@@ -79,6 +79,12 @@ config("runtime_library") {
       "-isystem" + rebase_path("$libcxxabi_prefix/include", root_build_dir),
     ]
 
+    if (is_apple) {
+      # The in-tree libc++ provides the aligned new/delete operators. They do
+      # not depend on the deployment target's system libc++ implementation.
+      cflags_cc += [ "-faligned-allocation" ]
+    }
+
     cflags_objcc = cflags_cc
 
     # Make sure we don't link against the system libstdc++ or libc++.

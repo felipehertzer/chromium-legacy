@@ -100,9 +100,19 @@ constexpr inline uintptr_t kTombstoneMask = ~kTombstone;
 // enforce both `sizeof(ThreadCache) <= kThreadCacheStorageSize` and
 // `kThreadCacheStorageSize - sizeof(ThreadCache) <= 8`, so any change to
 // `sizeof(ThreadCache)` triggers a compile-time failure pointing here.
+#if PA_BUILDFLAG(IS_MAC) && !PA_CONFIG(USE_APPLE_UNFAIR_LOCK)
+// The baseline reserves an 8-byte-aligned unfair lock. Legacy builds embed a
+// larger pthread mutex inside SchedulerLoopQuarantineBranch::lock_.
+constexpr inline size_t kLegacyMacMutexStorageOverhead =
+    sizeof(SpinningMutex) - sizeof(uint64_t);
+#else
+constexpr inline size_t kLegacyMacMutexStorageOverhead = 0;
+#endif
+
 #if PA_BUILDFLAG(HAS_64_BIT_POINTERS)
 constexpr inline size_t kThreadCacheStorageSize =
-    1392 + (PA_BUILDFLAG(ENABLE_PARTITION_LOCK_PRIORITY_INHERITANCE) ? 8 : 0) +
+    1392 + kLegacyMacMutexStorageOverhead +
+    (PA_BUILDFLAG(ENABLE_PARTITION_LOCK_PRIORITY_INHERITANCE) ? 8 : 0) +
     ((PA_BUILDFLAG(EXPENSIVE_DCHECKS_ARE_ON) ||
       PA_BUILDFLAG(ENABLE_PARTITION_LOCK_REENTRANCY_CHECK))
          ? 8

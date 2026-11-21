@@ -13,6 +13,7 @@
 #include "partition_alloc/partition_alloc_base/compiler_specific.h"
 
 #if PA_BUILDFLAG(IS_MAC)
+#include <stdlib.h>
 #include <sys/random.h>
 #elif PA_BUILDFLAG(IS_APPLE)
 #include <CommonCrypto/CommonRandom.h>
@@ -20,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
 #include <cerrno>
 
 #include "partition_alloc/partition_alloc_base/files/file_util.h"
@@ -87,7 +89,11 @@ namespace partition_alloc::internal::base {
 // `output_length` bytes.
 PA_UNSAFE_BUFFER_USAGE void RandBytes(void* output, size_t output_length) {
 #if PA_BUILDFLAG(IS_MAC)
-  PA_BASE_CHECK(getentropy(output, output_length) == 0);
+  if (__builtin_available(macOS 10.12, *)) {
+    PA_BASE_CHECK(getentropy(output, output_length) == 0);
+  } else {
+    arc4random_buf(output, output_length);
+  }
 #elif PA_BUILDFLAG(IS_APPLE)
   PA_BASE_CHECK(CCRandomGenerateBytes(output, output_length) == kCCSuccess);
 #else
