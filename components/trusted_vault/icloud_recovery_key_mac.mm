@@ -68,6 +68,7 @@ NSData* EncodePrivateKey(
   return [NSData dataWithBytes:bytes.data() length:bytes.size()];
 }
 
+API_AVAILABLE(macos(10.9))
 NSMutableDictionary* GetDefaultQuery(std::string_view keychain_access_group,
                                      std::string_view keychain_service) {
   return [NSMutableDictionary dictionaryWithDictionary:@{
@@ -83,42 +84,46 @@ NSMutableDictionary* GetDefaultQuery(std::string_view keychain_access_group,
 std::vector<std::unique_ptr<trusted_vault::SecureBoxKeyPair>>
 RetrieveKeysInternal(std::string_view keychain_access_group,
                      std::string_view keychain_service) {
-  NSDictionary* query =
-      GetDefaultQuery(keychain_access_group, keychain_service);
-  [query setValuesForKeysWithDictionary:@{
-    CFToNSPtrCast(kSecMatchLimit) : CFToNSPtrCast(kSecMatchLimitAll),
-    CFToNSPtrCast(kSecReturnData) : @YES,
-    CFToNSPtrCast(kSecReturnRef) : @YES,
-    CFToNSPtrCast(kSecReturnAttributes) : @YES,
-  }];
-  base::apple::ScopedCFTypeRef<CFTypeRef> result;
-  OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
-      NSToCFPtrCast(query), result.InitializeInto());
-  std::vector<std::unique_ptr<trusted_vault::SecureBoxKeyPair>> ret;
-  if (status == errSecItemNotFound) {
-    return ret;
-  }
-  if (status != errSecSuccess) {
-    LOG(ERROR) << "Could not retrieve iCloud recovery key: " << status;
-    return ret;
-  }
-  CFArrayRef items = base::apple::CFCastStrict<CFArrayRef>(result.get());
-  ret.reserve(CFArrayGetCount(items));
-  for (CFIndex i = 0; i < CFArrayGetCount(items); ++i) {
-    CFDictionaryRef item = base::apple::CFCastStrict<CFDictionaryRef>(
-        CFArrayGetValueAtIndex(items, i));
-    CFDataRef key = base::apple::CFCastStrict<CFDataRef>(
-        CFDictionaryGetValue(item, kSecValueData));
-    std::unique_ptr<trusted_vault::SecureBoxKeyPair> key_pair =
-        trusted_vault::SecureBoxKeyPair::CreateByPrivateKeyImport(
-            base::apple::CFDataToSpan(key));
-    if (!key_pair) {
-      LOG(ERROR) << "iCloud recovery key is corrupted, skipping";
-      continue;
+  if (@available(macOS 10.9, *)) {
+    NSDictionary* query =
+        GetDefaultQuery(keychain_access_group, keychain_service);
+    [query setValuesForKeysWithDictionary:@{
+      CFToNSPtrCast(kSecMatchLimit) : CFToNSPtrCast(kSecMatchLimitAll),
+      CFToNSPtrCast(kSecReturnData) : @YES,
+      CFToNSPtrCast(kSecReturnRef) : @YES,
+      CFToNSPtrCast(kSecReturnAttributes) : @YES,
+    }];
+    base::apple::ScopedCFTypeRef<CFTypeRef> result;
+    OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
+        NSToCFPtrCast(query), result.InitializeInto());
+    std::vector<std::unique_ptr<trusted_vault::SecureBoxKeyPair>> ret;
+    if (status == errSecItemNotFound) {
+      return ret;
     }
-    ret.emplace_back(std::move(key_pair));
+    if (status != errSecSuccess) {
+      LOG(ERROR) << "Could not retrieve iCloud recovery key: " << status;
+      return ret;
+    }
+    CFArrayRef items = base::apple::CFCastStrict<CFArrayRef>(result.get());
+    ret.reserve(CFArrayGetCount(items));
+    for (CFIndex i = 0; i < CFArrayGetCount(items); ++i) {
+      CFDictionaryRef item = base::apple::CFCastStrict<CFDictionaryRef>(
+          CFArrayGetValueAtIndex(items, i));
+      CFDataRef key = base::apple::CFCastStrict<CFDataRef>(
+          CFDictionaryGetValue(item, kSecValueData));
+      std::unique_ptr<trusted_vault::SecureBoxKeyPair> key_pair =
+          trusted_vault::SecureBoxKeyPair::CreateByPrivateKeyImport(
+              base::apple::CFDataToSpan(key));
+      if (!key_pair) {
+        LOG(ERROR) << "iCloud recovery key is corrupted, skipping";
+        continue;
+      }
+      ret.emplace_back(std::move(key_pair));
+    }
+    return ret;
   }
-  return ret;
+  // Never substitute local keys for an unavailable iCloud Keychain.
+  return {};
 }
 
 }  // namespace
@@ -177,25 +182,29 @@ std::unique_ptr<ICloudRecoveryKey> ICloudRecoveryKey::CreateForTest() {
 std::unique_ptr<ICloudRecoveryKey> ICloudRecoveryKey::CreateAndStoreKeySlowly(
     trusted_vault::SecurityDomainId security_domain_id,
     std::string_view keychain_access_group) {
-  std::unique_ptr<trusted_vault::SecureBoxKeyPair> key =
-      trusted_vault::SecureBoxKeyPair::GenerateRandom();
+  if (@available(macOS 10.9, *)) {
+    std::unique_ptr<trusted_vault::SecureBoxKeyPair> key =
+        trusted_vault::SecureBoxKeyPair::GenerateRandom();
 
-  NSMutableDictionary* attributes = GetDefaultQuery(
-      keychain_access_group, GetKeychainService(security_domain_id));
-  [attributes setValuesForKeysWithDictionary:@{
-    CFToNSPtrCast(kSecAttrAccessible) :
-        CFToNSPtrCast(kSecAttrAccessibleAfterFirstUnlock),
-    CFToNSPtrCast(kSecAttrAccount) : EncodePublicKey(key->public_key()),
-    CFToNSPtrCast(kSecValueData) : EncodePrivateKey(key->private_key()),
-  }];
-  OSStatus result = crypto::apple::KeychainV2::GetInstance().ItemAdd(
-      NSToCFPtrCast(attributes),
-      /*result=*/nil);
-  if (result != errSecSuccess) {
-    LOG(ERROR) << "Could not store iCloud recovery key: " << result;
-    return nullptr;
+    NSMutableDictionary* attributes = GetDefaultQuery(
+        keychain_access_group, GetKeychainService(security_domain_id));
+    [attributes setValuesForKeysWithDictionary:@{
+      CFToNSPtrCast(kSecAttrAccessible) :
+          CFToNSPtrCast(kSecAttrAccessibleAfterFirstUnlock),
+      CFToNSPtrCast(kSecAttrAccount) : EncodePublicKey(key->public_key()),
+      CFToNSPtrCast(kSecValueData) : EncodePrivateKey(key->private_key()),
+    }];
+    OSStatus result = crypto::apple::KeychainV2::GetInstance().ItemAdd(
+        NSToCFPtrCast(attributes),
+        /*result=*/nil);
+    if (result != errSecSuccess) {
+      LOG(ERROR) << "Could not store iCloud recovery key: " << result;
+      return nullptr;
+    }
+    return base::WrapUnique(new ICloudRecoveryKey(std::move(key)));
   }
-  return base::WrapUnique(new ICloudRecoveryKey(std::move(key)));
+  // Never substitute local keys for an unavailable iCloud Keychain.
+  return nullptr;
 }
 
 // static

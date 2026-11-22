@@ -129,6 +129,15 @@ or replaces a Chromium 159 dependency.
   remains alive independently of the window delegate and releases its captures
   when the modal session ends. Lion window registrations use ARC-zeroing weak
   keys, since its old NSMapTable weak options only provide non-retained pointers.
+- The native background component downloader requires 10.11, including its
+  task-enumeration API. Older systems keep the Chromium network-fetcher backend;
+  missing native sessions never enter the background downloader. iCloud recovery
+  keys require synchronized Keychain support on 10.9; earlier systems return
+  unavailable without substituting local keys or dropping access-group policy.
+- OS-backed enterprise SSO requests fail before NSURLSession is available on
+  10.9. Existing origin, redirect, size, and allowed-header checks stay in place.
+  Before 10.15, HTTP header lookup uses ASCII case-insensitive names and rejects
+  ambiguous case variants and non-string values.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -176,6 +185,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Secure archives, normal and forced old initializers | 11 checks each | 11 checks each |
 | Native sheets, normal and forced old APIs | 10 checks each | 10 checks each |
 | ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
+| HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -188,7 +198,7 @@ An additional symbol audit compares the probes with the **actual Lion 10.7.5
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
-weak-key ownership, timers, atomics, and forced C++ runtime probes have no missing required symbols
+weak-key ownership, HTTP headers, timers, atomics, and forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
@@ -203,7 +213,10 @@ extraction. These checks do not start VoiceOver or validate assistive-technology
 navigation in the full browser.
 The VideoToolbox checks create and release a real native H.264 software session,
 validate OS capability exports and production format dictionaries. They do not
-encode/decode frames or validate hardware video playback.
+encode/decode frames or validate hardware video playback. The HTTP header checks
+use local response objects and malformed dictionaries; they do not authenticate
+to an SSO provider. Background component downloads and iCloud recovery keys have
+compiler verification only and still need full-browser integration tests.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -224,6 +237,7 @@ legacy/test_media_platform.sh
 legacy/test_bluetooth_platform.sh
 legacy/test_accessibility_platform.sh
 legacy/test_secure_archive.sh
+legacy/test_http_header.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_sheet.sh
 legacy/test_weak_key_map.sh

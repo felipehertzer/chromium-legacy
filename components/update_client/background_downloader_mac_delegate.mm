@@ -120,7 +120,8 @@
 
 - (void)URLSession:(NSURLSession*)session
                           task:(NSURLSessionTask*)task
-    didFinishCollectingMetrics:(NSURLSessionTaskMetrics*)metrics {
+    didFinishCollectingMetrics:(NSURLSessionTaskMetrics*)metrics
+    API_AVAILABLE(macos(10.12)) {
   _callback_runner->PostTask(
       FROM_HERE,
       base::BindOnce(_metrics_collected_callback,

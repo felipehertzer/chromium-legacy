@@ -69,9 +69,11 @@ scoped_refptr<CrxDownloader> CrxDownloaderFactoryChromium::MakeCrxDownloader(
           nullptr, network_fetcher_factory_, prod_id);
   if (background_download_enabled) {
 #if BUILDFLAG(IS_MAC)
-    return base::MakeRefCounted<BackgroundDownloader>(
-        url_fetcher_downloader, background_downloader_shared_session_,
-        background_sequence_);
+    if (background_downloader_shared_session_) {
+      return base::MakeRefCounted<BackgroundDownloader>(
+          url_fetcher_downloader, background_downloader_shared_session_,
+          background_sequence_);
+    }
 #elif BUILDFLAG(IS_WIN)
     scoped_refptr<CrxDownloader> bits_downloader =
         base::MakeRefCounted<BackgroundDownloader>(url_fetcher_downloader,

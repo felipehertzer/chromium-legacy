@@ -29,6 +29,7 @@ using UpdateClientDelegateMetricsCollectedCallback =
 using UpdateClientDelegateDownloadProgressCallback =
     base::RepeatingCallback<void(const GURL&)>;
 
+API_AVAILABLE(macos(10.9))
 COMPONENT_EXPORT(BACKGROUND_DOWNLOADER_DELEGATE)
 @interface UpdateClientDownloadDelegate
     : NSObject <NSURLSessionDownloadDelegate>

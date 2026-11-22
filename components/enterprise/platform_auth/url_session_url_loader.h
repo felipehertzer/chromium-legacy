@@ -93,7 +93,8 @@ class COMPONENT_EXPORT(ENTERPRISE_PLATFORM_AUTH) URLSessionURLLoader
       mojo::PendingRemote<network::mojom::URLLoaderClient> client_info_remote,
       base::TimeDelta timeout = kTimeout);
 
-  void OnRequestComplete(NSURLResponse* response, NSData* data);
+  void OnRequestComplete(NSURLResponse* response, NSData* data)
+      API_AVAILABLE(macos(10.9));
 
   void OnRequestFailed(SSORequestFailReason reason);
 
@@ -108,19 +109,18 @@ class COMPONENT_EXPORT(ENTERPRISE_PLATFORM_AUTH) URLSessionURLLoader
   void RecordFailureMetrics(SSORequestFailReason reason);
 
   inline void SetAttachProtocolCallbackForTesting(
-      base::OnceCallback<void(NSURLSessionConfiguration*)> callback) {
+      base::OnceCallback<void(id)> callback) API_AVAILABLE(macos(10.9)) {
     CHECK_IS_TEST();
     attach_protocol_callback_for_testing_ = std::move(callback);
   }
-  base::OnceCallback<void(NSURLSessionConfiguration*)>
-      attach_protocol_callback_for_testing_;
+  base::OnceCallback<void(id)> attach_protocol_callback_for_testing_;
   friend URLSessionURLLoaderTest;
 
   static constexpr base::TimeDelta kTimeout = base::Seconds(30);
 
   mojo::Receiver<network::mojom::URLLoader> receiver_{this};
   mojo::Remote<network::mojom::URLLoaderClient> client_;
-  NSURLSessionTask* task_ = nil;
+  NSURLSessionTask* task_ API_AVAILABLE(macos(10.9)) = nil;
   base::TimeTicks request_start_;
   url::Origin request_initiator_;
 

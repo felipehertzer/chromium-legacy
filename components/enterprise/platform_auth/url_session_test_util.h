@@ -83,7 +83,8 @@ class COMPONENT_EXPORT(ENTERPRISE_PLATFORM_AUTH) ResponseConfig {
 //   [task resume];
 COMPONENT_EXPORT(ENTERPRISE_PLATFORM_AUTH)
 void AttachProtocolToSessionForTesting(ResponseConfig&& config,
-                                       NSURLSessionConfiguration* session);
+                                       id session)
+    API_AVAILABLE(macos(10.9));
 
 static constexpr char kTestBody[] = R"JSON(
 {"request_body": "data"}

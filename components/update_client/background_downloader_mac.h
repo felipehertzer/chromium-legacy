@@ -68,6 +68,7 @@ class BackgroundDownloader : public CrxDownloader {
   base::WeakPtrFactory<BackgroundDownloader> weak_ptr_factory_{this};
 };
 
+// Returns null before 10.11; the factory retains its network-fetcher backend.
 scoped_refptr<BackgroundDownloaderSharedSession>
 MakeBackgroundDownloaderSharedSession(
     scoped_refptr<base::SequencedTaskRunner> background_sequence,

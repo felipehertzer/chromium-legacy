@@ -118,7 +118,7 @@ NSURL* NSURLWithGURL(const GURL& url) {
 
 namespace update_client {
 
-class BackgroundDownloaderSharedSessionImpl {
+class API_AVAILABLE(macos(10.11)) BackgroundDownloaderSharedSessionImpl {
  public:
   BackgroundDownloaderSharedSessionImpl(const base::FilePath& download_cache,
                                         const std::string& session_identifier)
@@ -552,7 +552,7 @@ base::OnceClosure BackgroundDownloader::DoStartDownload(
 
 // BackgroundDownloaderSharedSessionProxy manages an implementation bound to a
 // background sequence.
-class BackgroundDownloaderSharedSessionProxy
+class API_AVAILABLE(macos(10.11)) BackgroundDownloaderSharedSessionProxy
     : public BackgroundDownloaderSharedSession {
  public:
   BackgroundDownloaderSharedSessionProxy(
@@ -584,8 +584,13 @@ MakeBackgroundDownloaderSharedSession(
     scoped_refptr<base::SequencedTaskRunner> background_sequence,
     const base::FilePath& download_cache,
     const std::string& session_identifier) {
-  return base::MakeRefCounted<BackgroundDownloaderSharedSessionProxy>(
-      background_sequence, download_cache, session_identifier);
+  // This implementation queries all NSURLSession tasks, available since 10.11.
+  // Older systems use the ordinary Chromium network downloader in the factory.
+  if (@available(macOS 10.11, *)) {
+    return base::MakeRefCounted<BackgroundDownloaderSharedSessionProxy>(
+        background_sequence, download_cache, session_identifier);
+  }
+  return nullptr;
 }
 
 }  // namespace update_client

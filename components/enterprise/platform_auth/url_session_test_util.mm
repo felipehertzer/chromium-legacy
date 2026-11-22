@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "base/apple/foundation_util.h"
 #include "base/check.h"
 #include "base/check_is_test.h"
 #include "base/check_op.h"
@@ -166,9 +167,9 @@ namespace url_session_test_util {
 // class association mechanism.
 // ResponseConfig is wrapped with an Objective-C holder, which then is
 // associated with the protocol class.
-void AttachProtocolToSessionForTesting(
-    ResponseConfig&& config,
-    NSURLSessionConfiguration* session_config) {
+void AttachProtocolToSessionForTesting(ResponseConfig&& config, id session) {
+  NSURLSessionConfiguration* session_config =
+      base::apple::ObjCCastStrict<NSURLSessionConfiguration>(session);
   Class base_class = [PlatformAuthStubNSURLProtocol class];
 
   // The class name has to be unique.

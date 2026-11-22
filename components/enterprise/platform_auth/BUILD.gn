@@ -23,6 +23,7 @@ component("enterprise_platform_auth") {
   deps = [
     "//base",
     "//components/policy/core/common",
+    "//legacy:platform_support",
     "//services/network/public/mojom",
   ]
 

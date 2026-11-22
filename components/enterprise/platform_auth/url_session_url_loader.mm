@@ -29,6 +29,7 @@
 // Helper class to enforce same-origin policies on redirects.
 // URLSession's block-based API does not expose redirect handling, so a
 // delegate must be used.
+API_AVAILABLE(macos(10.9))
 @interface URLSessionRedirectEnforcer : NSObject <NSURLSessionTaskDelegate>
 - (instancetype)initWithAllowedOrigin:(url::Origin)origin;
 @end
@@ -76,8 +77,10 @@ constexpr base::ByteSize kDataSizeLimit = base::KiB(128);
 URLSessionURLLoader::URLSessionURLLoader() = default;
 
 URLSessionURLLoader::~URLSessionURLLoader() {
-  if (task_) {
-    [task_ cancel];
+  if (@available(macOS 10.9, *)) {
+    if (task_) {
+      [task_ cancel];
+    }
   }
 }
 
@@ -102,18 +105,22 @@ void URLSessionURLLoader::CreateAndStartForTesting(  // IN-TEST
   // more details.
   URLSessionURLLoader* url_loader = new URLSessionURLLoader();
 
-  url_session_test_util::ResponseConfig config;
-  config.body = url_session_test_util::kTestBody;
-  if (request.request_initiator.has_value()) {
-    config.headers.emplace_back("Access-Control-Allow-Origin",
-                                request.request_initiator.value().Serialize());
+  if (@available(macOS 10.9, *)) {
+    url_session_test_util::ResponseConfig config;
+    config.body = url_session_test_util::kTestBody;
+    if (request.request_initiator.has_value()) {
+      config.headers.emplace_back(
+          "Access-Control-Allow-Origin",
+          request.request_initiator.value().Serialize());
+    }
+    for (const auto& header :
+         url_session_test_util::kTestServerResponseHeaders) {
+      config.headers.emplace_back(header);
+    }
+    url_loader->SetAttachProtocolCallbackForTesting(  // IN-TEST
+        base::BindOnce(url_session_test_util::AttachProtocolToSessionForTesting,
+                       std::move(config)));
   }
-  for (const auto& header : url_session_test_util::kTestServerResponseHeaders) {
-    config.headers.emplace_back(header);
-  }
-  url_loader->SetAttachProtocolCallbackForTesting(  // IN-TEST
-      base::BindOnce(url_session_test_util::AttachProtocolToSessionForTesting,
-                     std::move(config)));
 
   url_loader->Start(request, std::move(loader), std::move(client_info));
 }
@@ -164,64 +171,73 @@ void URLSessionURLLoader::Start(
 
   request_initiator_ = request.request_initiator.value();
 
-  NSURLRequest* ns_request =
-      url_session_helper::ConvertResourceRequest(request, timeout);
-  // To enforce same-origin policies on redirects, we must create a specific
-  // session with a delegate that intercepts redirects.
-  // Ephemeral session acts like a default session but doesn't write anything
-  // to disk.
-  URLSessionRedirectEnforcer* bridge = [[URLSessionRedirectEnforcer alloc]
-      initWithAllowedOrigin:request.request_initiator.value()];
-  NSURLSessionConfiguration* config =
-      [NSURLSessionConfiguration ephemeralSessionConfiguration];
-  if (attach_protocol_callback_for_testing_) {
-    CHECK_IS_TEST();
-    std::move(attach_protocol_callback_for_testing_).Run(config);
+  if (@available(macOS 10.9, *)) {
+    NSURLRequest* ns_request =
+        url_session_helper::ConvertResourceRequest(request, timeout);
+    // To enforce same-origin policies on redirects, we must create a specific
+    // session with a delegate that intercepts redirects.
+    // Ephemeral session acts like a default session but doesn't write anything
+    // to disk.
+    URLSessionRedirectEnforcer* bridge = [[URLSessionRedirectEnforcer alloc]
+        initWithAllowedOrigin:request.request_initiator.value()];
+    NSURLSessionConfiguration* config =
+        [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    if (attach_protocol_callback_for_testing_) {
+      CHECK_IS_TEST();
+      std::move(attach_protocol_callback_for_testing_).Run(config);
+    }
+    NSURLSession* session = [NSURLSession sessionWithConfiguration:config
+                                                          delegate:bridge
+                                                     delegateQueue:nil];
+
+    scoped_refptr<base::SequencedTaskRunner> task_runner =
+        base::SequencedTaskRunner::GetCurrentDefault();
+    auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
+    // This completionHandler will run on Apple's network thread.
+    // It captures task_runner and weak_ptr by copy.
+    task_ = [session
+        dataTaskWithRequest:ns_request
+          completionHandler:^(NSData* data, NSURLResponse* response,
+                              NSError* error) {
+            if (error) {
+              LOG_POLICY(ERROR, EXTENSIBLE_SSO)
+                  << "[OktaEnterpriseSSO] URLSession request failed with code: "
+                  << error.code;
+              const SSORequestFailReason reason =
+                  error.code == NSURLErrorTimedOut
+                      ? SSORequestFailReason::kTimeout
+                      : SSORequestFailReason::kOsError;
+              task_runner->PostTask(
+                  FROM_HERE,
+                  base::BindOnce(&URLSessionURLLoader::OnRequestFailed,
+                                 weak_ptr, reason));
+            } else if (!response) {
+              // Happens when the redirect is interrupted.
+              LOG_POLICY(ERROR, EXTENSIBLE_SSO)
+                  << "[OktaEnterpriseSSO] URLSession completion handler "
+                     "received "
+                     "no error but response was nil. This was most likely "
+                     "caused "
+                     "by a blocked corss-origin redirect.";
+              task_runner->PostTask(
+                  FROM_HERE,
+                  base::BindOnce(&URLSessionURLLoader::OnRequestFailed,
+                                 weak_ptr,
+                                 SSORequestFailReason::kCorsViolation));
+            } else {
+              task_runner->PostTask(
+                  FROM_HERE,
+                  base::BindOnce(&URLSessionURLLoader::OnRequestComplete,
+                                 weak_ptr, response, data));
+            }
+          }];
+
+    // Starts the request asynchronously.
+    [task_ resume];
+  } else {
+    // Do not substitute a transport that cannot supply the OS SSO context.
+    OnRequestFailed(SSORequestFailReason::kOsError);
   }
-  NSURLSession* session = [NSURLSession sessionWithConfiguration:config
-                                                        delegate:bridge
-                                                   delegateQueue:nil];
-
-  scoped_refptr<base::SequencedTaskRunner> task_runner =
-      base::SequencedTaskRunner::GetCurrentDefault();
-  auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
-  // This completionHandler will run on Apple's network thread.
-  // It captures task_runner and weak_ptr by copy.
-  task_ = [session
-      dataTaskWithRequest:ns_request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          if (error) {
-            LOG_POLICY(ERROR, EXTENSIBLE_SSO)
-                << "[OktaEnterpriseSSO] URLSession request failed with code: "
-                << error.code;
-            const SSORequestFailReason reason =
-                error.code == NSURLErrorTimedOut
-                    ? SSORequestFailReason::kTimeout
-                    : SSORequestFailReason::kOsError;
-            task_runner->PostTask(
-                FROM_HERE, base::BindOnce(&URLSessionURLLoader::OnRequestFailed,
-                                          weak_ptr, reason));
-          } else if (!response) {
-            // Happens when the redirect is interrupted.
-            LOG_POLICY(ERROR, EXTENSIBLE_SSO)
-                << "[OktaEnterpriseSSO] URLSession completion handler received "
-                   "no error but response was nil. This was most likely caused "
-                   "by a blocked corss-origin redirect.";
-            task_runner->PostTask(
-                FROM_HERE,
-                base::BindOnce(&URLSessionURLLoader::OnRequestFailed, weak_ptr,
-                               SSORequestFailReason::kCorsViolation));
-          } else {
-            task_runner->PostTask(
-                FROM_HERE,
-                base::BindOnce(&URLSessionURLLoader::OnRequestComplete,
-                               weak_ptr, response, data));
-          }
-        }];
-
-  // Starts the request asynchronously.
-  [task_ resume];
 }
 
 void URLSessionURLLoader::OnRequestComplete(NSURLResponse* response,
@@ -299,7 +315,9 @@ void URLSessionURLLoader::OnRequestComplete(NSURLResponse* response,
 void URLSessionURLLoader::OnRequestFailed(SSORequestFailReason reason) {
   RecordFailureMetrics(reason);
 
-  task_ = nil;
+  if (@available(macOS 10.9, *)) {
+    task_ = nil;
+  }
   if (!client_) {
     // At this point, it is possible for |client_| to have disconnected, but
     // the callback might still be pending in the task queue.

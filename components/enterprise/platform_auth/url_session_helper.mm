@@ -21,6 +21,7 @@
 #include "base/strings/to_string.h"
 #include "base/time/time.h"
 #include "components/policy/core/common/policy_logger.h"
+#include "legacy/apple/http_header.h"
 #include "net/base/apple/url_conversions.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_status_code.h"
@@ -150,8 +151,8 @@ NSData* ConvertRequestBody(
 // Access-Control-Allow-Origin header in the `http_response`.
 std::vector<std::string> ParseAccessControlAllowHeaders(
     NSHTTPURLResponse* http_response) {
-  NSString* ns_access_control_allow_headers =
-      [http_response valueForHTTPHeaderField:@("access-control-allow-headers")];
+  NSString* ns_access_control_allow_headers = chromium_legacy::HTTPHeaderField(
+      http_response, @"access-control-allow-headers");
 
   std::vector<std::string> allowed_headers;
   if (ns_access_control_allow_headers) {
@@ -191,8 +192,8 @@ scoped_refptr<net::HttpResponseHeaders> ConvertNSHTTPURLResponseToHeaders(
   // Verify the Access-Control-Allow-Origin header is a wildcard or matches the
   // request_initiator.
   // valueForHTTPHeaderField is NOT case-sensitive.
-  NSString* ns_allowed_origin =
-      [http_response valueForHTTPHeaderField:@("access-control-allow-origin")];
+  NSString* ns_allowed_origin = chromium_legacy::HTTPHeaderField(
+      http_response, @"access-control-allow-origin");
   if (!ns_allowed_origin) {
     LOG_POLICY(ERROR, EXTENSIBLE_SSO)
         << "[OktaEnterpriseSSO] SSO URL request response rejected because the "
@@ -220,8 +221,8 @@ scoped_refptr<net::HttpResponseHeaders> ConvertNSHTTPURLResponseToHeaders(
   std::vector<std::pair<std::string, std::string>> headers_to_add;
   headers_to_add.reserve(allowed_headers.size());
   for (const std::string& allowed_header : allowed_headers) {
-    NSString* ns_value = [http_response
-        valueForHTTPHeaderField:base::SysUTF8ToNSString(allowed_header)];
+    NSString* ns_value = chromium_legacy::HTTPHeaderField(
+        http_response, base::SysUTF8ToNSString(allowed_header));
     if (!ns_value) {
       continue;
     }
