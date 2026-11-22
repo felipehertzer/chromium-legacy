@@ -40,8 +40,10 @@ base::Value AXNSObjectToBaseValue(id value, const AXTreeIndexerMac* indexer) {
   }
 
   // AXCustomContent
-  if (AXCustomContent* custom_content = ObjCCast<AXCustomContent>(value)) {
-    return base::Value(AXCustomContentToBaseValue(custom_content));
+  if (@available(macOS 11.0, *)) {
+    if (AXCustomContent* custom_content = ObjCCast<AXCustomContent>(value)) {
+      return base::Value(AXCustomContentToBaseValue(custom_content));
+    }
   }
 
   // NSDictionary
@@ -124,9 +126,11 @@ base::Value AXNSObjectToBaseValue(id value, const AXTreeIndexerMac* indexer) {
   }
 
   // NSAccessibilityCustomAction: expose the action name.
-  if (NSAccessibilityCustomAction* custom_action =
-          ObjCCast<NSAccessibilityCustomAction>(value)) {
-    return base::Value(base::SysNSStringToUTF16(custom_action.name));
+  if (@available(macOS 10.13, *)) {
+    if (NSAccessibilityCustomAction* custom_action =
+            ObjCCast<NSAccessibilityCustomAction>(value)) {
+      return base::Value(base::SysNSStringToUTF16(custom_action.name));
+    }
   }
 
   // Scalar value.
@@ -272,7 +276,7 @@ base::DictValue AXNSDictionaryToBaseValue(NSDictionary* dictionary_value,
   for (NSString* key in dictionary_value) {
     dictionary.SetByDottedPath(
         base::SysNSStringToUTF8(key),
-        AXNSObjectToBaseValue(dictionary_value[key], indexer));
+        AXNSObjectToBaseValue([dictionary_value objectForKey:key], indexer));
   }
   return dictionary;
 }

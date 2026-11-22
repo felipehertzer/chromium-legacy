@@ -32,7 +32,7 @@ TypeConverter<ui::mojom::blink::AttributedStringPtr, CFAttributedStringRef>::
         [ns_attributed_string attributesAtIndex:i
                                  effectiveRange:&effective_range];
 
-    NSFont* font = ns_attributes[NSFontAttributeName];
+    NSFont* font = [ns_attributes objectForKey:NSFontAttributeName];
     blink::String font_name;
     float font_point_size;
     // Only encode the attributes if the filtered set contains font information.

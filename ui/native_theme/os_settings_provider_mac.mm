@@ -75,15 +75,17 @@ OsSettingsProviderMac::OsSettingsProviderMac(PriorityLevel priority_level)
                     }];
   }
 
-  objc_members_->display_accessibility_notification_token =
-      [NSWorkspace.sharedWorkspace.notificationCenter
-          addObserverForName:
-              NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
-                      object:nil
-                       queue:nil
-                  usingBlock:^(NSNotification* notification) {
-                    provider->NotifyOnSettingsChanged();
-                  }];
+  if (@available(macOS 10.10, *)) {
+    objc_members_->display_accessibility_notification_token =
+        [NSWorkspace.sharedWorkspace.notificationCenter
+            addObserverForName:
+                NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification* notification) {
+                      provider->NotifyOnSettingsChanged();
+                    }];
+  }
 
   objc_members_->scroller_style_notification_token =
       [[NSNotificationCenter defaultCenter]
@@ -106,15 +108,19 @@ OsSettingsProviderMac::OsSettingsProviderMac(PriorityLevel priority_level)
                     }
                   }];
 
-  objc_members_->appearance_observer =
-      [[EffectiveAppearanceObserver alloc] initWithHandler:^{
-        provider->NotifyOnSettingsChanged();
-      }];
+  if (@available(macOS 10.14, *)) {
+    objc_members_->appearance_observer =
+        [[EffectiveAppearanceObserver alloc] initWithHandler:^{
+          provider->NotifyOnSettingsChanged();
+        }];
+  }
 }
 
 OsSettingsProviderMac::~OsSettingsProviderMac() {
-  [NSWorkspace.sharedWorkspace.notificationCenter
-      removeObserver:objc_members_->display_accessibility_notification_token];
+  if (objc_members_->display_accessibility_notification_token) {
+    [NSWorkspace.sharedWorkspace.notificationCenter
+        removeObserver:objc_members_->display_accessibility_notification_token];
+  }
   [NSNotificationCenter.defaultCenter
       removeObserver:objc_members_->scroller_style_notification_token];
   [NSNotificationCenter.defaultCenter
@@ -127,29 +133,42 @@ OsSettingsProviderMac::~OsSettingsProviderMac() {
 
 NativeTheme::PreferredColorScheme OsSettingsProviderMac::PreferredColorScheme()
     const {
-  NSAppearanceName appearance =
-      [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[
-        NSAppearanceNameAqua, NSAppearanceNameDarkAqua
-      ]];
-  return [appearance isEqual:NSAppearanceNameDarkAqua]
-             ? NativeTheme::PreferredColorScheme::kDark
-             : NativeTheme::PreferredColorScheme::kLight;
+  if (@available(macOS 10.14, *)) {
+    NSAppearanceName appearance =
+        [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[
+          NSAppearanceNameAqua, NSAppearanceNameDarkAqua
+        ]];
+    return [appearance isEqual:NSAppearanceNameDarkAqua]
+               ? NativeTheme::PreferredColorScheme::kDark
+               : NativeTheme::PreferredColorScheme::kLight;
+  }
+  return NativeTheme::PreferredColorScheme::kLight;
 }
 
 NativeTheme::PreferredContrast OsSettingsProviderMac::PreferredContrast()
     const {
-  return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldIncreaseContrast
-             ? NativeTheme::PreferredContrast::kMore
-             : OsSettingsProvider::PreferredContrast();
+  if (@available(macOS 10.10, *)) {
+    if (NSWorkspace.sharedWorkspace
+            .accessibilityDisplayShouldIncreaseContrast) {
+      return NativeTheme::PreferredContrast::kMore;
+    }
+  }
+  return OsSettingsProvider::PreferredContrast();
 }
 
 bool OsSettingsProviderMac::PrefersReducedTransparency() const {
-  return NSWorkspace.sharedWorkspace
-      .accessibilityDisplayShouldReduceTransparency;
+  if (@available(macOS 10.10, *)) {
+    return NSWorkspace.sharedWorkspace
+        .accessibilityDisplayShouldReduceTransparency;
+  }
+  return OsSettingsProvider::PrefersReducedTransparency();
 }
 
 bool OsSettingsProviderMac::PrefersInvertedColors() const {
-  return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldInvertColors;
+  if (@available(macOS 10.12, *)) {
+    return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldInvertColors;
+  }
+  return OsSettingsProvider::PrefersInvertedColors();
 }
 
 bool OsSettingsProviderMac::PrefersOverlayScrollbars() const {

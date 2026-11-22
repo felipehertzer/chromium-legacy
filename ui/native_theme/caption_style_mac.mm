@@ -18,6 +18,7 @@
 namespace ui {
 
 namespace {
+namespace __attribute__((availability(macos, introduced=10.9))) media_accessibility {
 
 constexpr auto kUserDomain = kMACaptionAppearanceDomainUser;
 
@@ -168,22 +169,28 @@ std::string GetMAWindowRadiusAsCSSNumberInPixels() {
   return MaybeAddCSSImportant(base::StringPrintf("%fpx", radius), important);
 }
 
+}  // namespace media_accessibility
 }  // namespace
 
 // static
 std::optional<CaptionStyle> CaptionStyle::FromSystemSettings() {
-  CaptionStyle style;
+  if (@available(macOS 10.9, *)) {
+    using namespace media_accessibility;
+    CaptionStyle style;
 
-  style.text_color = GetMAForegroundColorAndOpacityAsCSSColor();
-  style.background_color = GetMABackgroundColorAndOpacityAsCSSColor();
-  style.text_size = GetMATextScaleAsCSSPercent();
-  style.text_shadow = GetMATextEdgeStyleAsCSSShadow();
-  style.window_color = GetMAWindowColorAsCSSColor();
-  style.window_radius = GetMAWindowRadiusAsCSSNumberInPixels();
+    style.text_color = GetMAForegroundColorAndOpacityAsCSSColor();
+    style.background_color = GetMABackgroundColorAndOpacityAsCSSColor();
+    style.text_size = GetMATextScaleAsCSSPercent();
+    style.text_shadow = GetMATextEdgeStyleAsCSSShadow();
+    style.window_color = GetMAWindowColorAsCSSColor();
+    style.window_radius = GetMAWindowRadiusAsCSSNumberInPixels();
 
-  GetMAFontAsCSSFontSpecifiers(&style.font_family, &style.font_variant);
+    GetMAFontAsCSSFontSpecifiers(&style.font_family, &style.font_variant);
 
-  return style;
+    return style;
+  }
+  // Before MediaAccessibility, captions use the existing WebVTT defaults.
+  return std::nullopt;
 }
 
 }  // namespace ui

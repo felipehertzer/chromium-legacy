@@ -9,6 +9,10 @@
 #include "build/build_config.h"
 #include "ui/accessibility/ax_features.mojom-features.h"
 
+#if BUILDFLAG(IS_MAC)
+#include <AvailabilityMacros.h>
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/android_info.h"
 #endif
@@ -432,8 +436,14 @@ bool IsScreenAITestModeEnabled() {
 // Enables the switchover to the newer NSAccessibility property-based API.
 BASE_FEATURE(kMacAccessibilityAPIMigration, base::FEATURE_DISABLED_BY_DEFAULT);
 bool IsMacAccessibilityAPIMigrationEnabled() {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  // This build uses NSObject and Chromium's existing attribute-based API.
+  // NSAccessibilityElement's property defaults are not available on Lion.
+  return false;
+#else
   return base::FeatureList::IsEnabled(
       ::features::kMacAccessibilityAPIMigration);
+#endif
 }
 
 BASE_FEATURE(kMacAccessibilityOptimizeChildrenChanged,

@@ -33,9 +33,107 @@ COMPONENT_EXPORT(AX_PLATFORM)
 @property(nonatomic, readonly) BOOL polite;
 @end
 
+// NSAccessibilityElement does not exist before Yosemite. Builds targeting
+// those systems use Chromium's existing attribute-based accessibility API and
+// its own accessors on NSObject. The experimental property-API migration is
+// disabled for this build in accessibility_features.cc. Modern deployments
+// retain NSAccessibilityElement and its complete default implementations.
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+using AXCocoaSortDirection = NSInteger;
+COMPONENT_EXPORT(AX_PLATFORM)
+@interface AXPlatformNodeCocoa : NSObject <AXCustomContentProvider>
+
+// These accessors belong to Chromium and are also used internally by the
+// attribute-based implementation. Their implementation does not require the
+// OS's 10.10 NSAccessibility protocol or its inherited default properties.
+- (BOOL)accessibilityIsIgnored;
+- (id)accessibilityHitTest:(NSPoint)point;
+- (BOOL)accessibilityNotifiesWhenDestroyed;
+- (id)accessibilityFocusedUIElement;
+- (NSArray*)accessibilityActionNames;
+- (void)accessibilityPerformAction:(NSString*)action;
+- (BOOL)accessibilityPerformPress;
+- (BOOL)accessibilityPerformShowMenu;
+- (BOOL)accessibilityPerformDecrement;
+- (BOOL)accessibilityPerformIncrement;
+- (BOOL)accessibilityPerformConfirm;
+- (NSArray*)accessibilityAttributeNames;
+- (NSArray*)accessibilityParameterizedAttributeNames;
+- (void)accessibilitySetValue:(id)value forAttribute:(NSString*)attribute;
+- (id)accessibilityAttributeValue:(NSString*)attribute;
+- (id)accessibilityAttributeValue:(NSString*)attribute
+                     forParameter:(id)parameter;
+- (BOOL)isAccessibilityExpanded;
+- (BOOL)isAccessibilityFocused;
+- (NSArray*)accessibilityChildren;
+- (NSArray*)accessibilityChildrenInNavigationOrder;
+- (BOOL)isAccessibilityElement;
+- (BOOL)isAccessibilityEnabled;
+- (NSRect)accessibilityFrame;
+- (NSString*)accessibilityHelp;
+- (NSString*)accessibilityLabel;
+- (NSArray*)accessibilityLinkedUIElements;
+- (NSString*)accessibilityTitle;
+- (id)accessibilityValue;
+- (void)setAccessibilityValue:(id)value;
+- (BOOL)isAccessibilitySelectorAllowed:(SEL)selector;
+- (id)accessibilityParent;
+- (BOOL)isAccessibilityRequired;
+- (NSAccessibilityRole)accessibilityRole;
+- (NSAccessibilitySubrole)accessibilitySubrole;
+- (NSString*)accessibilityRoleDescription;
+- (NSArray*)accessibilitySelectedRows;
+- (NSArray*)accessibilityColumnHeaderUIElements;
+- (id)accessibilityHeader;
+- (NSInteger)accessibilityColumnCount;
+- (NSInteger)accessibilityRowCount;
+- (NSArray*)accessibilityRowHeaderUIElements;
+- (NSArray*)accessibilityColumns;
+- (NSArray*)accessibilityRows;
+- (NSInteger)accessibilitySortDirection;
+- (id)accessibilityDisclosedByRow;
+- (id)accessibilityDisclosedRows;
+- (NSInteger)accessibilityDisclosureLevel;
+- (BOOL)isAccessibilityDisclosed;
+- (void)setAccessibilityFocused:(BOOL)isFocused;
+- (NSInteger)accessibilityIndex;
+- (NSInteger)accessibilityInsertionPointLineNumber;
+- (NSInteger)accessibilityNumberOfCharacters;
+- (NSString*)accessibilityPlaceholderValue;
+- (NSString*)accessibilitySelectedText;
+- (void)setAccessibilitySelectedText:(NSString*)text;
+- (NSRange)accessibilitySelectedTextRange;
+- (void)setAccessibilitySelectedTextRange:(NSRange)range;
+- (NSArray*)accessibilitySelectedTextRanges;
+- (NSRange)accessibilityVisibleCharacterRange;
+- (NSString*)accessibilityStringForRange:(NSRange)range;
+- (NSInteger)accessibilityLineForIndex:(NSInteger)index;
+- (NSAttributedString*)accessibilityAttributedStringForRange:(NSRange)range;
+- (NSRange)accessibilityRangeForIndex:(NSInteger)index;
+- (NSRange)accessibilityStyleRangeForIndex:(NSInteger)index;
+- (NSRange)accessibilityRangeForLine:(NSInteger)line;
+- (NSRange)accessibilityRangeForPosition:(NSPoint)point;
+- (NSNumber*)accessibilitySelected;
+- (NSURL*)accessibilityURL;
+- (id)accessibilityTabs;
+- (id)accessibilitySplitters;
+- (id)accessibilityToolbarButton;
+- (id)accessibilityScrollBar:(ax::mojom::State)state;
+- (id)accessibilityHorizontalScrollBar;
+- (id)accessibilityVerticalScrollBar;
+- (id)accessibilityTitleUIElement;
+- (id)accessibilityCellForColumn:(NSInteger)column row:(NSInteger)row;
+- (NSRange)accessibilityColumnIndexRange;
+- (NSRange)accessibilityRowIndexRange;
+- (NSArray*)accessibilityVisibleColumns;
+- (NSArray*)accessibilityVisibleCells;
+- (NSArray*)accessibilityVisibleRows;
+#else
+using AXCocoaSortDirection = NSAccessibilitySortDirection;
 COMPONENT_EXPORT(AX_PLATFORM)
 @interface AXPlatformNodeCocoa
     : NSAccessibilityElement <NSAccessibility, AXCustomContentProvider>
+#endif
 
 - (NSArray*)accessibilityCustomContent;
 

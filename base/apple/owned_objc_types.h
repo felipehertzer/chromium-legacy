@@ -14,7 +14,12 @@
 #endif
 
 #if BUILDFLAG(IS_MAC)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101000
+// Before Yosemite, Mac accessibility is an informal protocol on NSObject.
+GENERATE_STRONG_OBJC_TYPE(NSObject)
+#else
 GENERATE_STRONG_OBJC_PROTOCOL(NSAccessibility)
+#endif
 GENERATE_STRONG_OBJC_TYPE(NSCursor)
 GENERATE_STRONG_OBJC_TYPE(NSEvent)
 #elif BUILDFLAG(IS_IOS)

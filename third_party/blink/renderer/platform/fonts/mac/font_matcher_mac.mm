@@ -390,7 +390,7 @@ ScopedCFTypeRef<CTFontRef> BestStyleMatchForFamilyNS(
   CTFontSymbolicTraits chosen_traits;
   int chosen_weight;
   for (NSArray* font_info in fonts) {
-    NSString* candidate_name = font_info[0];
+    NSString* candidate_name = [font_info objectAtIndex:0];
     ScopedCFTypeRef<CTFontRef> candidate_font;
     std::optional<int> resolved_weight;
     if (use_os2_weight && candidate_name) {
@@ -402,7 +402,7 @@ ScopedCFTypeRef<CTFontRef> BestStyleMatchForFamilyNS(
             CTFontCopyTraits(candidate_font.get()));
         if (NSDictionary* traits = CFToNSPtrCast(traits_ref.get())) {
           if (NSNumber* weight_num = ObjCCast<NSNumber>(
-                  traits[CFToNSPtrCast(kCTFontWeightTrait)])) {
+                  [traits objectForKey:CFToNSPtrCast(kCTFontWeightTrait)])) {
             resolved_weight = ToCssFontWeight(weight_num.floatValue);
           }
         }
@@ -411,12 +411,12 @@ ScopedCFTypeRef<CTFontRef> BestStyleMatchForFamilyNS(
     int candidate_weight = kNormalWeightValue;
     if (resolved_weight) {
       candidate_weight = *resolved_weight;
-    } else if (NSNumber* candidate_weight_ns = font_info[2]) {
+    } else if (NSNumber* candidate_weight_ns = [font_info objectAtIndex:2]) {
       candidate_weight = AppKitToCssFontWeight(candidate_weight_ns.intValue);
     }
 
     CTFontSymbolicTraits candidate_traits = kCTNormalTraitsValue;
-    NSNumber* candidate_traits_ns = font_info[3];
+    NSNumber* candidate_traits_ns = [font_info objectAtIndex:3];
     if (candidate_traits_ns) {
       candidate_traits = candidate_traits_ns.intValue & kImportantTraitsMask;
     }
@@ -497,15 +497,15 @@ ScopedCFTypeRef<CTFontRef> BestStyleMatchForFamily(
     NSDictionary* traits =
         CFToNSPtrCast(CFCast<CFDictionaryRef>(traits_ref.get()));
     if (traits) {
-      NSNumber* candidate_traits_num =
-          ObjCCast<NSNumber>(traits[CFToNSPtrCast(kCTFontSymbolicTrait)]);
+      NSNumber* candidate_traits_num = ObjCCast<NSNumber>(
+          [traits objectForKey:CFToNSPtrCast(kCTFontSymbolicTrait)]);
       if (candidate_traits_num) {
         candidate_traits = candidate_traits_num.intValue;
       }
 
       if (!os2_weight) {
-        NSNumber* candidate_weight_num =
-            ObjCCast<NSNumber>(traits[CFToNSPtrCast(kCTFontWeightTrait)]);
+        NSNumber* candidate_weight_num = ObjCCast<NSNumber>(
+            [traits objectForKey:CFToNSPtrCast(kCTFontWeightTrait)]);
         if (candidate_weight_num) {
           candidate_weight = ToCssFontWeight(candidate_weight_num.floatValue);
         }
@@ -609,21 +609,21 @@ void ClampVariationValuesToFontAcceptableRange(
     }
 
     NSNumber* axis_id = ObjCCast<NSNumber>(
-        axis[CFToNSPtrCast(kCTFontVariationAxisIdentifierKey)]);
+        [axis objectForKey:CFToNSPtrCast(kCTFontVariationAxisIdentifierKey)]);
     if (!axis_id) {
       continue;
     }
     int axis_id_value = axis_id.intValue;
 
     NSNumber* axis_min_number = ObjCCast<NSNumber>(
-        axis[CFToNSPtrCast(kCTFontVariationAxisMinimumValueKey)]);
+        [axis objectForKey:CFToNSPtrCast(kCTFontVariationAxisMinimumValueKey)]);
     if (!axis_min_number) {
       continue;
     }
     double axis_min_value = axis_min_number.doubleValue;
 
     NSNumber* axis_max_number = ObjCCast<NSNumber>(
-        axis[CFToNSPtrCast(kCTFontVariationAxisMaximumValueKey)]);
+        [axis objectForKey:CFToNSPtrCast(kCTFontVariationAxisMaximumValueKey)]);
     if (!axis_max_number) {
       continue;
     }
@@ -675,10 +675,12 @@ ScopedCFTypeRef<CTFontRef> MatchSystemUIFont(FontSelectionValue desired_weight,
 
   NSMutableDictionary* variations = [NSMutableDictionary dictionary];
   if (desired_weight != kNormalWeightValue) {
-    variations[@(kWeightTag)] = @(static_cast<float>(desired_weight));
+    [variations setObject:@(static_cast<float>(desired_weight))
+                   forKey:@(kWeightTag)];
   }
   if (desired_width != kNormalWidthValue) {
-    variations[@(kWidthTag)] = @(static_cast<float>(desired_width));
+    [variations setObject:@(static_cast<float>(desired_width))
+                   forKey:@(kWidthTag)];
   }
 
   NSDictionary* attributes = @{
@@ -877,16 +879,18 @@ NSFont* MatchNSFontFamily(const AtomicString& desired_family_string,
   for (NSArray* font_info in fonts) {
     // Each font is represented by an array of four elements:
 
-    // TODO(https://crbug.com/1442008): The docs say that font_info[0] is the
-    // PostScript name of the font, but it's treated as the full name here.
-    // Either the docs are wrong and we should note that here for future readers
-    // of the code, or the docs are right and we should fix this.
+    // TODO(https://crbug.com/1442008): The docs say that [font_info
+    // objectAtIndex:0] is the PostScript name of the font, but it's treated as
+    // the full name here. Either the docs are wrong and we should note that
+    // here for future readers of the code, or the docs are right and we should
+    // fix this.
     // https://developer.apple.com/documentation/appkit/nsfontmanager/1462316-availablemembersoffontfamily
-    NSString* font_full_name = font_info[0];
-    // font_info[1] is "the part of the font name used in the font panel that's
-    // not the font name". This is not needed.
-    int font_weight = [font_info[2] intValue];
-    NSFontTraitMask font_traits = [font_info[3] unsignedIntValue];
+    NSString* font_full_name = [font_info objectAtIndex:0];
+    // [font_info objectAtIndex:1] is "the part of the font name used in the
+    // font panel that's not the font name". This is not needed.
+    int font_weight = [[font_info objectAtIndex:2] intValue];
+    NSFontTraitMask font_traits =
+        [[font_info objectAtIndex:3] unsignedIntValue];
 
     BOOL new_winner;
     if (!chose_font) {

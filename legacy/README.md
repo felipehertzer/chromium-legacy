@@ -100,6 +100,16 @@ or replaces a Chromium 159 dependency.
   before 10.12. The logger remains independent of libbase, keeps owned crash
   annotations, and preserves the original error when reporting truncation.
   Missing abort-report SPI retains the existing fatal trap behavior.
+- Lion deployment builds keep owning NSObject wrappers and Chromium's existing
+  attribute-based accessibility API. The experimental property-API migration
+  remains disabled in this build; modern deployment targets retain their original
+  NSAccessibilityElement base and defaults. Old search wire keys, notifications,
+  required-field attributes, and locale-aware Unicode casing remain available.
+  Optional custom-content/actions and announcement priorities require their OS APIs.
+- Blink font cascades use the existing CoreText adapter, and its font/calendar
+  code uses the original Foundation selectors. Native appearance observation
+  requires 10.14; system caption preferences require MediaAccessibility/10.9.
+  Earlier systems retain WebVTT defaults and the base theme preferences.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -137,6 +147,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Actual compositor clipping, normal and forced legacy paths | 13 checks each | 13 checks each |
 | Bluetooth UUIDs/identity/state/umbrella binding, normal and forced legacy paths | 15 checks each, Intel and ARM | 15 checks each |
 | Sandbox logging/formatting, normal and forced legacy paths | 8 checks each | 8 checks each |
+| Accessibility announcements/search wire keys/Unicode casing | 72 normal and 70 forced legacy checks, Intel and ARM | 72 normal and 70 forced legacy checks |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -147,13 +158,18 @@ application, SDK overlay preservation, and Mach-O audit behavior.
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
-compositor clipping, Bluetooth, sandbox logging, timers, atomics, and forced C++
-runtime probes have no missing required symbols
+compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode, timers,
+atomics, and forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
 Only the Catalina Mac is available for physical-machine tests.
 The sandbox logging checks exercise diagnostics, not renderer containment.
+The real-node `accessibility_probe` checks Chromium actions, role/name/required
+attributes, native traversal, disabled/read-only policy, and object lifetime.
+Its integration build is in progress; it has not yet been run. The standalone
+platform checks validate data and casing, without starting VoiceOver or testing
+assistive-technology navigation in the browser.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -172,6 +188,7 @@ legacy/test_vpx_timer.sh
 legacy/test_pthreadpool_atomics.sh
 legacy/test_media_platform.sh
 legacy/test_bluetooth_platform.sh
+legacy/test_accessibility_platform.sh
 python3 legacy/test_ml_clocks.py
 # Requires the integration objects and a retained base_probe.rsp:
 python3 legacy/test_clipboard.py

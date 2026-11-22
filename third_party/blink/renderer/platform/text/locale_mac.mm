@@ -130,7 +130,7 @@ const Vector<String>& LocaleMac::MonthLabels() {
     NSArray* array = ShortDateFormatter().monthSymbols;
     if (array.count == 12) {
       for (wtf_size_t i = 0; i < 12; ++i) {
-        month_labels_.push_back(String(array[i]));
+        month_labels_.push_back(String([array objectAtIndex:i]));
       }
     } else {
       std::ranges::copy(kFallbackMonthNames, std::back_inserter(month_labels_));
@@ -145,7 +145,7 @@ const Vector<String>& LocaleMac::WeekDayShortLabels() {
     NSArray* array = ShortDateFormatter().veryShortWeekdaySymbols;
     if (array.count == 7) {
       for (wtf_size_t i = 0; i < 7; ++i) {
-        week_day_short_labels_.push_back(String(array[i]));
+        week_day_short_labels_.push_back(String([array objectAtIndex:i]));
       }
     } else {
       std::ranges::copy(kFallbackWeekdayShortNames,
@@ -257,7 +257,7 @@ const Vector<String>& LocaleMac::ShortMonthLabels() {
     NSArray* array = ShortDateFormatter().shortMonthSymbols;
     if (array.count == 12) {
       for (wtf_size_t i = 0; i < 12; ++i) {
-        short_month_labels_.push_back(array[i]);
+        short_month_labels_.push_back([array objectAtIndex:i]);
       }
     } else {
       std::ranges::copy(kFallbackMonthShortNames,
@@ -274,7 +274,7 @@ const Vector<String>& LocaleMac::StandAloneMonthLabels() {
   if (array.count == 12) {
     stand_alone_month_labels_.reserve(12);
     for (wtf_size_t i = 0; i < 12; ++i) {
-      stand_alone_month_labels_.push_back(array[i]);
+      stand_alone_month_labels_.push_back([array objectAtIndex:i]);
     }
     return stand_alone_month_labels_;
   }
@@ -289,7 +289,7 @@ const Vector<String>& LocaleMac::ShortStandAloneMonthLabels() {
   if (array.count == 12) {
     short_stand_alone_month_labels_.reserve(12);
     for (wtf_size_t i = 0; i < 12; ++i) {
-      short_stand_alone_month_labels_.push_back(array[i]);
+      short_stand_alone_month_labels_.push_back([array objectAtIndex:i]);
     }
     return short_stand_alone_month_labels_;
   }

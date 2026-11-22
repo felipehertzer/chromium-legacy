@@ -45,7 +45,7 @@ class COMPONENT_EXPORT(AX_PLATFORM) AXCallStatementInvoker final {
   // Invoke a property node for a given AXCustomContent.
   AXOptionalNSObject InvokeForAXCustomContent(
       id target,
-      const AXPropertyNode& property_node) const;
+      const AXPropertyNode& property_node) const API_AVAILABLE(macos(11.0));
 
   // Invokes a property node for a given AXElement.
   AXOptionalNSObject InvokeForAXElement(

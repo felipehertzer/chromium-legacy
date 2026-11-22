@@ -31,6 +31,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/trace_event.h"
+#include "legacy/apple/localized_string.h"
 #include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -298,6 +299,8 @@ AccessibilityMatchPredicate PredicateForSearchKey(NSString* searchKey) {
 // Initialize a OneShotAccessibilityTreeSearch object given the parameters
 // passed to AXUIElementCountForSearchPredicate or
 // AXUIElementsForSearchPredicate. Return true on success.
+// Keep the original wire keys, which predate the public 10.12 AppKit symbols:
+// https://chromium.googlesource.com/chromium/src/+/49.0.2623.112/content/browser/accessibility/browser_accessibility_cocoa.mm
 bool InitializeAccessibilityTreeSearch(OneShotAccessibilityTreeSearch* search,
                                        id parameter) {
   NSDictionary* dictionary = ObjCCast<NSDictionary>(parameter);
@@ -307,46 +310,44 @@ bool InitializeAccessibilityTreeSearch(OneShotAccessibilityTreeSearch* search,
 
   BrowserAccessibilityCocoa* startElementParameter =
       ObjCCast<BrowserAccessibilityCocoa>(
-          dictionary[NSAccessibilitySearchCurrentElementKey]);
+          [dictionary objectForKey:@"AXStartElement"]);
   if (startElementParameter) {
     search->SetStartNode([startElementParameter owner]);
   }
 
   bool immediateDescendantsOnly = false;
-  if (NSNumber* immediateDescendantsOnlyParameter =
-          ObjCCast<NSNumber>(dictionary[@"AXImmediateDescendantsOnly"])) {
+  if (NSNumber* immediateDescendantsOnlyParameter = ObjCCast<NSNumber>(
+          [dictionary objectForKey:@"AXImmediateDescendantsOnly"])) {
     immediateDescendantsOnly = immediateDescendantsOnlyParameter.boolValue;
   }
 
   bool onscreenOnly = false;
   // AXVisibleOnly actually means onscreen objects only -- nothing scrolled off.
   if (NSNumber* onscreenOnlyParameter =
-          ObjCCast<NSNumber>(dictionary[@"AXVisibleOnly"])) {
+          ObjCCast<NSNumber>([dictionary objectForKey:@"AXVisibleOnly"])) {
     onscreenOnly = onscreenOnlyParameter.boolValue;
   }
 
   ui::OneShotAccessibilityTreeSearch::Direction direction =
       ui::OneShotAccessibilityTreeSearch::FORWARDS;
   if (NSString* directionParameter =
-          ObjCCast<NSString>(dictionary[NSAccessibilitySearchDirectionKey])) {
-    if ([directionParameter
-            isEqualToString:NSAccessibilitySearchDirectionNext]) {
+          ObjCCast<NSString>([dictionary objectForKey:@"AXDirection"])) {
+    if ([directionParameter isEqualToString:@"AXDirectionNext"]) {
       direction = ui::OneShotAccessibilityTreeSearch::FORWARDS;
-    } else if ([directionParameter
-                   isEqualToString:NSAccessibilitySearchDirectionPrevious]) {
+    } else if ([directionParameter isEqualToString:@"AXDirectionPrevious"]) {
       direction = ui::OneShotAccessibilityTreeSearch::BACKWARDS;
     }
   }
 
   int resultsLimit = kAXResultsLimitNoLimit;
-  if (NSNumber* resultsLimitParameter = ObjCCast<NSNumber>(
-          dictionary[NSAccessibilitySearchResultsLimitKey])) {
+  if (NSNumber* resultsLimitParameter =
+          ObjCCast<NSNumber>([dictionary objectForKey:@"AXResultsLimit"])) {
     resultsLimit = resultsLimitParameter.intValue;
   }
 
   std::string searchText;
   if (NSString* searchTextParameter =
-          ObjCCast<NSString>(dictionary[NSAccessibilitySearchTextKey])) {
+          ObjCCast<NSString>([dictionary objectForKey:@"AXSearchText"])) {
     searchText = base::SysNSStringToUTF8(searchTextParameter);
   }
 
@@ -362,7 +363,7 @@ bool InitializeAccessibilityTreeSearch(OneShotAccessibilityTreeSearch* search,
     search->SetResultLimit(resultsLimit);
   }
 
-  id searchKey = [dictionary objectForKey:NSAccessibilitySearchIdentifiersKey];
+  id searchKey = [dictionary objectForKey:@"AXSearchKey"];
   if (NSString* searchKeyString = ObjCCast<NSString>(searchKey)) {
     AccessibilityMatchPredicate predicate =
         PredicateForSearchKey(searchKeyString);
@@ -660,7 +661,7 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
     }
 
     for (size_t child_index = 0; child_index < child_count; child_index++) {
-      BrowserAccessibilityCocoa* child = _children[child_index];
+      BrowserAccessibilityCocoa* child = [_children objectAtIndex:child_index];
       BrowserAccessibility* browserAccessibilityChild =
           static_cast<BrowserAccessibility*>([child nodeDelegate]);
       if (![child instanceActive] || !browserAccessibilityChild ||
@@ -2728,12 +2729,14 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
     return nil;
   }
 
-  NSString* operationType = ObjCCast<NSString>(dict[@"AXTextOperationType"]);
+  NSString* operationType =
+      ObjCCast<NSString>([dict objectForKey:@"AXTextOperationType"]);
   if (!operationType) {
     return nil;
   }
 
-  NSArray* ranges = ObjCCast<NSArray>(dict[@"AXTextOperationMarkerRanges"]);
+  NSArray* ranges =
+      ObjCCast<NSArray>([dict objectForKey:@"AXTextOperationMarkerRanges"]);
   if (!ranges.count) {
     return nil;
   }
@@ -2743,8 +2746,8 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
 
   if ([operationType isEqualToString:@"TextOperationReplace"] ||
       [operationType isEqualToString:@"TextOperationReplacePreserveCase"]) {
-    replacementStrings =
-        ObjCCast<NSArray>(dict[@"AXTextOperationIndividualReplacementStrings"]);
+    replacementStrings = ObjCCast<NSArray>(
+        [dict objectForKey:@"AXTextOperationIndividualReplacementStrings"]);
     if (replacementStrings) {
       // The count of individual replacement strings must match the count of the
       // provided ranges for a valid text operation request.
@@ -2761,8 +2764,8 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
       // When individual replacement strings aren't provided, we check for a
       // single replacement string that is applied to all of the ranges. This
       // matches WebKit's behavior at the time of writing.
-      NSString* replacementString =
-          ObjCCast<NSString>(dict[@"AXTextOperationReplacementString"]);
+      NSString* replacementString = ObjCCast<NSString>(
+          [dict objectForKey:@"AXTextOperationReplacementString"]);
       if (!replacementString) {
         return nil;
       }
@@ -2781,7 +2784,7 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
     NSMutableArray<NSString*>* resultStrings =
         [[NSMutableArray alloc] initWithCapacity:count];
     for (NSUInteger i = 0; i < count; ++i) {
-      NSString* text = GetTextForTextMarkerRange(ranges[i]);
+      NSString* text = GetTextForTextMarkerRange([ranges objectAtIndex:i]);
       if (text) {
         // Based on WebKit's behavior at the time of writing; when multiple
         // ranges are provided, we return the associated text for each of the
@@ -2806,8 +2809,9 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
   if ([operationType isEqualToString:@"TextOperationReplacePreserveCase"]) {
     return [self applyTextOperationReplacementToRanges:ranges
                                     computeReplacement:^(NSUInteger i) {
-      return replacementStrings[i];
-    }];
+                                      return
+                                          [replacementStrings objectAtIndex:i];
+                                    }];
   }
 
   // Replaces the text at the provided ranges, while modifying the replacement
@@ -2816,81 +2820,123 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
     return [self
         applyTextOperationReplacementToRanges:ranges
                            computeReplacement:^NSString*(NSUInteger i) {
-      NSString* text =
-         GetTextForTextMarkerRange(ranges[i]);
-      if (!text) {
-       return nil;
-      }
+                             NSString* text = GetTextForTextMarkerRange(
+                                 [ranges objectAtIndex:i]);
+                             if (!text) {
+                               return nil;
+                             }
 
-      // Like in WebKit, we adjust the replacement string's case to match that
-      // of the text being replaced, unless the replacement string is all caps
-      // (assumed to be an acronym).
-      //
-      // This is useful for a find-and-replace style operation, where you have
-      // multiple case-insensitive occurrences of a string and want to replace
-      // them a new string.
-      //
-      // For example:
-      //   Original text -> Replacement String == Actual text after replacement
-      //   Hello         -> hey                == Hey           (capitalized)
-      //   Hello         -> hey there          == Hey there     (capitalized)
-      //   hello         -> Hey                == hey           (lowercased)
-      //   hello         -> HEY                == HEY           (unmodified)
-      //   hello         -> hey                == hey           (unmodified)
-      NSString* replacement = replacementStrings[i];
-      if (text.length && replacement.length > 2 &&
-          ![replacement isEqualTo:replacement.localizedUppercaseString]) {
-        NSString* firstChar = [text substringToIndex:1];
-        if ([firstChar isEqualTo:firstChar.localizedUppercaseString]) {
-          // Capitalize the first word when the first char of the existing
-          // text is uppercase.
-          // To correctly handle locale-aware capitalization, we should operate
-          // on grapheme clusters rather than raw UTF-16 code units.
-          // For simplicity, we capitalize the entire first word, which safely
-          // includes the first grapheme cluster.
-          NSRange firstSpace = [replacement
-              rangeOfCharacterFromSet:NSCharacterSet
-                                          .whitespaceAndNewlineCharacterSet];
-          NSUInteger wordEndIndex = (firstSpace.location != NSNotFound)
-                                        ? firstSpace.location
-                                        : replacement.length;
-          NSString* firstWord = [replacement substringToIndex:wordEndIndex];
-          NSString* capitalizedFirstWord = firstWord.localizedCapitalizedString;
-          NSString* rest = (wordEndIndex < replacement.length)
-                               ? [replacement substringFromIndex:wordEndIndex]
-                               : @"";
-          replacement = [capitalizedFirstWord stringByAppendingString:rest];
-        } else {
-          // Lowercase the entire string when the first letter is lowercase.
-          replacement = replacement.localizedLowercaseString;
-        }
-      }
-      return replacement;
-    }];
+                             // Like in WebKit, we adjust the replacement
+                             // string's case to match that of the text being
+                             // replaced, unless the replacement string is all
+                             // caps (assumed to be an acronym).
+                             //
+                             // This is useful for a find-and-replace style
+                             // operation, where you have multiple
+                             // case-insensitive occurrences of a string and
+                             // want to replace them a new string.
+                             //
+                             // For example:
+                             //   Original text -> Replacement String == Actual
+                             //   text after replacement Hello         -> hey ==
+                             //   Hey           (capitalized) Hello         ->
+                             //   hey there          == Hey there (capitalized)
+                             //   hello         -> Hey                == hey
+                             //   (lowercased) hello         -> HEY == HEY
+                             //   (unmodified) hello         -> hey == hey
+                             //   (unmodified)
+                             NSString* replacement =
+                                 [replacementStrings objectAtIndex:i];
+                             if (text.length && replacement.length > 2 &&
+                                 ![replacement
+                                     isEqualTo:
+                                         chromium_legacy::LocalizedCaseString(
+                                             replacement,
+                                             chromium_legacy::StringCase::
+                                                 kUpper)]) {
+                               NSString* firstChar = [text substringToIndex:1];
+                               if ([firstChar
+                                       isEqualTo:
+                                           chromium_legacy::LocalizedCaseString(
+                                               firstChar,
+                                               chromium_legacy::StringCase::
+                                                   kUpper)]) {
+                                 // Capitalize the first word when the first
+                                 // char of the existing text is uppercase. To
+                                 // correctly handle locale-aware
+                                 // capitalization, we should operate on
+                                 // grapheme clusters rather than raw UTF-16
+                                 // code units. For simplicity, we capitalize
+                                 // the entire first word, which safely includes
+                                 // the first grapheme cluster.
+                                 NSRange firstSpace = [replacement
+                                     rangeOfCharacterFromSet:
+                                         NSCharacterSet
+                                             .whitespaceAndNewlineCharacterSet];
+                                 NSUInteger wordEndIndex =
+                                     (firstSpace.location != NSNotFound)
+                                         ? firstSpace.location
+                                         : replacement.length;
+                                 NSString* firstWord = [replacement
+                                     substringToIndex:wordEndIndex];
+                                 NSString* capitalizedFirstWord =
+                                     chromium_legacy::LocalizedCaseString(
+                                         firstWord,
+                                         chromium_legacy::StringCase::kTitle);
+                                 NSString* rest =
+                                     (wordEndIndex < replacement.length)
+                                         ? [replacement
+                                               substringFromIndex:wordEndIndex]
+                                         : @"";
+                                 replacement = [capitalizedFirstWord
+                                     stringByAppendingString:rest];
+                               } else {
+                                 // Lowercase the entire string when the first
+                                 // letter is lowercase.
+                                 replacement =
+                                     chromium_legacy::LocalizedCaseString(
+                                         replacement,
+                                         chromium_legacy::StringCase::kLower);
+                               }
+                             }
+                             return replacement;
+                           }];
   }
 
   // Capitalizes the text at the provided ranges.
   if ([operationType isEqualToString:@"Capitalize"]) {
-    return [self applyTextOperationReplacementToRanges:ranges
-                                    computeReplacement:^(NSUInteger i) {
-      return [GetTextForTextMarkerRange(ranges[i]) localizedCapitalizedString];
-    }];
+    return
+        [self applyTextOperationReplacementToRanges:ranges
+                                 computeReplacement:^(NSUInteger i) {
+                                   return chromium_legacy::LocalizedCaseString(
+                                       GetTextForTextMarkerRange(
+                                           [ranges objectAtIndex:i]),
+                                       chromium_legacy::StringCase::kTitle);
+                                 }];
   }
 
   // Lowercases the text at the provided ranges.
   if ([operationType isEqualToString:@"Lowercase"]) {
-    return [self applyTextOperationReplacementToRanges:ranges
-                                    computeReplacement:^(NSUInteger i) {
-      return [GetTextForTextMarkerRange(ranges[i]) localizedLowercaseString];
-    }];
+    return
+        [self applyTextOperationReplacementToRanges:ranges
+                                 computeReplacement:^(NSUInteger i) {
+                                   return chromium_legacy::LocalizedCaseString(
+                                       GetTextForTextMarkerRange(
+                                           [ranges objectAtIndex:i]),
+                                       chromium_legacy::StringCase::kLower);
+                                 }];
   }
 
   // Uppercases the text at the provided ranges.
   if ([operationType isEqualToString:@"Uppercase"]) {
-    return [self applyTextOperationReplacementToRanges:ranges
-                                    computeReplacement:^(NSUInteger i) {
-      return [GetTextForTextMarkerRange(ranges[i]) localizedUppercaseString];
-    }];
+    return
+        [self applyTextOperationReplacementToRanges:ranges
+                                 computeReplacement:^(NSUInteger i) {
+                                   return chromium_legacy::LocalizedCaseString(
+                                       GetTextForTextMarkerRange(
+                                           [ranges objectAtIndex:i]),
+                                       chromium_legacy::StringCase::kUpper);
+                                 }];
   }
 
   return nil;
@@ -2910,7 +2956,7 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
       [[NSMutableArray alloc] initWithCapacity:count];
 
   for (NSUInteger i = 0; i < count; ++i) {
-    AXRange range = AXTextMarkerRangeToAXRange(ranges[i]);
+    AXRange range = AXTextMarkerRangeToAXRange([ranges objectAtIndex:i]);
     if (range.IsNull()) {
       continue;
     }
@@ -3432,62 +3478,65 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
   return NSAccessibilityActionDescription(action);
 }
 
-- (NSArray<NSAccessibilityCustomAction*>*)accessibilityCustomActions {
-  if (![self instanceActive]) {
-    return nil;
-  }
-
-  if (!_owner->HasState(ax::mojom::State::kHasActions)) {
-    return nil;
-  }
-
-  base::span<const int32_t> action_ids =
-      _owner->GetIntListAttribute(ax::mojom::IntListAttribute::kActionsIds);
-  if (action_ids.empty()) {
-    return nil;
-  }
-
-  NSMutableArray<NSAccessibilityCustomAction*>* custom_actions =
-      [NSMutableArray arrayWithCapacity:action_ids.size()];
-  BrowserAccessibilityManager* manager = _owner->manager();
-
-  for (int32_t target_id : action_ids) {
-    BrowserAccessibility* target = manager->GetFromID(target_id);
-    if (!target) {
-      continue;
+- (NSArray*)accessibilityCustomActions {
+  if (@available(macOS 10.13, *)) {
+    if (![self instanceActive]) {
+      return nil;
     }
 
-    std::u16string name = target->GetNameAsString16();
-    if (name.empty()) {
-      continue;
+    if (!_owner->HasState(ax::mojom::State::kHasActions)) {
+      return nil;
     }
 
-    NSString* action_name = base::SysUTF16ToNSString(name);
-    // Capture target_id by value; re-resolve the target in the handler to
-    // handle tree mutations between action creation and invocation.
-    int32_t captured_target_id = target_id;
-    __weak BrowserAccessibilityCocoa* weak_self = self;
-    NSAccessibilityCustomAction* action = [[NSAccessibilityCustomAction alloc]
-        initWithName:action_name
-             handler:^BOOL {
-               BrowserAccessibilityCocoa* strong_self = weak_self;
-               if (!strong_self || ![strong_self instanceActive]) {
-                 return NO;
-               }
-               BrowserAccessibilityManager* mgr =
-                   strong_self->_owner->manager();
-               BrowserAccessibility* action_target =
-                   mgr->GetFromID(captured_target_id);
-               if (!action_target) {
-                 return NO;
-               }
-               mgr->DoDefaultAction(*action_target);
-               return YES;
-             }];
-    [custom_actions addObject:action];
-  }
+    base::span<const int32_t> action_ids =
+        _owner->GetIntListAttribute(ax::mojom::IntListAttribute::kActionsIds);
+    if (action_ids.empty()) {
+      return nil;
+    }
 
-  return custom_actions.count > 0 ? custom_actions : nil;
+    NSMutableArray<NSAccessibilityCustomAction*>* custom_actions =
+        [NSMutableArray arrayWithCapacity:action_ids.size()];
+    BrowserAccessibilityManager* manager = _owner->manager();
+
+    for (int32_t target_id : action_ids) {
+      BrowserAccessibility* target = manager->GetFromID(target_id);
+      if (!target) {
+        continue;
+      }
+
+      std::u16string name = target->GetNameAsString16();
+      if (name.empty()) {
+        continue;
+      }
+
+      NSString* action_name = base::SysUTF16ToNSString(name);
+      // Capture target_id by value; re-resolve the target in the handler to
+      // handle tree mutations between action creation and invocation.
+      int32_t captured_target_id = target_id;
+      __weak BrowserAccessibilityCocoa* weak_self = self;
+      NSAccessibilityCustomAction* action = [[NSAccessibilityCustomAction alloc]
+          initWithName:action_name
+               handler:^BOOL {
+                 BrowserAccessibilityCocoa* strong_self = weak_self;
+                 if (!strong_self || ![strong_self instanceActive]) {
+                   return NO;
+                 }
+                 BrowserAccessibilityManager* mgr =
+                     strong_self->_owner->manager();
+                 BrowserAccessibility* action_target =
+                     mgr->GetFromID(captured_target_id);
+                 if (!action_target) {
+                   return NO;
+                 }
+                 mgr->DoDefaultAction(*action_target);
+                 return YES;
+               }];
+      [custom_actions addObject:action];
+    }
+
+    return custom_actions.count > 0 ? custom_actions : nil;
+  }
+  return nil;
 }
 
 // Projects the production -accessibilityCustomActions return value to a
@@ -3509,21 +3558,24 @@ bool IsAXCustomActionNamesForTestingProjectionEnabled() {
 // "not applicable" and omits it from baselines, in addition to the
 // enumeration gate.
 - (NSArray<NSString*>*)customActionNamesForTesting {
-  if (!ui::IsAXCustomActionNamesForTestingProjectionEnabled()) {
-    return nil;
+  if (@available(macOS 10.13, *)) {
+    if (!ui::IsAXCustomActionNamesForTestingProjectionEnabled()) {
+      return nil;
+    }
+    NSArray<NSAccessibilityCustomAction*>* actions =
+        [self accessibilityCustomActions];
+    if (actions.count == 0) {
+      return nil;
+    }
+    NSMutableArray<NSString*>* names =
+        [NSMutableArray arrayWithCapacity:actions.count];
+    for (NSAccessibilityCustomAction* action in actions) {
+      CHECK(action.name);
+      [names addObject:action.name];
+    }
+    return names;
   }
-  NSArray<NSAccessibilityCustomAction*>* actions =
-      [self accessibilityCustomActions];
-  if (actions.count == 0) {
-    return nil;
-  }
-  NSMutableArray<NSString*>* names =
-      [NSMutableArray arrayWithCapacity:actions.count];
-  for (NSAccessibilityCustomAction* action in actions) {
-    CHECK(action.name);
-    [names addObject:action.name];
-  }
-  return names;
+  return nil;
 }
 
 // Sets an override value for a specific accessibility attribute.

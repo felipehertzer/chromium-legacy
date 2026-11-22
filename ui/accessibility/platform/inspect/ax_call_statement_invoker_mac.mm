@@ -196,8 +196,10 @@ AXOptionalNSObject AXCallStatementInvoker::InvokeFor(
     return InvokeForDictionary(target, property_node);
   }
 
-  if ([target isKindOfClass:[AXCustomContent class]]) {
-    return InvokeForAXCustomContent(target, property_node);
+  if (@available(macOS 11.0, *)) {
+    if ([target isKindOfClass:[AXCustomContent class]]) {
+      return InvokeForAXCustomContent(target, property_node);
+    }
   }
 
   LOG(ERROR) << "Unexpected target type for " << property_node.ToFlatString();
@@ -206,7 +208,7 @@ AXOptionalNSObject AXCallStatementInvoker::InvokeFor(
 
 AXOptionalNSObject AXCallStatementInvoker::InvokeForAXCustomContent(
     id target,
-    const AXPropertyNode& property_node) const {
+    const AXPropertyNode& property_node) const API_AVAILABLE(macos(11.0)) {
   AXCustomContent* content = target;
 
   if (property_node.name_or_value == "label") {
@@ -425,7 +427,7 @@ AXOptionalNSObject AXCallStatementInvoker::InvokeForArray(
     return AXOptionalNSObject::Error();
   }
 
-  return AXOptionalNSObject(target[*maybe_index]);
+  return AXOptionalNSObject([target objectAtIndex:*maybe_index]);
 }
 
 AXOptionalNSObject AXCallStatementInvoker::InvokeForDictionary(
@@ -439,7 +441,7 @@ AXOptionalNSObject AXCallStatementInvoker::InvokeForDictionary(
 
   NSString* key = PropertyNodeToString(property_node);
   NSDictionary* dictionary = target;
-  return AXOptionalNSObject::NotNullOrError(dictionary[key]);
+  return AXOptionalNSObject::NotNullOrError([dictionary objectForKey:key]);
 }
 
 AXOptionalNSObject AXCallStatementInvoker::InvokeSetAccessibilityFocused(
@@ -834,7 +836,7 @@ NSDictionary* AXCallStatementInvoker::PropertyNodeToDictionary(
       return nil;
     }
 
-    params[key] = value;
+    [params setObject:value forKey:key];
   }
 
   return params;

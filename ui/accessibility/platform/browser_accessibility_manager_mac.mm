@@ -17,6 +17,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/time/time.h"
+#include "legacy/apple/accessibility.h"
 #include "ui/accelerated_widget_mac/accelerated_widget_mac.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_role_properties.h"
@@ -119,11 +120,9 @@ void BrowserAccessibilityManagerMac::FireSourceEvent(
 
 void PostAnnouncementNotification(NSString* announcement,
                                   id element,
-                                  NSAccessibilityPriorityLevel priorityLevel) {
-  NSDictionary* notification_info = @{
-    NSAccessibilityAnnouncementKey : announcement,
-    NSAccessibilityPriorityKey : @(priorityLevel)
-  };
+                                  bool assertive) {
+  NSDictionary* notification_info =
+      chromium_legacy::AccessibilityAnnouncementInfo(announcement, assertive);
   // Trigger VoiceOver speech and show on Braille display, if available.
   // The Braille will only appear for a few seconds, and then will be replaced
   // with the previous announcement.
@@ -256,12 +255,10 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
           // https://chromium-review.googlesource.com/c/chromium/src/+/3257815
           std::string live_status =
               node->GetStringAttribute(ax::mojom::StringAttribute::kLiveStatus);
-          NSAccessibilityPriorityLevel priority_level =
-              live_status == "assertive" ? NSAccessibilityPriorityHigh
-                                         : NSAccessibilityPriorityMedium;
+          bool assertive = live_status == "assertive";
           PostAnnouncementNotification(
               base::SysUTF16ToNSString(wrapper->GetTextContentUTF16()),
-              [root_manager_mac->GetParentView() window], priority_level);
+              [root_manager_mac->GetParentView() window], assertive);
           return;
         }
       }
@@ -481,20 +478,10 @@ void BrowserAccessibilityManagerMac::FireAriaNotificationEvent(
     const std::string& type) {
   CHECK(node);
 
-  auto MapPropertiesToNSAccessibilityPriorityLevel =
-      [&]() -> NSAccessibilityPriorityLevel {
-    switch (priority_property) {
-      case ax::mojom::AriaNotificationPriority::kNormal:
-        return NSAccessibilityPriorityMedium;
-      case ax::mojom::AriaNotificationPriority::kHigh:
-        return NSAccessibilityPriorityHigh;
-    }
-    NOTREACHED();
-  };
-
-  PostAnnouncementNotification(base::SysUTF8ToNSString(announcement),
-                               node->GetNativeViewAccessible().Get(),
-                               MapPropertiesToNSAccessibilityPriorityLevel());
+  PostAnnouncementNotification(
+      base::SysUTF8ToNSString(announcement),
+      node->GetNativeViewAccessible().Get(),
+      priority_property == ax::mojom::AriaNotificationPriority::kHigh);
 }
 
 void BrowserAccessibilityManagerMac::FireNativeMacNotification(
@@ -629,12 +616,12 @@ void BrowserAccessibilityManagerMac::OnSubtreeWillBeReparented(AXTree* tree,
 NSDictionary* BrowserAccessibilityManagerMac::
     GetUserInfoForSelectedTextChangedNotification() {
   NSMutableDictionary* user_info = [NSMutableDictionary dictionary];
-  user_info[NSAccessibilityTextStateSyncKey] = @YES;
-  user_info[NSAccessibilityTextSelectionDirection] =
-      @(AXTextSelectionDirectionUnknown);
-  user_info[NSAccessibilityTextSelectionGranularity] =
-      @(AXTextSelectionGranularityUnknown);
-  user_info[NSAccessibilityTextSelectionChangedFocus] = @YES;
+  [user_info setObject:@YES forKey:NSAccessibilityTextStateSyncKey];
+  [user_info setObject:@(AXTextSelectionDirectionUnknown)
+                forKey:NSAccessibilityTextSelectionDirection];
+  [user_info setObject:@(AXTextSelectionGranularityUnknown)
+                forKey:NSAccessibilityTextSelectionGranularity];
+  [user_info setObject:@YES forKey:NSAccessibilityTextSelectionChangedFocus];
 
   // Try to detect when the text selection changes due to a focus change.
   BrowserAccessibility* focus_object = GetFocus();
@@ -646,18 +633,18 @@ NSDictionary* BrowserAccessibilityManagerMac::
   bool text_changed = !text_edits_.empty();
 
   if (focus_changed == text_changed) {
-    user_info[NSAccessibilityTextStateChangeTypeKey] =
-        @(AXTextStateChangeTypeUnknown);
+    [user_info setObject:@(AXTextStateChangeTypeUnknown)
+                  forKey:NSAccessibilityTextStateChangeTypeKey];
   } else if (focus_changed) {
     // This key is necessary so that VoiceOver also announces information about
     // the element that contains this selection.
-    user_info[NSAccessibilityTextStateChangeTypeKey] =
-        @(AXTextStateChangeTypeSelectionMove);
+    [user_info setObject:@(AXTextStateChangeTypeSelectionMove)
+                  forKey:NSAccessibilityTextStateChangeTypeKey];
   } else if (text_changed) {
     // This key prevents a bug where VoiceOver repeats placeholder
     // information in text inputs while the user is typing.
-    user_info[NSAccessibilityTextStateChangeTypeKey] =
-        @(AXTextStateChangeTypeEdit);
+    [user_info setObject:@(AXTextStateChangeTypeEdit)
+                  forKey:NSAccessibilityTextStateChangeTypeKey];
   }
 
   focus_object = focus_object->PlatformGetLowestPlatformAncestor();
@@ -665,12 +652,13 @@ NSDictionary* BrowserAccessibilityManagerMac::
       ObjCCast<BrowserAccessibilityCocoa>(
           focus_object->GetNativeViewAccessible().Get());
   if (native_focus_object && [native_focus_object instanceActive]) {
-    user_info[NSAccessibilityTextChangeElement] = native_focus_object;
+    [user_info setObject:native_focus_object
+                  forKey:NSAccessibilityTextChangeElement];
 
     id selected_text = [native_focus_object selectedTextMarkerRange];
     if (selected_text) {
-      user_info[CFToNSPtrCast(kAXSelectedTextMarkerRangeAttribute)] =
-          selected_text;
+      [user_info setObject:selected_text
+                    forKey:CFToNSPtrCast(kAXSelectedTextMarkerRangeAttribute)];
     }
   }
 
@@ -697,7 +685,8 @@ BrowserAccessibilityManagerMac::GetUserInfoForValueChangedNotification(
               base::SysUTF16ToNSString(deleted_text)
         }];
     if (edit_text_marker) {
-      change[NSAccessibilityChangeValueStartMarker] = edit_text_marker;
+      [change setObject:edit_text_marker
+                 forKey:NSAccessibilityChangeValueStartMarker];
     }
     [changes addObject:change];
   }
@@ -714,7 +703,8 @@ BrowserAccessibilityManagerMac::GetUserInfoForValueChangedNotification(
               base::SysUTF16ToNSString(inserted_text)
         }];
     if (edit_text_marker) {
-      change[NSAccessibilityChangeValueStartMarker] = edit_text_marker;
+      [change setObject:edit_text_marker
+                 forKey:NSAccessibilityChangeValueStartMarker];
     }
     [changes addObject:change];
   }
@@ -761,7 +751,8 @@ bool BrowserAccessibilityManagerMac::ShouldFireLoadCompleteNotification() {
   }
 
   if ([NSApp isActive]) {
-    return window == [NSApp accessibilityFocusedWindow];
+    return window == [NSApp accessibilityAttributeValue:
+                                NSAccessibilityFocusedWindowAttribute];
   }
 
   // TODO(accessibility): We need a solution to the problem described below.

@@ -42,6 +42,7 @@
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/timer/elapsed_timer.h"
+#include "legacy/apple/font_cascade.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
@@ -132,9 +133,8 @@ ScopedCFTypeRef<CTFontRef> CreateCopyWithCascadeListForLanguage(
     CTFontRef font,
     NSString* language,
     float size) {
-  NSArray* cascade_list =
-      CFToNSOwnershipCast(CTFontCopyDefaultCascadeListForLanguages(
-          font, NSToCFPtrCast(@[ language ])));
+  NSArray* cascade_list = CFToNSOwnershipCast(
+      chromium_legacy::CopyFontCascade(font, NSToCFPtrCast(@[ language ])));
   if (!cascade_list) {
     return ScopedCFTypeRef<CTFontRef>(nullptr);
   }
@@ -197,7 +197,7 @@ ScopedCFTypeRef<CTFontRef> GetSubstituteFont(CTFontRef ct_font,
       IsAppleColorEmojiFont(substitute_font.get())) {
     NSArray* lang_list = @[ @"en" ];
     NSArray* cascade_list =
-        CFToNSOwnershipCast(CTFontCopyDefaultCascadeListForLanguages(
+        CFToNSOwnershipCast(chromium_legacy::CopyFontCascade(
             substitute_font.get(), NSToCFPtrCast(lang_list)));
     NSDictionary* mono_emoji_attributes = @{
       CFToNSPtrCast(kCTFontNameAttribute) : @"Apple Symbols",
@@ -249,7 +249,7 @@ const FontPlatformData* GetAlternateFontPlatformData(
     float weight = kCTNormalWeightValue;
     if (font_traits) {
       NSNumber* weight_num = base::apple::ObjCCast<NSNumber>(
-          font_traits[CFToNSPtrCast(kCTFontWeightTrait)]);
+          [font_traits objectForKey:CFToNSPtrCast(kCTFontWeightTrait)]);
       if (weight_num) {
         weight = weight_num.floatValue;
       }

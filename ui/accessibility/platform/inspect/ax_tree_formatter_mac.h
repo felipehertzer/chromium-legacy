@@ -61,10 +61,9 @@ class COMPONENT_EXPORT(AX_PLATFORM) AXTreeFormatterMac
                      base::DictValue* dict) const;
 
   // Invokes an attribute by a property node.
-  AXOptionalNSObject InvokeAttributeFor(
-      const NSAccessibilityElement* cocoa_node,
-      const AXPropertyNode& property_node,
-      const AXTreeIndexerMac* indexer) const;
+  AXOptionalNSObject InvokeAttributeFor(id cocoa_node,
+                                        const AXPropertyNode& property_node,
+                                        const AXTreeIndexerMac* indexer) const;
 
   base::DictValue PopulateLocalPosition(const AXElementWrapper& ax_element,
                                         const NSRect& root_rect) const;

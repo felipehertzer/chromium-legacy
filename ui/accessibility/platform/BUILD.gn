@@ -34,6 +34,7 @@ component("platform") {
   visibility = [
     "//chrome/browser/accessibility:*",
     "//chrome/browser/ui/webui/accessibility",
+    "//legacy:accessibility_probe",
     "//ui/accessibility",
     "//ui/views",
   ]
@@ -289,10 +290,13 @@ component("platform") {
         "inspect/ax_tree_indexer_mac.mm",
       ]
 
-      deps += [ "//ui/accelerated_widget_mac" ]
+      deps += [
+        "//legacy:platform_support",
+        "//ui/accelerated_widget_mac",
+      ]
 
+      weak_frameworks = [ "Accessibility.framework" ]
       frameworks = [
-        "Accessibility.framework",
         "AppKit.framework",
         "Foundation.framework",
       ]

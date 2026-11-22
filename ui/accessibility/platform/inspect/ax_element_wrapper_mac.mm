@@ -35,7 +35,8 @@ namespace {
 // AXUIElementCopyAttributeValue("AXCustomContent") returns an NSData
 // that contains an NSDictionary in NSKeyedArchiver format.
 // This function unpacks the array of AXCustomContents contained within.
-NSArray<AXCustomContent*>* CustomContentFromArchive(NSData* archive_data) {
+NSArray<AXCustomContent*>* CustomContentFromArchive(NSData* archive_data)
+    API_AVAILABLE(macos(11.0)) {
   NSError* error = nil;
   NSKeyedUnarchiver* unarchiver =
       [[NSKeyedUnarchiver alloc] initForReadingFromData:archive_data
@@ -113,7 +114,13 @@ bool AXElementWrapper::IsValidElement() const {
 }
 
 bool AXElementWrapper::IsNSAccessibilityElement() const {
-  return [node_ isKindOfClass:[NSAccessibilityElement class]];
+  if ([node_ isKindOfClass:[AXPlatformNodeCocoa class]]) {
+    return true;
+  }
+  if (@available(macOS 10.10, *)) {
+    return [node_ isKindOfClass:[NSAccessibilityElement class]];
+  }
+  return false;
 }
 
 bool AXElementWrapper::IsAXUIElement() const {
@@ -265,11 +272,11 @@ AXOptionalNSObject AXElementWrapper::GetAttributeValue(
     if ([attribute isEqualToString:@"AXCustomContent"] &&
         result == kAXErrorSuccess &&
         CFGetTypeID(value_ref.get()) == CFDataGetTypeID()) {
-      NSData* data = (__bridge NSData*)value_ref.get();
-      NSArray<AXCustomContent*>* custom_contents =
-          CustomContentFromArchive(data);
-
-      return AXOptionalNSObject(custom_contents);
+      if (@available(macOS 11.0, *)) {
+        NSData* data = (__bridge NSData*)value_ref.get();
+        return AXOptionalNSObject(CustomContentFromArchive(data));
+      }
+      return AXOptionalNSObject::Error("AXCustomContent requires macOS 11");
     }
 
     return ToOptional(
@@ -291,7 +298,8 @@ AXOptionalNSObject AXElementWrapper::GetParameterizedAttributeValue(
     ScopedCFTypeRef<CFTypeRef> parameter_ref(CFBridgingRetain(parameter));
 
     if (std::optional<NSRange> range = ui::NSValueGetRange(parameter)) {
-      parameter_ref.reset(AXValueCreate(kAXValueTypeCFRange, &range.value()));
+      parameter_ref.reset(AXValueCreate(
+          static_cast<AXValueType>(kAXValueCFRangeType), &range.value()));
     }
 
     // Get value.

@@ -14,8 +14,8 @@ namespace ui {
 struct AXNodeComparator {
   bool operator()(const gfx::NativeViewAccessible& lhs,
                   const gfx::NativeViewAccessible& rhs) const {
-    id<NSAccessibility> id_lhs = lhs.Get();
-    id<NSAccessibility> id_rhs = rhs.Get();
+    id id_lhs = lhs.Get();
+    id id_rhs = rhs.Get();
     if (AXElementWrapper::IsAXUIElement(id_lhs)) {
       CHECK(AXElementWrapper::IsAXUIElement(id_rhs));
       return CFHash((__bridge CFTypeRef)id_lhs) <

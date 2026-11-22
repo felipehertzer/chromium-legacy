@@ -1945,6 +1945,7 @@ component("platform") {
   }
 
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
     sources -= [
       "fonts/skia/font_cache_skia.cc",
       "fonts/web_font_render_style.cc",

@@ -196,7 +196,13 @@ using NativeViewAccessible = IAccessible*;
 // objects owned NSObjects. Do not use as a general object wrapper.
 using NativeViewAccessible = base::apple::OwnedNSObject;
 #elif BUILDFLAG(IS_MAC)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101000
+// Lion's attribute-based accessibility objects conform to the informal
+// NSObject protocol, rather than Yosemite's property-based NSAccessibility.
+using NativeViewAccessible = base::apple::OwnedNSObject;
+#else
 using NativeViewAccessible = base::apple::OwnedNSAccessibility;
+#endif
 #elif BUILDFLAG(IS_LINUX)
 // Linux doesn't have a native accessibility type.
 using NativeViewAccessible = AtkObject*;

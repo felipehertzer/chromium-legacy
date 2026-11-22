@@ -43,11 +43,24 @@ NSString* const kOutOfScopeWindowIdentifier =
 // Returns true if `window` is `scope_window` or one of its descendant child
 // windows (or sheets).
 bool IsWindowInScope(NSWindow* window, NSWindow* scope_window) {
-  for (NSWindow* ancestor = window; ancestor;
-       ancestor = ancestor.parentWindow ?: ancestor.sheetParent) {
+  for (NSWindow* ancestor = window; ancestor;) {
     if (ancestor == scope_window) {
       return true;
     }
+    NSWindow* parent = ancestor.parentWindow;
+    if (!parent) {
+      if (@available(macOS 10.9, *)) {
+        parent = ancestor.sheetParent;
+      } else {
+        for (NSWindow* candidate in NSApp.windows) {
+          if (candidate.attachedSheet == ancestor) {
+            parent = candidate;
+            break;
+          }
+        }
+      }
+    }
+    ancestor = parent;
   }
   return false;
 }
@@ -112,7 +125,6 @@ AXEventRecorderMac::AXEventRecorderMac(
     NSAccessibilityFocusedWindowChangedNotification,
     NSAccessibilityHelpTagCreatedNotification,
     CFToNSPtrCast(kAXInvalidStatusChangedNotification),
-    NSAccessibilityLayoutChangedNotification,
     CFToNSPtrCast(kAXLiveRegionChangedNotification),
     CFToNSPtrCast(kAXLiveRegionCreatedNotification),
     CFToNSPtrCast(kAXLoadCompleteNotification),
@@ -146,6 +158,9 @@ AXEventRecorderMac::AXEventRecorderMac(
   for (NSString* notification : notifications) {
     AddNotification(notification);
   }
+  if (@available(macOS 10.9, *)) {
+    AddNotification(NSAccessibilityLayoutChangedNotification);
+  }
 
   // Add the observer to the current message loop.
   observer_run_loop_source_ = AXObserverGetRunLoopSource(observer_ref_.get());
@@ -160,9 +175,16 @@ AXEventRecorderMac::~AXEventRecorderMac() {
   // Remove the markers applied by UpdateWindowScopeMarkers().
   if (scope_window_) {
     for (NSWindow* window in NSApp.windows) {
-      if ([window.accessibilityIdentifier
+      if ([[window
+              accessibilityAttributeValue:NSAccessibilityIdentifierAttribute]
               isEqualToString:kOutOfScopeWindowIdentifier]) {
-        window.accessibilityIdentifier = nil;
+        if (@available(macOS 10.10, *)) {
+          window.accessibilityIdentifier = nil;
+        } else {
+          [window
+              accessibilitySetOverrideValue:nil
+                               forAttribute:NSAccessibilityIdentifierAttribute];
+        }
       }
     }
   }
@@ -174,14 +196,18 @@ void AXEventRecorderMac::AddNotification(NSString* notification) {
 }
 
 void AXEventRecorderMac::UpdateWindowScopeMarkers() {
-  // Setting accessibilityIdentifier is a plain stored property on
-  // NSAccessibilityProtocol; AppKit does not post an accessibility
-  // notification when it changes, so it is safe to assign unconditionally on
-  // every call.
+  // Use the native property on Yosemite and newer, or the original
+  // per-instance accessibility attribute override on older systems.
   for (NSWindow* window in NSApp.windows) {
-    window.accessibilityIdentifier = IsWindowInScope(window, scope_window_)
-                                         ? nil
-                                         : kOutOfScopeWindowIdentifier;
+    NSString* identifier = IsWindowInScope(window, scope_window_)
+                               ? nil
+                               : kOutOfScopeWindowIdentifier;
+    if (@available(macOS 10.10, *)) {
+      window.accessibilityIdentifier = identifier;
+    } else {
+      [window accessibilitySetOverrideValue:identifier
+                               forAttribute:NSAccessibilityIdentifierAttribute];
+    }
   }
 }
 
@@ -283,7 +309,8 @@ std::string AXEventRecorderMac::SerializeTextSelectionChangedProperties(
   NSDictionary* ns_user_info = CFToNSPtrCast(user_info);
   std::vector<std::string> serialized_info;
   for (NSString* key in ns_user_info) {
-    NSNumber* value = base::apple::ObjCCast<NSNumber>(ns_user_info[key]);
+    NSNumber* value =
+        base::apple::ObjCCast<NSNumber>([ns_user_info objectForKey:key]);
     std::string value_string;
     if ([key isEqual:NSAccessibilityTextStateChangeTypeKey]) {
       value_string =
@@ -301,7 +328,7 @@ std::string AXEventRecorderMac::SerializeTextSelectionChangedProperties(
     } else if ([key isEqual:NSAccessibilityTextSelectionChangedFocus]) {
       value_string = value.boolValue ? "true" : "false";
     } else if ([key isEqual:NSAccessibilityTextChangeElement]) {
-      AXElementWrapper ax_element(ns_user_info[key]);
+      AXElementWrapper ax_element([ns_user_info objectForKey:key]);
       AXOptionalNSObject role =
           ax_element.GetAttributeValue(NSAccessibilityRoleAttribute);
       if (!role.HasValue()) {

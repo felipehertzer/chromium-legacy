@@ -6,6 +6,7 @@ import("//build/rust/rust_executable.gni")
 
 source_set("platform_support") {
   sources = [
+    "apple/accessibility.h",
     "apple/atomic_wait.h",
     "apple/audit_token.h",
     "apple/clock.h",
@@ -14,6 +15,7 @@ source_set("platform_support") {
     "apple/fd_io.h",
     "apple/file_times.h",
     "apple/font_cascade.h",
+    "apple/localized_string.h",
     "apple/product_version.h",
     "apple/remove_all.h",
     "apple/scoped_dispatch.h",
@@ -34,6 +36,16 @@ if (is_mac) {
     ]
     deps = [ ":platform_support" ]
     frameworks = [ "Security.framework" ]
+  }
+
+  executable("accessibility_probe") {
+    testonly = true
+    sources = [ "tests/accessibility_probe.mm" ]
+    deps = [
+      "//base",
+      "//ui/accessibility/platform",
+    ]
+    frameworks = [ "AppKit.framework" ]
   }
 
   executable("sdk_probe") {

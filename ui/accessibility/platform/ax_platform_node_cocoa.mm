@@ -19,6 +19,7 @@
 #include "base/notimplemented.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/trace_event/trace_event.h"
+#include "legacy/apple/accessibility.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_action_data.h"
@@ -142,7 +143,6 @@ RoleMap BuildSubroleMap() {
       {ax::mojom::Role::kSuperscript,
        CFToNSPtrCast(kAXSuperscriptStyleGroupSubrole)},
       {ax::mojom::Role::kSwitch, CFToNSPtrCast(kAXSwitchSubrole)},
-      {ax::mojom::Role::kTab, NSAccessibilityTabButtonSubrole},
       {ax::mojom::Role::kTabPanel, CFToNSPtrCast(kAXTabPanelSubrole)},
       {ax::mojom::Role::kTerm, CFToNSPtrCast(kAXTermSubrole)},
       {ax::mojom::Role::kTime, CFToNSPtrCast(kAXTimeGroupSubrole)},
@@ -153,7 +153,11 @@ RoleMap BuildSubroleMap() {
       {ax::mojom::Role::kTreeItem, NSAccessibilityOutlineRowSubrole},
   };
 
-  return RoleMap(begin(subroles), end(subroles));
+  RoleMap result(begin(subroles), end(subroles));
+  if (@available(macOS 10.13, *)) {
+    result[ax::mojom::Role::kTab] = NSAccessibilityTabButtonSubrole;
+  }
+  return result;
 }
 
 EventMap BuildEventMap() {
@@ -207,12 +211,8 @@ const ui::CocoaActionList& GetCocoaActionList() {
 void PostAnnouncementNotification(NSString* announcement,
                                   NSWindow* window,
                                   bool is_polite) {
-  NSAccessibilityPriorityLevel priority =
-      is_polite ? NSAccessibilityPriorityMedium : NSAccessibilityPriorityHigh;
-  NSDictionary* notification_info = @{
-    NSAccessibilityAnnouncementKey : announcement,
-    NSAccessibilityPriorityKey : @(priority)
-  };
+  NSDictionary* notification_info =
+      chromium_legacy::AccessibilityAnnouncementInfo(announcement, !is_polite);
   // On Mojave, announcements from an inactive window aren't spoken.
   NSAccessibilityPostNotificationWithUserInfo(
       window, NSAccessibilityAnnouncementRequestedNotification,
@@ -311,8 +311,6 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
     dict = @{
       @"accessibilityCellForColumn:row:" :
           NSAccessibilityCellForColumnAndRowParameterizedAttribute,
-      @"accessibilityChildrenInNavigationOrder" :
-          NSAccessibilityChildrenInNavigationOrderAttribute,
       @"accessibilityColumns" : NSAccessibilityColumnsAttribute,
       @"accessibilityColumnCount" : NSAccessibilityColumnCountAttribute,
       @"accessibilityColumnIndexRange" :
@@ -343,6 +341,12 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
       @"isAccessibilityExpanded" : NSAccessibilityExpandedAttribute,
       @"isAccessibilityFocused" : NSAccessibilityFocusedAttribute,
     };
+    if (@available(macOS 10.12, *)) {
+      NSMutableDictionary* attributes = [dict mutableCopy];
+      [attributes setObject:NSAccessibilityChildrenInNavigationOrderAttribute
+                     forKey:@"accessibilityChildrenInNavigationOrder"];
+      dict = [attributes copy];
+    }
   });
   return dict;
 }
@@ -1295,15 +1299,16 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
     // TODO(crbug.com/41456329): Implement NSAccessibilityVisibleNameKey.
 
     if (text_attrs.font_size != ui::AXTextAttributes::kUnsetValue) {
-      fontAttributes[NSAccessibilityFontSizeKey] = @(text_attrs.font_size);
+      [fontAttributes setObject:@(text_attrs.font_size)
+                         forKey:NSAccessibilityFontSizeKey];
     }
 
     if (text_attrs.HasTextStyle(ax::mojom::TextStyle::kBold)) {
-      fontAttributes[@"AXFontBold"] = @YES;
+      [fontAttributes setObject:@YES forKey:@"AXFontBold"];
     }
 
     if (text_attrs.HasTextStyle(ax::mojom::TextStyle::kItalic)) {
-      fontAttributes[@"AXFontItalic"] = @YES;
+      [fontAttributes setObject:@YES forKey:@"AXFontItalic"];
     }
 
     [attributedString addAttribute:NSAccessibilityFontTextAttribute
@@ -1311,10 +1316,9 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
                              range:leafRange];
 
     if (text_attrs.color != ui::AXTextAttributes::kUnsetValue) {
+      auto color = skia::CGColorCreateFromSkColor(SkColor(text_attrs.color));
       [attributedString addAttribute:NSAccessibilityForegroundColorTextAttribute
-                               value:(__bridge id)skia::SkColorToSRGBNSColor(
-                                         SkColor(text_attrs.color))
-                                         .CGColor
+                               value:(__bridge id)color.get()
                                range:leafRange];
     } else {
       [attributedString
@@ -1323,10 +1327,10 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
     }
 
     if (text_attrs.background_color != ui::AXTextAttributes::kUnsetValue) {
+      auto color =
+          skia::CGColorCreateFromSkColor(SkColor(text_attrs.background_color));
       [attributedString addAttribute:NSAccessibilityBackgroundColorTextAttribute
-                               value:(__bridge id)skia::SkColorToSRGBNSColor(
-                                         SkColor(text_attrs.background_color))
-                                         .CGColor
+                               value:(__bridge id)color.get()
                                range:leafRange];
     } else {
       [attributedString
@@ -1826,7 +1830,8 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
 
   if (ui::SupportsRequired(role)) {
-    [axAttributes addObject:NSAccessibilityRequiredAttribute];
+    // The AXRequired wire attribute predates the public 10.12 AppKit constant.
+    [axAttributes addObject:@"AXRequired"];
   }
 
   // Url: add the url attribute only if the object has a valid url.
@@ -2420,20 +2425,19 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
     return nil;
   }
 
-  // ARIA descriptions are returned as AXCustomContent (see
-  // -accessibilityCustomContent below), so if the description is from ARIA,
-  // don't provide it as AXHelp, and return nothing.
-  if ([self descriptionIsFromAriaDescription]) {
-    // VoiceOver does not announce AXCustomContent for fieldsets, so we fall
-    // back to exposing the ARIA description as AXHelp for them.
-    if ([[self getStringAttribute:ax::mojom::StringAttribute::kHtmlTag]
-            isEqualToString:@"fieldset"]) {
-      return [self getStringAttribute:ax::mojom::StringAttribute::kDescription];
+  // Big Sur exposes ARIA descriptions as custom content. Earlier systems
+  // must retain the text in AXHelp because they have no AXCustomContent API.
+  if (@available(macOS 11.0, *)) {
+    if ([self descriptionIsFromAriaDescription]) {
+      // VoiceOver does not announce custom content for fieldsets.
+      if (![[self getStringAttribute:ax::mojom::StringAttribute::kHtmlTag]
+              isEqualToString:@"fieldset"]) {
+        return nil;
+      }
     }
-    return nil;
   }
 
-  // Otherwise, it's a non-ARIA description, which is returned as AXHelp.
+  // Keep ordinary descriptions, fieldsets, and the legacy ARIA fallback.
   return [self getStringAttribute:ax::mojom::StringAttribute::kDescription];
 }
 
@@ -3068,7 +3072,13 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
 
   // TODO(crbug.com/41115917): What about role-specific selectors?
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  // NSObject has no property-based accessibility defaults. Only allow selectors
+  // actually implemented by this node, after the state/role checks above.
+  return [super respondsToSelector:selector];
+#else
   return [super isAccessibilitySelectorAllowed:selector];
+#endif
 }
 
 // NSAccessibility: Determining Relationships.
@@ -3425,17 +3435,19 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   return rows;
 }
 
-- (NSAccessibilitySortDirection)accessibilitySortDirection {
+- (AXCocoaSortDirection)accessibilitySortDirection {
+  // The method-based protocol encodes unknown/ascending/descending as 0/1/2.
+  // Its integer ABI is also used by our own accessor in Lion builds.
   // Keep logic consistent with `-[BrowserAccessibilityCocoa sortDirection]`
   if (![self instanceActive]) {
-    return NSAccessibilitySortDirectionUnknown;
+    return static_cast<AXCocoaSortDirection>(0);
   }
 
   // If this object should not support `accessibilitySortDirection`, treat
   // the sort direction as unknown regardless of what's in the `AXNodeData`.
   if ([self internalRole] != ax::mojom::Role::kRowHeader &&
       [self internalRole] != ax::mojom::Role::kColumnHeader) {
-    return NSAccessibilitySortDirectionUnknown;
+    return static_cast<AXCocoaSortDirection>(0);
   }
 
   // The Core-AAM states that `aria-sort=none` is "not mapped".
@@ -3444,16 +3456,16 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
                               &sortDirection) ||
       static_cast<ax::mojom::SortDirection>(sortDirection) ==
           ax::mojom::SortDirection::kUnsorted) {
-    return NSAccessibilitySortDirectionUnknown;
+    return static_cast<AXCocoaSortDirection>(0);
   }
 
   switch (static_cast<ax::mojom::SortDirection>(sortDirection)) {
     case ax::mojom::SortDirection::kAscending:
-      return NSAccessibilitySortDirectionAscending;
+      return static_cast<AXCocoaSortDirection>(1);
     case ax::mojom::SortDirection::kDescending:
-      return NSAccessibilitySortDirectionDescending;
+      return static_cast<AXCocoaSortDirection>(2);
     case ax::mojom::SortDirection::kOther:
-      return NSAccessibilitySortDirectionUnknown;
+      return static_cast<AXCocoaSortDirection>(0);
     default:
       NOTREACHED();
   }
@@ -3939,12 +3951,16 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
 
   NSString* description =
       [self getStringAttribute:ax::mojom::StringAttribute::kDescription];
-  AXCustomContent* contentItem =
-      [AXCustomContent customContentWithLabel:@"description" value:description];
-  // A custom content importance of high causes it to be spoken
-  // automatically, rather than "More content available".
-  contentItem.importance = AXCustomContentImportanceHigh;
-  return @[ contentItem ];
+  if (@available(macOS 11.0, *)) {
+    AXCustomContent* contentItem =
+        [AXCustomContent customContentWithLabel:@"description"
+                                          value:description];
+    // A custom content importance of high causes it to be spoken
+    // automatically, rather than "More content available".
+    contentItem.importance = AXCustomContentImportanceHigh;
+    return @[ contentItem ];
+  }
+  return nil;
 }
 
 // MathML attributes.
@@ -3960,7 +3976,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 1)
-    return children[0];
+    return [children objectAtIndex:0];
   return nil;
 }
 
@@ -3971,7 +3987,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 2)
-    return children[1];
+    return [children objectAtIndex:1];
   return nil;
 }
 
@@ -3984,7 +4000,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   NSArray* children = [self accessibilityChildren];
   if (_node->GetRole() == ax::mojom::Role::kMathMLRoot) {
     if ([children count] >= 1)
-      return [NSArray arrayWithObjects:children[0], nil];
+      return [NSArray arrayWithObjects:[children objectAtIndex:0], nil];
     return nil;
   }
   return children;
@@ -3997,7 +4013,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 2)
-    return children[1];
+    return [children objectAtIndex:1];
   return nil;
 }
 
@@ -4014,7 +4030,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 1)
-    return children[0];
+    return [children objectAtIndex:0];
   return nil;
 }
 
@@ -4026,7 +4042,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 2)
-    return children[1];
+    return [children objectAtIndex:1];
   return nil;
 }
 
@@ -4039,11 +4055,11 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   NSArray* children = [self accessibilityChildren];
   if (_node->GetRole() == ax::mojom::Role::kMathMLOver &&
       [children count] >= 2) {
-    return children[1];
+    return [children objectAtIndex:1];
   }
   if (_node->GetRole() == ax::mojom::Role::kMathMLUnderOver &&
       [children count] >= 3) {
-    return children[2];
+    return [children objectAtIndex:2];
   }
   return nil;
 }
@@ -4056,7 +4072,7 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   }
   NSArray* children = [self accessibilityChildren];
   if ([children count] >= 2)
-    return children[1];
+    return [children objectAtIndex:1];
   return nil;
 }
 
@@ -4069,11 +4085,11 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
   NSArray* children = [self accessibilityChildren];
   if (_node->GetRole() == ax::mojom::Role::kMathMLSup &&
       [children count] >= 2) {
-    return children[1];
+    return [children objectAtIndex:1];
   }
   if (_node->GetRole() == ax::mojom::Role::kMathMLSubSup &&
       [children count] >= 3) {
-    return children[2];
+    return [children objectAtIndex:2];
   }
   return nil;
 }
@@ -4084,10 +4100,12 @@ NSDictionary* CreateMathSubSupScriptsPair(AXPlatformNodeCocoa* subscript,
                                           AXPlatformNodeCocoa* superscript) {
   NSMutableDictionary* dictionary = [NSMutableDictionary dictionary];
   if (subscript) {
-    dictionary[CFToNSPtrCast(kAXMathSubscriptAttribute)] = subscript;
+    [dictionary setObject:subscript
+                   forKey:CFToNSPtrCast(kAXMathSubscriptAttribute)];
   }
   if (superscript) {
-    dictionary[CFToNSPtrCast(kAXMathSuperscriptAttribute)] = superscript;
+    [dictionary setObject:superscript
+                   forKey:CFToNSPtrCast(kAXMathSuperscriptAttribute)];
   }
   return dictionary;
 }

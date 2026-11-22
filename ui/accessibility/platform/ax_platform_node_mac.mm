@@ -6,6 +6,7 @@
 
 #include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "legacy/apple/accessibility.h"
 #include "ui/accessibility/platform/ax_platform_node_cocoa.h"
 #include "ui/accessibility/platform/ax_private_webkit_constants_mac.h"
 
@@ -18,12 +19,8 @@ using ActionList = std::vector<std::pair<ax::mojom::Action, NSString*>>;
 void PostAnnouncementNotification(NSString* announcement,
                                   NSWindow* window,
                                   bool is_polite) {
-  NSAccessibilityPriorityLevel priority =
-      is_polite ? NSAccessibilityPriorityMedium : NSAccessibilityPriorityHigh;
-  NSDictionary* notification_info = @{
-    NSAccessibilityAnnouncementKey : announcement,
-    NSAccessibilityPriorityKey : @(priority)
-  };
+  NSDictionary* notification_info =
+      chromium_legacy::AccessibilityAnnouncementInfo(announcement, !is_polite);
   // On Mojave, announcements from an inactive window aren't spoken.
   NSAccessibilityPostNotificationWithUserInfo(
       window, NSAccessibilityAnnouncementRequestedNotification,

@@ -112,7 +112,7 @@ bool IsValidAXAttribute(const std::string& attribute) {
     CFToNSPtrCast(kAXMathUnderAttribute),
     CFToNSPtrCast(kAXOwnsAttribute),
     CFToNSPtrCast(kAXPopupValueAttribute),
-    NSAccessibilityRequiredAttribute,
+    @"AXRequired",
     NSAccessibilityRoleDescriptionAttribute,
     NSAccessibilitySelectedAttribute,
     NSAccessibilitySizeAttribute,
@@ -200,10 +200,12 @@ std::pair<ScopedCFTypeRef<AXUIElementRef>, int> FindAXApplication(
           kCGNullWindowID));
 
   for (NSDictionary* window_info in windows) {
-    int pid = base::apple::ObjCCast<NSNumber>(window_info[@"kCGWindowOwnerPID"])
+    int pid = base::apple::ObjCCast<NSNumber>(
+                  [window_info objectForKey:@"kCGWindowOwnerPID"])
                   .intValue;
-    std::string window_name = base::SysNSStringToUTF8(
-        base::apple::ObjCCast<NSString>(window_info[@"kCGWindowOwnerName"]));
+    std::string window_name =
+        base::SysNSStringToUTF8(base::apple::ObjCCast<NSString>(
+            [window_info objectForKey:@"kCGWindowOwnerName"]));
 
     ScopedCFTypeRef<AXUIElementRef> node;
 
