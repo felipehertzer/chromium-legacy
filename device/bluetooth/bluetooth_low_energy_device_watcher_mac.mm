@@ -80,8 +80,17 @@ BluetoothLowEnergyDeviceWatcherMac::OnPropertyListFileChangedOnFileThread(
   //    }
   //  }
   NSURL* plist_file = base::apple::FilePathToNSURL(path);
-  NSDictionary* bluetooth_info_dictionary =
-      [NSDictionary dictionaryWithContentsOfURL:plist_file error:nil];
+  NSData* data = [NSData dataWithContentsOfURL:plist_file
+                                       options:0
+                                         error:nullptr];
+  if (!data) {
+    return std::nullopt;
+  }
+  NSDictionary* bluetooth_info_dictionary = base::apple::ObjCCast<NSDictionary>(
+      [NSPropertyListSerialization propertyListWithData:data
+                                                options:NSPropertyListImmutable
+                                                 format:nullptr
+                                                  error:nullptr]);
 
   // |bluetooth_info_dictionary| is nil if there was an error reading the file
   // or if the content of the read file cannot be represented by a dictionary.
@@ -139,18 +148,20 @@ std::map<std::string, std::string>
 BluetoothLowEnergyDeviceWatcherMac::ParseBluetoothDevicePropertyListData(
     NSDictionary* data) {
   std::map<std::string, std::string> updated_low_energy_devices_info;
-  NSDictionary* low_energy_devices_info = data[@"CoreBluetoothCache"];
+  NSDictionary* low_energy_devices_info =
+      [data objectForKey:@"CoreBluetoothCache"];
   if (!low_energy_devices_info) {
     return updated_low_energy_devices_info;
   }
 
   for (NSString* identifier in low_energy_devices_info) {
-    NSDictionary* device_info = low_energy_devices_info[identifier];
+    NSDictionary* device_info =
+        [low_energy_devices_info objectForKey:identifier];
     if (!device_info) {
       continue;
     }
 
-    NSString* raw_device_address = device_info[@"DeviceAddress"];
+    NSString* raw_device_address = [device_info objectForKey:@"DeviceAddress"];
     if (!raw_device_address) {
       continue;
     }

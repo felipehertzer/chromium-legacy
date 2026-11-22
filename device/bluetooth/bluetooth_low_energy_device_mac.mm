@@ -25,6 +25,8 @@
 #include "device/bluetooth/bluetooth_remote_gatt_service_mac.h"
 #include "device/bluetooth/public/cpp/bluetooth_address.h"
 
+#include "legacy/apple/core_bluetooth.h"
+
 namespace device {
 
 BluetoothLowEnergyDeviceMac::BluetoothLowEnergyDeviceMac(
@@ -123,7 +125,11 @@ bool BluetoothLowEnergyDeviceMac::IsConnectable() const {
 }
 
 bool BluetoothLowEnergyDeviceMac::IsConnecting() const {
-  return ([peripheral_ state] == CBPeripheralStateConnecting);
+  if (@available(macOS 10.9, iOS 7.0, *)) {
+    return peripheral_.state == CBPeripheralStateConnecting;
+  }
+  return !create_gatt_connection_callbacks_.empty() &&
+         !chromium_legacy::IsPeripheralConnected(peripheral_);
 }
 
 bool BluetoothLowEnergyDeviceMac::ExpectingPinCode() const {
@@ -397,9 +403,8 @@ void BluetoothLowEnergyDeviceMac::DidWriteValueForDescriptor(
 // static
 std::string BluetoothLowEnergyDeviceMac::GetPeripheralIdentifier(
     CBPeripheral* peripheral) {
-  NSUUID* uuid = [peripheral identifier];
-  NSString* uuidString = [uuid UUIDString];
-  return base::SysNSStringToUTF8(uuidString);
+  return base::SysNSStringToUTF8(
+      chromium_legacy::PeripheralIdentifier(peripheral));
 }
 
 // static

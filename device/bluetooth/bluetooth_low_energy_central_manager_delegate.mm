@@ -11,6 +11,8 @@
 #include "device/bluetooth/bluetooth_low_energy_adapter_apple.h"
 #include "device/bluetooth/bluetooth_low_energy_discovery_manager_mac.h"
 
+#include "legacy/apple/core_bluetooth.h"
+
 namespace device {
 
 // This class exists to bridge between the Objective-C CBCentralManagerDelegate
@@ -92,7 +94,8 @@ class BluetoothLowEnergyCentralManagerBridge {
 
 - (void)centralManagerDidUpdateState:(CBCentralManager*)central {
   // Notifies when the powered state of the central manager changed.
-  _bridge->UpdatedState(central.state == CBManagerStatePoweredOn);
+  _bridge->UpdatedState(central.state ==
+                        chromium_legacy::kBluetoothStatePoweredOn);
 }
 
 - (void)centralManager:(CBCentralManager*)central

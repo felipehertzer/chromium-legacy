@@ -11,6 +11,8 @@
 #include "base/strings/sys_string_conversions.h"
 #include "device/bluetooth/bluetooth_low_energy_device_mac.h"
 
+#include "legacy/apple/core_bluetooth.h"
+
 namespace device {
 
 BluetoothLowEnergyDiscoveryManagerMac::
@@ -44,8 +46,9 @@ void BluetoothLowEnergyDiscoveryManagerMac::TryStartDiscovery() {
     return;
   }
 
-  if ([central_manager_ state] != CBManagerStatePoweredOn) {
-    DVLOG(1) << "TryStartDiscovery != CBManagerStatePoweredOn";
+  if ([central_manager_ state] != chromium_legacy::kBluetoothStatePoweredOn) {
+    DVLOG(1)
+        << "TryStartDiscovery != chromium_legacy::kBluetoothStatePoweredOn";
     return;
   }
 

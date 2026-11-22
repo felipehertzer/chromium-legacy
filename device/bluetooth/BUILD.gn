@@ -223,6 +223,7 @@ component("bluetooth") {
   }
 
   if (is_apple) {
+    deps += [ "//legacy:platform_support" ]
     sources += [
       "bluetooth_advertisement_mac.h",
       "bluetooth_advertisement_mac.mm",
@@ -251,10 +252,12 @@ component("bluetooth") {
       "bluetooth_remote_gatt_service_mac.h",
       "bluetooth_remote_gatt_service_mac.mm",
     ]
-    frameworks = [
-      "CoreBluetooth.framework",
-      "Foundation.framework",
-    ]
+    frameworks = [ "Foundation.framework" ]
+    if (!is_mac) {
+      frameworks += [ "CoreBluetooth.framework" ]
+    }
+
+    # On macOS, IOBluetooth reexports CoreBluetooth at each OS's actual path.
   }
 
   if (is_mac) {

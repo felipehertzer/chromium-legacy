@@ -127,7 +127,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyAdapterApple
   CBCentralManager* GetCentralManager();
 
   // Returns the CBPeripheralManager instance.
-  CBPeripheralManager* GetPeripheralManager();
+  id GetPeripheralManager();
 
   // Checks if the low energy central manager is powered on. Returns false if
   // BLE is not available.
@@ -210,9 +210,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyAdapterApple
       low_energy_central_manager_delegate_;
 
   // Underlying CoreBluetooth CBPeripheralManager and its delegate.
-  CBPeripheralManager* __strong low_energy_peripheral_manager_;
-  BluetoothLowEnergyPeripheralManagerDelegate* __strong
-      low_energy_peripheral_manager_delegate_;
+  id __strong low_energy_peripheral_manager_;
+  id __strong low_energy_peripheral_manager_delegate_;
 
   // Watches system file /Library/Preferences/com.apple.Bluetooth.plist to
   // obtain information about system paired bluetooth devices.

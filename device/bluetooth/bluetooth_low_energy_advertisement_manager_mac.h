@@ -27,7 +27,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyAdvertisementManagerMac {
 
   // Initializes the advertisement manager.
   void Init(scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-            CBPeripheralManager* peripheral_manager);
+            id peripheral_manager);
 
   // Registers a new BLE advertisement.
   void RegisterAdvertisement(
@@ -52,7 +52,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyAdvertisementManagerMac {
 
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
 
-  CBPeripheralManager* peripheral_manager_;
+  id peripheral_manager_;
 
   scoped_refptr<BluetoothAdvertisementMac> active_advertisement_;
 };

@@ -58,21 +58,21 @@ def _legacy_stub(name, data):
     return text.encode('utf-8')
 
 
-def _has_coretext(args, seen=None):
+def _has_framework(args, framework, seen=None):
     seen = set() if seen is None else seen
     for index, argument in enumerate(args):
         if (argument == '-framework' and index + 1 < len(args) and
-                args[index + 1] == 'CoreText'):
+                args[index + 1] == framework):
             return True
-        if argument == '-Wl,-framework,CoreText':
+        if argument == '-Wl,-framework,' + framework:
             return True
         if argument.startswith('@'):
             response = Path(argument[1:]).resolve()
             if response in seen or not response.is_file():
                 continue
             seen.add(response)
-            if _has_coretext(shlex.split(response.read_text(encoding='utf-8-sig')),
-                             seen):
+            if _has_framework(shlex.split(response.read_text(encoding='utf-8-sig')),
+                              framework, seen):
                 return True
     return False
 
@@ -104,9 +104,17 @@ def add_legacy_sdk_overlay(args, build_dir=None):
                fingerprint.hexdigest())
     for name, data in frameworks.items():
         _atomic_write(overlay / (name + '.framework') / (name + '.tbd'), data)
-    prefix = ['-F' + str(overlay.resolve())]
+    # Preserve the stable umbrella install names when their reexports moved.
+    # Lion's IOBluetooth reexports a nested CoreBluetooth; newer OS versions
+    # reexport its public install name. Do not bind the app to one leaf path.
+    prefix = ['-F' + str(overlay.resolve()), '-Wl,-no_implicit_dylibs']
+    # Lion's Foundation reexports libobjc; its CoreFoundation does not.
+    # Select Foundation first when requested, before a modern SDK umbrella
+    # can bind Objective-C runtime symbols through CoreFoundation instead.
+    if _has_framework(args, 'Foundation'):
+        prefix += ['-framework', 'Foundation']
     # Umbrella frameworks can otherwise load the system CoreText stub before
     # an explicit -framework CoreText, bypassing our legacy install name.
-    if _has_coretext(args):
+    if _has_framework(args, 'CoreText'):
         prefix += ['-framework', 'CoreText']
     return prefix + args

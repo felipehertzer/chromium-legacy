@@ -337,17 +337,18 @@ NSDictionary* BuildServiceDefinition(const BluetoothUUID& uuid,
     const int kServiceNameKey =
         kEnglishLanguageBase + kBluetoothSDPAttributeIdentifierServiceName;
     NSString* service_name = base::SysUTF8ToNSString(*name);
-    service_definition[IntToNSString(kServiceNameKey)] = service_name;
+    [service_definition setObject:service_name
+                           forKey:IntToNSString(kServiceNameKey)];
   }
 
   const int kUUIDsKey = kBluetoothSDPAttributeIdentifierServiceClassIDList;
   NSArray* uuids = @[ GetIOBluetoothSDPUUID(uuid) ];
-  service_definition[IntToNSString(kUUIDsKey)] = uuids;
+  [service_definition setObject:uuids forKey:IntToNSString(kUUIDsKey)];
 
   const int kProtocolDefinitionsKey =
       kBluetoothSDPAttributeIdentifierProtocolDescriptorList;
-  service_definition[IntToNSString(kProtocolDefinitionsKey)] =
-      protocol_definition;
+  [service_definition setObject:protocol_definition
+                         forKey:IntToNSString(kProtocolDefinitionsKey)];
 
   return service_definition;
 }

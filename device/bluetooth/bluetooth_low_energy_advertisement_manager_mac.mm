@@ -8,9 +8,12 @@
 
 #include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #import "base/task/single_thread_task_runner.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
+
+#include "legacy/apple/core_bluetooth.h"
 
 namespace device {
 
@@ -22,89 +25,105 @@ BluetoothLowEnergyAdvertisementManagerMac::
 
 void BluetoothLowEnergyAdvertisementManagerMac::Init(
     scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-    CBPeripheralManager* peripheral_manager) {
+    id peripheral_manager) {
   ui_task_runner_ = ui_task_runner;
   peripheral_manager_ = peripheral_manager;
 }
 
 void BluetoothLowEnergyAdvertisementManagerMac::
     OnPeripheralManagerStateChanged() {
-  // This function handles several cases:
-  //   1. Error out when registering an advertisement, but the adapter is not
-  //      powered on.
-  //   2. Start advertising a registered advertisement if the adapter is powered
-  //      on.
-  //   3. Stop the advertisement when the adapter is powered off.
-  //      Note that if the adapter is powered off while advertising, macOS will
-  //      automatically restart advertising when the adapter is powered back on,
-  //      so we need to explicitly stop advertising in this case.
+  if (@available(macOS 10.9, iOS 6.0, *)) {
+    // This function handles several cases:
+    //   1. Error out when registering an advertisement, but the adapter is not
+    //      powered on.
+    //   2. Start advertising a registered advertisement if the adapter is
+    //   powered
+    //      on.
+    //   3. Stop the advertisement when the adapter is powered off.
+    //      Note that if the adapter is powered off while advertising, macOS
+    //      will automatically restart advertising when the adapter is powered
+    //      back on, so we need to explicitly stop advertising in this case.
 
-  if (!active_advertisement_) {
-    return;
-  }
+    if (!active_advertisement_) {
+      return;
+    }
 
-  CBManagerState adapter_state = [peripheral_manager_ state];
-  if (adapter_state == CBManagerStateUnknown) {
-    // Wait for the adapter to initialize.
-    return;
-  }
+    NSInteger adapter_state = [peripheral_manager_ state];
+    if (adapter_state == chromium_legacy::kBluetoothStateUnknown) {
+      // Wait for the adapter to initialize.
+      return;
+    }
 
-  if (active_advertisement_->is_waiting_for_adapter() &&
-      adapter_state < CBManagerStatePoweredOn) {
-    DVLOG(1)
-        << "Registration failed. Adapter changed to invalid adapter_state.";
-    BluetoothAdvertisement::ErrorCode error_code =
-        adapter_state == CBManagerStatePoweredOff
-            ? BluetoothAdvertisement::ERROR_ADAPTER_POWERED_OFF
-            : BluetoothAdvertisement::ERROR_UNSUPPORTED_PLATFORM;
-    active_advertisement_->OnAdvertisementError(ui_task_runner_.get(),
-                                                error_code);
-    active_advertisement_ = nullptr;
-    return;
-  }
+    if (active_advertisement_->is_waiting_for_adapter() &&
+        adapter_state < chromium_legacy::kBluetoothStatePoweredOn) {
+      DVLOG(1)
+          << "Registration failed. Adapter changed to invalid adapter_state.";
+      BluetoothAdvertisement::ErrorCode error_code =
+          adapter_state == chromium_legacy::kBluetoothStatePoweredOff
+              ? BluetoothAdvertisement::ERROR_ADAPTER_POWERED_OFF
+              : BluetoothAdvertisement::ERROR_UNSUPPORTED_PLATFORM;
+      active_advertisement_->OnAdvertisementError(ui_task_runner_.get(),
+                                                  error_code);
+      active_advertisement_ = nullptr;
+      return;
+    }
 
-  if (active_advertisement_->is_advertising() &&
-      adapter_state == CBManagerStateResetting) {
-    DVLOG(1) << "Adapter resetting. Invalidating advertisement.";
-    active_advertisement_->OnAdapterReset();
-    active_advertisement_ = nullptr;
-    return;
-  }
+    if (active_advertisement_->is_advertising() &&
+        adapter_state == chromium_legacy::kBluetoothStateResetting) {
+      DVLOG(1) << "Adapter resetting. Invalidating advertisement.";
+      active_advertisement_->OnAdapterReset();
+      active_advertisement_ = nullptr;
+      return;
+    }
 
-  if (active_advertisement_->is_advertising() &&
-      adapter_state == CBManagerStatePoweredOff) {
-    DVLOG(1) << "Adapter powered off. Stopping advertisement.";
-    // Note: we purposefully don't unregister the active advertisement for
-    // consistency with ChromeOS. The caller must manually unregister
-    // the advertisement themselves.
-    [peripheral_manager_ stopAdvertising];
-    return;
-  }
+    if (active_advertisement_->is_advertising() &&
+        adapter_state == chromium_legacy::kBluetoothStatePoweredOff) {
+      DVLOG(1) << "Adapter powered off. Stopping advertisement.";
+      // Note: we purposefully don't unregister the active advertisement for
+      // consistency with ChromeOS. The caller must manually unregister
+      // the advertisement themselves.
+      [peripheral_manager_ stopAdvertising];
+      return;
+    }
 
-  if (active_advertisement_->is_waiting_for_adapter()) {
-    StartAdvertising();
+    if (active_advertisement_->is_waiting_for_adapter()) {
+      StartAdvertising();
+    }
+  } else {
+    CHECK(!active_advertisement_);
   }
 }
 
 void BluetoothLowEnergyAdvertisementManagerMac::StartAdvertising() {
-  NSMutableArray* service_uuid_array = [[NSMutableArray alloc]
-      initWithCapacity:active_advertisement_->service_uuids().size()];
-  for (const std::string& service_uuid :
-       active_advertisement_->service_uuids()) {
-    NSString* uuid_string = base::SysUTF8ToNSString(service_uuid);
-    [service_uuid_array addObject:[CBUUID UUIDWithString:uuid_string]];
-  }
+  if (@available(macOS 10.9, iOS 6.0, *)) {
+    NSMutableArray* service_uuid_array = [[NSMutableArray alloc]
+        initWithCapacity:active_advertisement_->service_uuids().size()];
+    for (const std::string& service_uuid :
+         active_advertisement_->service_uuids()) {
+      NSString* uuid_string = base::SysUTF8ToNSString(service_uuid);
+      [service_uuid_array addObject:[CBUUID UUIDWithString:uuid_string]];
+    }
 
-  active_advertisement_->OnAdvertisementPending();
-  [peripheral_manager_ startAdvertising:@{
-    CBAdvertisementDataServiceUUIDsKey : service_uuid_array
-  }];
+    active_advertisement_->OnAdvertisementPending();
+    [peripheral_manager_ startAdvertising:@{
+      CBAdvertisementDataServiceUUIDsKey : service_uuid_array
+    }];
+  } else {
+    NOTREACHED();
+  }
 }
 
 void BluetoothLowEnergyAdvertisementManagerMac::RegisterAdvertisement(
     std::unique_ptr<BluetoothAdvertisement::Data> advertisement_data,
     BluetoothAdapter::CreateAdvertisementCallback callback,
     BluetoothAdapter::AdvertisementErrorCallback error_callback) {
+  if (!peripheral_manager_) {
+    ui_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(error_callback),
+                       BluetoothAdvertisement::ERROR_UNSUPPORTED_PLATFORM));
+    return;
+  }
   std::optional<BluetoothAdvertisement::ErrorCode> error_code;
 
   const std::optional<BluetoothAdvertisement::UUIDList>& service_uuids =

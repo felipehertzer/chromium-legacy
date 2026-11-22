@@ -21,6 +21,8 @@
 #include "device/bluetooth/bluetooth_remote_gatt_descriptor_mac.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service_mac.h"
 
+#include "legacy/apple/core_bluetooth.h"
+
 namespace device {
 
 namespace {
@@ -53,21 +55,23 @@ static BluetoothGattCharacteristic::Properties ConvertProperties(
   if (cb_property & CBCharacteristicPropertyExtendedProperties) {
     result |= BluetoothGattCharacteristic::PROPERTY_EXTENDED_PROPERTIES;
   }
-  if (cb_property & CBCharacteristicPropertyNotifyEncryptionRequired) {
-    // This property is used only in CBMutableCharacteristic
-    // (local characteristic). So this value should never appear for
-    // CBCharacteristic (remote characteristic). Apple is not able to send
-    // this value over BLE since it is not part of the spec.
-    DCHECK(false);
-    result |= BluetoothGattCharacteristic::PROPERTY_NOTIFY;
-  }
-  if (cb_property & CBCharacteristicPropertyIndicateEncryptionRequired) {
-    // This property is used only in CBMutableCharacteristic
-    // (local characteristic). So this value should never appear for
-    // CBCharacteristic (remote characteristic). Apple is not able to send
-    // this value over BLE since it is not part of the spec.
-    DCHECK(false);
-    result |= BluetoothGattCharacteristic::PROPERTY_INDICATE;
+  if (@available(macOS 10.9, iOS 7.0, *)) {
+    if (cb_property & CBCharacteristicPropertyNotifyEncryptionRequired) {
+      // This property is used only in CBMutableCharacteristic
+      // (local characteristic). So this value should never appear for
+      // CBCharacteristic (remote characteristic). Apple is not able to send
+      // this value over BLE since it is not part of the spec.
+      DCHECK(false);
+      result |= BluetoothGattCharacteristic::PROPERTY_NOTIFY;
+    }
+    if (cb_property & CBCharacteristicPropertyIndicateEncryptionRequired) {
+      // This property is used only in CBMutableCharacteristic
+      // (local characteristic). So this value should never appear for
+      // CBCharacteristic (remote characteristic). Apple is not able to send
+      // this value over BLE since it is not part of the spec.
+      DCHECK(false);
+      result |= BluetoothGattCharacteristic::PROPERTY_INDICATE;
+    }
   }
   return result;
 }
@@ -272,7 +276,7 @@ void BluetoothRemoteGattCharacteristicMac::DiscoverDescriptors() {
 }
 
 void BluetoothRemoteGattCharacteristicMac::DidUpdateValue(NSError* error) {
-  CHECK_EQ(GetCBPeripheral().state, CBPeripheralStateConnected);
+  CHECK(chromium_legacy::IsPeripheralConnected(GetCBPeripheral()));
   // This method is called when the characteristic is read and when a
   // notification is received.
   if (HasPendingRead()) {
@@ -321,7 +325,7 @@ void BluetoothRemoteGattCharacteristicMac::DidWriteValue(NSError* error) {
   // TODO(crbug.com/41321574): Remove once we can avoid calling DidWriteValue
   // when we disconnect before or during a write without response call.
   if (HasPendingWrite() &&
-      GetCBPeripheral().state != CBPeripheralStateConnected) {
+      !chromium_legacy::IsPeripheralConnected(GetCBPeripheral())) {
     std::pair<base::OnceClosure, ErrorCallback> callbacks;
     callbacks.swap(write_characteristic_value_callbacks_);
     std::move(callbacks.second)
@@ -329,7 +333,7 @@ void BluetoothRemoteGattCharacteristicMac::DidWriteValue(NSError* error) {
     return;
   }
 
-  CHECK_EQ(GetCBPeripheral().state, CBPeripheralStateConnected);
+  CHECK(chromium_legacy::IsPeripheralConnected(GetCBPeripheral()));
   if (!HasPendingWrite()) {
     // In case of buggy device, nothing should be done if receiving extra
     // write confirmation.

@@ -45,7 +45,7 @@ class SDKOverlayTest(unittest.TestCase):
         self.assertIn('objc-classes: [ NSObject ]', foundation)
         self.assertIn('_ExistingExport', foundation)
         self.assertIn('ApplicationServices.framework/Versions/A/Frameworks/CoreText', coretext)
-        self.assertEqual(arguments[1:], self.args)
+        self.assertEqual(arguments[1:], ['-Wl,-no_implicit_dylibs'] + self.args)
         for path, data in self.stubs.values():
             self.assertEqual(path.read_bytes(), data)
         self.assertEqual(SDK.add_legacy_sdk_overlay(self.args, self.root / 'out'),
@@ -54,8 +54,17 @@ class SDKOverlayTest(unittest.TestCase):
     def test_coretext_precedes_umbrella_frameworks(self):
         args = self.args + ['-framework', 'AppKit', '-framework', 'CoreText']
         result = SDK.add_legacy_sdk_overlay(args, self.root / 'out')
-        self.assertEqual(result[1:3], ['-framework', 'CoreText'])
-        self.assertEqual(result[3:], args)
+        self.assertEqual(result[1], '-Wl,-no_implicit_dylibs')
+        self.assertEqual(result[2:4], ['-framework', 'CoreText'])
+        self.assertEqual(result[4:], args)
+
+    def test_foundation_precedes_corefoundation_and_coretext(self):
+        args = self.args + ['-framework', 'CoreFoundation',
+                            '-framework', 'Foundation', '-framework', 'CoreText']
+        result = SDK.add_legacy_sdk_overlay(args, self.root / 'out')
+        self.assertEqual(result[2:6], ['-framework', 'Foundation',
+                                       '-framework', 'CoreText'])
+        self.assertEqual(result[6:], args)
 
     def test_detects_coretext_in_response_files(self):
         nested = self.root / 'nested.rsp'
@@ -64,7 +73,8 @@ class SDKOverlayTest(unittest.TestCase):
         response.write_text('-framework AppKit @' + str(nested))
         args = self.args + ['@' + str(response)]
         result = SDK.add_legacy_sdk_overlay(args, self.root / 'out')
-        self.assertEqual(result[1:3], ['-framework', 'CoreText'])
+        self.assertEqual(result[1], '-Wl,-no_implicit_dylibs')
+        self.assertEqual(result[2:4], ['-framework', 'CoreText'])
         self.assertEqual(nested.read_text(), '-framework CoreText')
 
     def test_modern_target_uses_sdk_unchanged(self):

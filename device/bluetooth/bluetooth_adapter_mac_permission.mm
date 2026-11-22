@@ -9,15 +9,18 @@
 namespace device {
 
 BluetoothAdapter::PermissionStatus GetMacBluetoothPermissionStatus() {
-  switch (CBCentralManager.authorization) {
-    case CBManagerAuthorizationNotDetermined:
-      return BluetoothAdapter::PermissionStatus::kUndetermined;
-    case CBManagerAuthorizationRestricted:
-    case CBManagerAuthorizationDenied:
-      return BluetoothAdapter::PermissionStatus::kDenied;
-    case CBManagerAuthorizationAllowedAlways:
-      return BluetoothAdapter::PermissionStatus::kAllowed;
+  if (@available(macOS 10.15, *)) {
+    switch (CBCentralManager.authorization) {
+      case CBManagerAuthorizationNotDetermined:
+        return BluetoothAdapter::PermissionStatus::kUndetermined;
+      case CBManagerAuthorizationRestricted:
+      case CBManagerAuthorizationDenied:
+        return BluetoothAdapter::PermissionStatus::kDenied;
+      case CBManagerAuthorizationAllowedAlways:
+        return BluetoothAdapter::PermissionStatus::kAllowed;
+    }
   }
+  return BluetoothAdapter::PermissionStatus::kAllowed;
 }
 
 }  // namespace device

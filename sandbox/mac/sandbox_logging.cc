@@ -35,7 +35,7 @@
 #endif
 
 extern "C" {
-void abort_report_np(const char*, ...);
+void abort_report_np(const char*, ...) __attribute__((weak_import));
 }
 
 namespace sandbox::logging {
@@ -44,20 +44,23 @@ namespace {
 
 enum class Level { FATAL, ERR, WARN, INFO };
 
-void SendOsLog(Level level, const char* message) {
-  const class OSLog {
-   public:
-    explicit OSLog()
-        : os_log_(os_log_create("org.chromium.sandbox", "chromium_logging")) {}
-    OSLog(const OSLog&) = delete;
-    OSLog& operator=(const OSLog&) = delete;
-    ~OSLog() { os_release(os_log_); }
-    os_log_t get() const { return os_log_; }
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+class API_AVAILABLE(macos(10.12)) OSLog {
+ public:
+  OSLog()
+      : os_log_(os_log_create("org.chromium.sandbox", "chromium_logging")) {}
+  OSLog(const OSLog&) = delete;
+  OSLog& operator=(const OSLog&) = delete;
+  ~OSLog() { os_release(os_log_); }
+  os_log_t get() const { return os_log_; }
 
-   private:
-    os_log_t os_log_;
-  } log;
+ private:
+  os_log_t os_log_;
+};
 
+API_AVAILABLE(macos(10.12))
+void SendUnifiedLog(Level level, const char* message) {
+  const OSLog log;
   const os_log_type_t os_log_type = [](Level level) {
     switch (level) {
       case Level::FATAL:
@@ -70,16 +73,40 @@ void SendOsLog(Level level, const char* message) {
         return OS_LOG_TYPE_INFO;
     }
   }(level);
-
   UNSAFE_TODO(os_log_with_type(log.get(), os_log_type, "%{public}s", message));
+}
+#endif
 
-  if (level == Level::ERR) {
+void SendLog(Level level, const char* message) {
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (__builtin_available(macOS 10.12, *)) {
+    SendUnifiedLog(level, message);
+  } else
+#endif
+  {
+    const int priority = [](Level level) {
+      switch (level) {
+        case Level::FATAL:
+          return LOG_CRIT;
+        case Level::ERR:
+          return LOG_ERR;
+        case Level::WARN:
+          return LOG_WARNING;
+        case Level::INFO:
+          return LOG_INFO;
+      }
+    }(level);
+    UNSAFE_TODO(syslog(priority, "org.chromium.sandbox: %s", message));
+  }
+
+  if (level == Level::ERR || level == Level::FATAL) {
     sandbox::crash_message::SetCrashMessage(message);
   }
-
-  if (level == Level::FATAL) {
-    abort_report_np(message);
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (level == Level::FATAL && abort_report_np) {
+    abort_report_np("%s", message);
   }
+#endif
 }
 
 // |error| is strerror(errno) when a P* logging function is called. Pass
@@ -92,7 +119,7 @@ void DoLogging(Level level,
   int ret = UNSAFE_TODO(vsnprintf(message, sizeof(message), fmt, args));
 
   if (ret < 0) {
-    SendOsLog(level, "warning: log message could not be formatted");
+    SendLog(level, "warning: log message could not be formatted");
     return;
   }
 
@@ -103,10 +130,10 @@ void DoLogging(Level level,
   if (error)
     final_message += ": " + *error;
 
-  SendOsLog(level, final_message.c_str());
+  SendLog(level, final_message.c_str());
 
   if (truncated) {
-    SendOsLog(level, "warning: previous log message truncated");
+    SendLog(Level::WARN, "warning: previous log message truncated");
   }
 }
 

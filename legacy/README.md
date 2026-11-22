@@ -88,6 +88,18 @@ or replaces a Chromium 159 dependency.
   Current Dawn image access requires macOS 13; ANGLE shared events require the
   corresponding OS API. Native color loading uses the original appearance
   scope on Catalina and older selectors for system colors and input coordinates.
+- Bluetooth retains Lion's CFUUID identity and connection selectors, old
+  dictionary APIs, and the original manager-state values. BLE advertising
+  requires 10.9. Before the synchronous connected-device query exists, results
+  are limited to connected devices already known to the browser.
+- Intel Lion links preserve umbrella-library bindings. IOBluetooth supplies
+  CoreBluetooth through its OS-specific reexport, so the same executable can
+  load on Lion, Catalina, and the current build host without hard-coding one
+  CoreBluetooth leaf path. Linker warnings and required-symbol checks remain fatal.
+- Sandbox diagnostics retain unified logging on newer macOS and use syslog
+  before 10.12. The logger remains independent of libbase, keeps owned crash
+  annotations, and preserves the original error when reporting truncation.
+  Missing abort-report SPI retains the existing fatal trap behavior.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -123,28 +135,31 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | CoreVideo/GCD ownership, normal and forced legacy paths | 16 checks each, Intel and ARM | 16 checks each |
 | Original Chromium Rust/C++ interoperability tests | 5 tests passed | 5 tests passed |
 | Actual compositor clipping, normal and forced legacy paths | 13 checks each | 13 checks each |
+| Bluetooth UUIDs/identity/state/umbrella binding, normal and forced legacy paths | 15 checks each, Intel and ARM | 15 checks each |
+| Sandbox logging/formatting, normal and forced legacy paths | 8 checks each | 8 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
 process cwd inheritance. It does not test a TLS handshake or the browser.
-Thirty-three Python tests cover the port inventory, pinned dependency/Rust patch
+Thirty-four Python tests cover the port inventory, pinned dependency/Rust patch
 application, SDK overlay preservation, and Mach-O audit behavior.
 
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
-compositor clipping, timers, atomics, and forced C++
+compositor clipping, Bluetooth, sandbox logging, timers, atomics, and forced C++
 runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
 Only the Catalina Mac is available for physical-machine tests.
-The installer recovery system omits AVFoundation. Its original framework was
-extracted from the same installer's Essentials.pkg for the compositor audit.
+The sandbox logging checks exercise diagnostics, not renderer containment.
+The installer recovery system omits AVFoundation and Bluetooth libraries. Their
+original frameworks were extracted from the same installer's Essentials.pkg and
+BaseSystemBinaries.pkg for these audits.
 `audit_macho.py --supplemental-root PATH` fills absent libraries from that
 extraction; existing primary-root libraries retain precedence, and malformed
 libraries still fail the audit.
-
 
 ## Run the focused checks
 
@@ -156,11 +171,13 @@ legacy/test_appkit.sh
 legacy/test_vpx_timer.sh
 legacy/test_pthreadpool_atomics.sh
 legacy/test_media_platform.sh
+legacy/test_bluetooth_platform.sh
 python3 legacy/test_ml_clocks.py
 # Requires the integration objects and a retained base_probe.rsp:
 python3 legacy/test_clipboard.py
 python3 legacy/test_display.py
 python3 legacy/test_core_animation.py
+python3 legacy/test_sandbox_logging.py
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

@@ -17,6 +17,7 @@ namespace device {
 class BluetoothLowEnergyAdvertisementManagerMac;
 }  // namespace device
 
+API_AVAILABLE(macos(10.9), ios(6.0))
 @interface BluetoothLowEnergyPeripheralManagerDelegate
     : NSObject<CBPeripheralManagerDelegate>
 

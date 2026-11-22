@@ -9,6 +9,7 @@ source_set("platform_support") {
     "apple/atomic_wait.h",
     "apple/audit_token.h",
     "apple/clock.h",
+    "apple/core_bluetooth.h",
     "apple/cv_buffer.h",
     "apple/fd_io.h",
     "apple/file_times.h",
