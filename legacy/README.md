@@ -93,9 +93,10 @@ or replaces a Chromium 159 dependency.
   requires 10.9. Before the synchronous connected-device query exists, results
   are limited to connected devices already known to the browser.
 - Intel Lion links preserve umbrella-library bindings. IOBluetooth supplies
-  CoreBluetooth through its OS-specific reexport, so the same executable can
+  CoreBluetooth and CoreServices supplies CFNetwork through their OS-specific
+  reexports, preserving Lion's nested framework paths. The same executable can
   load on Lion, Catalina, and the current build host without hard-coding one
-  CoreBluetooth leaf path. Linker warnings and required-symbol checks remain fatal.
+  leaf path. Linker warnings and required-symbol checks remain fatal.
 - Sandbox diagnostics retain unified logging on newer macOS and use syslog
   before 10.12. The logger remains independent of libbase, keeps owned crash
   annotations, and preserves the original error when reporting truncation.
@@ -115,6 +116,19 @@ or replaces a Chromium 159 dependency.
   constants and HDR metadata use their respective OS APIs. SVC requires 11.3,
   external per-frame QP requires 12, and reference-buffer controls require 13.
   Unsupported controls are not advertised as available on Catalina.
+- Native window coordinates use the original rectangle conversions. Window
+  dragging before 10.11 uses Chromium's existing capture/move loop and does not
+  forward an event after that loop can destroy the window. Touch Bar methods
+  require 10.12.2. Accessory-based immersive fullscreen requires 10.12; older
+  systems retain normal fullscreen. Transparent-titlebar fullscreen requires 11.
+- Native window archives retain secure coding on 10.8 and later, using the old
+  secure initializer before 10.13. Lion skips native AppKit archives rather than
+  decoding without secure coding. Decoder subclasses and restoration options
+  are preserved; rejected data does not count as a successful restoration.
+- Sheets retain the original NSApplication API before 10.9. Their completion
+  remains alive independently of the window delegate and releases its captures
+  when the modal session ends. Lion window registrations use ARC-zeroing weak
+  keys, since its old NSMapTable weak options only provide non-retained pointers.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -122,7 +136,11 @@ Before 10.12, Base's continuous-clock fallback uses `mach_absolute_time`, which
 excludes system sleep. The pre-10.15 application-launch fallback can hide an
 app and avoid activation, but lacks the newer invisible-background-launch SPI.
 Before 10.12, IOSurfaces remain resident because the purge API is unavailable.
-These limitations need review alongside the remaining browser port.
+Before 10.9, native occlusion reports are unavailable: the tracker uses window
+visibility/Space membership plus its existing coverage checks for this app's
+windows, without claiming coverage by other applications. Window dragging and
+fullscreen still need full-browser testing. These limitations need review
+alongside the remaining browser port.
 
 ## Verified so far
 
@@ -154,6 +172,10 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Sandbox logging/formatting, normal and forced legacy paths | 8 checks each | 8 checks each |
 | Accessibility announcements/search wire keys/Unicode casing | 72 normal and 70 forced legacy checks, Intel and ARM | 72 normal and 70 forced legacy checks |
 | Actual VideoToolbox capability/session/color-format helpers | 14 checks passed | 14 checks passed |
+| Real Chromium accessibility nodes/actions/traversal/lifetime | 33 checks passed | 33 checks passed |
+| Secure archives, normal and forced old initializers | 11 checks each | 11 checks each |
+| Native sheets, normal and forced old APIs | 10 checks each | 10 checks each |
+| ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -165,7 +187,8 @@ An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
-VideoToolbox helpers, timers, atomics, and forced C++ runtime probes have no missing required symbols
+VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
+weak-key ownership, timers, atomics, and forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
@@ -173,9 +196,11 @@ Only the Catalina Mac is available for physical-machine tests.
 The sandbox logging checks exercise diagnostics, not renderer containment.
 The real-node `accessibility_probe` checks Chromium actions, role/name/required
 attributes, native traversal, disabled/read-only policy, and object lifetime.
-Its integration build is in progress; it has not yet been run. The standalone
-platform checks validate data and casing, without starting VoiceOver or testing
-assistive-technology navigation in the browser.
+Its 33 checks passed on the build Mac and Catalina, including a forced
+experimental feature flag that cannot bypass the legacy API selection. Its final
+link via CoreServices also passed the Lion audit with the supplemental framework
+extraction. These checks do not start VoiceOver or validate assistive-technology
+navigation in the full browser.
 The VideoToolbox checks create and release a real native H.264 software session,
 validate OS capability exports and production format dictionaries. They do not
 encode/decode frames or validate hardware video playback.
@@ -198,6 +223,10 @@ legacy/test_pthreadpool_atomics.sh
 legacy/test_media_platform.sh
 legacy/test_bluetooth_platform.sh
 legacy/test_accessibility_platform.sh
+legacy/test_secure_archive.sh
+# Requires the current Intel C++/ABI static libraries in out/Lion:
+legacy/test_sheet.sh
+legacy/test_weak_key_map.sh
 python3 legacy/test_ml_clocks.py
 # Requires the integration objects and a retained base_probe.rsp:
 python3 legacy/test_clipboard.py

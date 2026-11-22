@@ -26,6 +26,7 @@ class ImmersiveModeControllerCocoa;
 }  // namespace remote_cocoa
 
 // Host of the overlay view.
+API_AVAILABLE(macos(10.12))
 @interface ImmersiveModeTitlebarViewController
     : NSTitlebarAccessoryViewController {
   NSView* __strong _blank_separator_view;
@@ -50,6 +51,10 @@ REMOTE_COCOA_APP_SHIM_EXPORT NSWindow*
 OriginalBrowserWindowFromFullScreenWindow(NSWindow* full_screen_window);
 
 // Manages a single fullscreen session.
+// Older windows may own a null pointer; Cocoa operations require this OS API.
+#pragma clang attribute push(                                 \
+    __attribute__((availability(macos, introduced = 10.12))), \
+    apply_to = function)
 class REMOTE_COCOA_APP_SHIM_EXPORT ImmersiveModeControllerCocoa
     : public display::DisplayObserver {
  public:
@@ -206,7 +211,7 @@ class REMOTE_COCOA_APP_SHIM_EXPORT ImmersiveModeControllerCocoa
 
   // A controller for top chrome.
   ImmersiveModeTitlebarViewController* __strong
-      immersive_mode_titlebar_view_controller_;
+      immersive_mode_titlebar_view_controller_ API_AVAILABLE(macos(10.12));
 
   ImmersiveModeMapper* __strong immersive_mode_mapper_;
 
@@ -218,6 +223,7 @@ class REMOTE_COCOA_APP_SHIM_EXPORT ImmersiveModeControllerCocoa
 
   base::WeakPtrFactory<ImmersiveModeControllerCocoa> weak_ptr_factory_;
 };
+#pragma clang attribute pop
 
 }  // namespace remote_cocoa
 

@@ -111,8 +111,9 @@ NSAttributedString* AttributedSubstringFromRange(LocalFrame* frame,
     const float device_scale_factor =
         frame->GetWidgetForLocalRoot()->DIPsToBlinkSpace(1.0f);
 
-    attrs[kCrBaselineOffset] =
-        @(primaryFont->GetFontMetrics().Descent() * page_scale_factor);
+    [attrs
+        setObject:@(primaryFont->GetFontMetrics().Descent() * page_scale_factor)
+           forKey:kCrBaselineOffset];
 
     NSFont* original_font =
         base::apple::CFToNSPtrCast(font_platform_data.CtFont());
@@ -121,7 +122,14 @@ NSAttributedString* AttributedSubstringFromRange(LocalFrame* frame,
 
     NSFont* font = nil;
     if (original_font) {
-      font = [original_font fontWithSize:desired_size];
+      if (@available(macOS 10.15, *)) {
+        font = [original_font fontWithSize:desired_size];
+      } else {
+        base::apple::ScopedCFTypeRef<CTFontRef> resized_font(
+            CTFontCreateCopyWithAttributes(font_platform_data.CtFont(),
+                                           desired_size, nullptr, nullptr));
+        font = base::apple::CFToNSPtrCast(resized_font.get());
+      }
     }
 
     // If the platform font can't be loaded, or the size is incorrect comparing
@@ -138,19 +146,21 @@ NSAttributedString* AttributedSubstringFromRange(LocalFrame* frame,
                                           .ComputedSize() *
                                       page_scale_factor / device_scale_factor];
     }
-    attrs[NSFontAttributeName] = font;
+    [attrs setObject:font forKey:NSFontAttributeName];
 
     if (!style.VisitedDependentColor(GetCSSPropertyColor())
              .IsFullyTransparent()) {
-      attrs[NSForegroundColorAttributeName] =
-          NsColor(style.VisitedDependentColor(GetCSSPropertyColor()));
+      [attrs
+          setObject:NsColor(style.VisitedDependentColor(GetCSSPropertyColor()))
+             forKey:NSForegroundColorAttributeName];
     } else {
       [attrs removeObjectForKey:NSForegroundColorAttributeName];
     }
     if (!style.VisitedDependentColor(GetCSSPropertyBackgroundColor())
              .IsFullyTransparent()) {
-      attrs[NSBackgroundColorAttributeName] =
-          NsColor(style.VisitedDependentColor(GetCSSPropertyBackgroundColor()));
+      [attrs setObject:NsColor(style.VisitedDependentColor(
+                           GetCSSPropertyBackgroundColor()))
+                forKey:NSBackgroundColorAttributeName];
     } else {
       [attrs removeObjectForKey:NSBackgroundColorAttributeName];
     }
@@ -174,7 +184,7 @@ gfx::Point GetBaselinePoint(LocalFrameView* frame_view,
   if (string.length) {
     NSDictionary* attributes = [string attributesAtIndex:0
                                           effectiveRange:nullptr];
-    if (NSNumber* descender = attributes[kCrBaselineOffset]) {
+    if (NSNumber* descender = [attributes objectForKey:kCrBaselineOffset]) {
       string_point.Offset(0, -ceil(descender.doubleValue));
     }
   }

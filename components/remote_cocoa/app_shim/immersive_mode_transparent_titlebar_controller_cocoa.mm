@@ -56,6 +56,7 @@ void SetTransparencyAllowedInFullScreen(NSView* container, bool allowed) {
 
 // The view of the titlebar accessory. It is empty and transparent, and it
 // tells the controller when AppKit moves it to a different window.
+API_AVAILABLE(macos(11.0))
 @interface ImmersiveModeTransparentTitlebarAccessoryView : NSView
 - (instancetype)initWithController:
     (base::WeakPtr<
@@ -100,6 +101,7 @@ void SetTransparencyAllowedInFullScreen(NSView* container, bool allowed) {
 // An empty titlebar accessory that is placed below the titlebar. It makes the
 // NSToolbarFullScreenWindow as tall as top chrome, and reports the steps of
 // AppKit's reveal animation.
+API_AVAILABLE(macos(11.0))
 @interface ImmersiveModeTransparentTitlebarViewController
     : NSTitlebarAccessoryViewController
 - (instancetype)initWithController:

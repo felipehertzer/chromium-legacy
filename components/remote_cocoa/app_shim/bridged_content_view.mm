@@ -62,9 +62,15 @@ gfx::Point MovePointToWindow(const NSPoint& point,
                              NSWindow* source_window,
                              NSWindow* target_window) {
   NSPoint point_in_screen =
-      source_window ? [source_window convertPointToScreen:point] : point;
+      source_window
+          ? [source_window
+                convertRectToScreen:NSMakeRect(point.x, point.y, 0, 0)]
+                .origin
+          : point;
   NSPoint point_in_window =
-      [target_window convertPointFromScreen:point_in_screen];
+      [target_window convertRectFromScreen:NSMakeRect(point_in_screen.x,
+                                                      point_in_screen.y, 0, 0)]
+          .origin;
 
   NSRect content_rect =
       [target_window contentRectForFrameRect:[target_window frame]];
@@ -80,9 +86,16 @@ gfx::Point MovePointToView(const NSPoint& point,
                            NSWindow* source_window,
                            NSView* target_view) {
   NSPoint point_in_screen =
-      source_window ? [source_window convertPointToScreen:point] : point;
+      source_window
+          ? [source_window
+                convertRectToScreen:NSMakeRect(point.x, point.y, 0, 0)]
+                .origin
+          : point;
   NSPoint point_in_window =
-      [target_view.window convertPointFromScreen:point_in_screen];
+      [target_view.window
+          convertRectFromScreen:NSMakeRect(point_in_screen.x, point_in_screen.y,
+                                           0, 0)]
+          .origin;
 
   NSPoint point_in_view = [target_view convertPoint:point_in_window
                                            fromView:nil];
@@ -902,8 +915,11 @@ SEL EditingActionForKeyEquivalent(NSEvent* event) {
 }
 
 - (void)forceTouchEvent:(NSEvent*)theEvent {
-  if (ui::ForceClickInvokesQuickLook())
-    [self quickLookWithEvent:theEvent];
+  if (@available(macOS 10.8, *)) {
+    if (ui::ForceClickInvokesQuickLook()) {
+      [self quickLookWithEvent:theEvent];
+    }
+  }
 }
 
 // NSView implementation.
@@ -1923,7 +1939,10 @@ SEL EditingActionForKeyEquivalent(NSEvent* event) {
 - (NSArray*)accessibilityChildren {
   if (id accessible = _bridge->host_helper()->GetNativeViewAccessible())
     return @[ accessible ];
-  return [super accessibilityChildren];
+  if (@available(macOS 10.10, *)) {
+    return [super accessibilityChildren];
+  }
+  return [super accessibilityAttributeValue:NSAccessibilityChildrenAttribute];
 }
 
 // NSAccessibility informal protocol implementation:

@@ -22,7 +22,8 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 // `nil` unless the `kFullscreenPermanentThinController` is enabled.
 // (see https://crbug.com/373722654)
 @property(nonatomic)
-    NSTitlebarAccessoryViewController* thinTitlebarViewController;
+    NSTitlebarAccessoryViewController* thinTitlebarViewController API_AVAILABLE(
+        macos(10.10));
 @end
 
 #endif  // COMPONENTS_REMOTE_COCOA_APP_SHIM_BROWSER_NATIVE_WIDGET_WINDOW_MAC_H_

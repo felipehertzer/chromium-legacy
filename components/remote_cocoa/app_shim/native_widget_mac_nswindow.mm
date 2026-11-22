@@ -24,6 +24,7 @@
 #import "components/remote_cocoa/app_shim/views_nswindow_delegate.h"
 #import "components/remote_cocoa/app_shim/window_touch_bar_delegate.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
+#include "legacy/apple/secure_archive.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #import "ui/base/cocoa/default_command_dispatcher_delegate.h"
 #import "ui/base/cocoa/user_interface_item_command_handler.h"
@@ -170,23 +171,39 @@ struct NSEdgeAndCornerThicknesses {
 // Use this category to implement mouseDown: on multiple frame view classes
 // with different superclasses.
 @interface NSView (CRFrameViewAdditions)
-- (void)cr_mouseDownOnFrameView:(NSEvent*)event;
+- (BOOL)cr_mouseDownOnFrameView:(NSEvent*)event;
 @end
 
 @implementation NSView (CRFrameViewAdditions)
 // If a mouseDown: falls through to the frame view, turn it into a window drag.
-- (void)cr_mouseDownOnFrameView:(NSEvent*)event {
-  if ([self.window _resizeDirectionForMouseLocation:event.locationInWindow] !=
-      -1)
-    return;
-  [self.window performWindowDragWithEvent:event];
+- (BOOL)cr_mouseDownOnFrameView:(NSEvent*)event {
+  if ([self.window
+          respondsToSelector:@selector(_resizeDirectionForMouseLocation:)] &&
+      [self.window _resizeDirectionForMouseLocation:event.locationInWindow] !=
+          -1)
+    return NO;
+  if (@available(macOS 10.11, *)) {
+    [self.window performWindowDragWithEvent:event];
+  } else if (auto* bridge =
+                 remote_cocoa::NativeWidgetNSWindowBridge::GetFromNSWindow(
+                     self.window)) {
+    // Use Chromium's existing capture/move loop, which handles destruction
+    // during tracking, rather than an unavailable AppKit drag entry point.
+    NSPoint mouse = NSEvent.mouseLocation;
+    NSRect frame = self.window.frame;
+    bridge->RunMoveLoop(
+        gfx::Vector2d(mouse.x - NSMinX(frame), NSMaxY(frame) - mouse.y));
+    // The move loop may destroy the window. Do not forward this event again.
+    return YES;
+  }
+  return NO;
 }
 @end
 
 @implementation NativeWidgetMacNSWindowTitledFrame
 - (void)mouseDown:(NSEvent*)event {
-  if (self.window.movable) {
-    [self cr_mouseDownOnFrameView:event];
+  if (self.window.movable && [self cr_mouseDownOnFrameView:event]) {
+    return;
   }
   [super mouseDown:event];
 }
@@ -195,7 +212,11 @@ struct NSEdgeAndCornerThicknesses {
 }
 // The base implementation just tests [self class] == [NSThemeFrame class].
 - (BOOL)_shouldFlipTrafficLightsForRTL {
-  return [[self window] windowTitlebarLayoutDirection] ==
+  if (@available(macOS 10.12, *)) {
+    return [[self window] windowTitlebarLayoutDirection] ==
+           NSUserInterfaceLayoutDirectionRightToLeft;
+  }
+  return NSApp.userInterfaceLayoutDirection ==
          NSUserInterfaceLayoutDirectionRightToLeft;
 }
 @end
@@ -203,7 +224,9 @@ struct NSEdgeAndCornerThicknesses {
 @implementation NativeWidgetMacNSWindowBorderlessFrame
 
 - (void)mouseDown:(NSEvent*)event {
-  [self cr_mouseDownOnFrameView:event];
+  if ([self cr_mouseDownOnFrameView:event]) {
+    return;
+  }
   [super mouseDown:event];
 }
 - (BOOL)usesCustomDrawing {
@@ -255,6 +278,11 @@ struct NSEdgeAndCornerThicknesses {
         [[DefaultCommandDispatcherDelegate alloc] init];
     [_commandDispatcher setDelegate:_defaultCommandDispatcherDelegate];
     self.releasedWhenClosed = NO;
+    if (@available(macOS 10.8, *)) {
+      // Native archives can retain the secure-coding requirement.
+    } else {
+      self.restorable = NO;
+    }
   }
   return self;
 }
@@ -380,7 +408,7 @@ struct NSEdgeAndCornerThicknesses {
     DCHECK(_isEnforcingNeverMadeVisible);
     DCHECK_EQ(object, self);
     DCHECK_EQ(context, nil);
-    if ([change[NSKeyValueChangeNewKey] boolValue])
+    if ([[change objectForKey:NSKeyValueChangeNewKey] boolValue])
       base::debug::DumpWithoutCrashing();
   }
   [super observeValueForKeyPath:keyPath
@@ -450,7 +478,13 @@ struct NSEdgeAndCornerThicknesses {
 }
 
 - (NSAccessibilityRole)accessibilityRole {
-  return _isTooltip ? NSAccessibilityHelpTagRole : [super accessibilityRole];
+  if (_isTooltip) {
+    return NSAccessibilityHelpTagRole;
+  }
+  if (@available(macOS 10.10, *)) {
+    return [super accessibilityRole];
+  }
+  return [super accessibilityAttributeValue:NSAccessibilityRoleAttribute];
 }
 
 // NSWindow overrides.
@@ -747,8 +781,12 @@ struct NSEdgeAndCornerThicknesses {
   // nil (indicating a custom draggable background). Performing the action on
   // mouse-up matches the native titlebar behavior.
   if (type == NSEventTypeLeftMouseUp && [event clickCount] == 2) {
+    NSRect layout_rect = self.contentView.frame;
+    if (@available(macOS 10.10, *)) {
+      layout_rect = self.contentLayoutRect;
+    }
     const BOOL hitCustomDraggableArea =
-        NSPointInRect(event.locationInWindow, self.contentLayoutRect) &&
+        NSPointInRect(event.locationInWindow, layout_rect) &&
         [[self contentView] hitTest:event.locationInWindow] == nil;
     if (hitCustomDraggableArea) {
       NSString* action = [[NSUserDefaults standardUserDefaults]
@@ -962,7 +1000,7 @@ struct NSEdgeAndCornerThicknesses {
     [super cursorUpdate:theEvent];
 }
 
-- (NSTouchBar*)makeTouchBar {
+- (NSTouchBar*)makeTouchBar API_AVAILABLE(macos(10.12.2)) {
   return _touchBarDelegate ? [_touchBarDelegate makeTouchBar] : nil;
 }
 
@@ -1036,12 +1074,14 @@ struct NSEdgeAndCornerThicknesses {
   // Create restorable state archives with secure encoding. See the article at
   // https://sector7.computest.nl/post/2022-08-process-injection-breaking-all-macos-security-layers-with-a-single-vulnerability/
   // for more details.
-  NSKeyedArchiver* encoder =
-      [[NSKeyedArchiver alloc] initRequiringSecureCoding:YES];
-  encoder.delegate = self;
-  [self encodeRestorableStateWithCoder:encoder];
-  [encoder finishEncoding];
-  NSData* restorableState = encoder.encodedData;
+  NSData* restorableState =
+      chromium_legacy::SecureArchive(^(NSKeyedArchiver* encoder) {
+        encoder.delegate = self;
+        [self encodeRestorableStateWithCoder:encoder];
+      });
+  if (!restorableState) {
+    return;
+  }
 
   // Don't bother saving restorable state if it didn't actually change since
   // the last save. This avoids an extra IPC when nothing has changed.
@@ -1191,8 +1231,16 @@ struct NSEdgeAndCornerThicknesses {
   // the views::RootView (and WidgetDelegate::GetAccessibleWindowTitle()). For
   // all other attributes, use what NSWindow provides by default since diverging
   // from NSWindow's behavior can easily break VoiceOver integration.
-  NSString* viewsValue = self.rootAccessibilityObject.accessibilityTitle;
-  return viewsValue ? viewsValue : [super accessibilityTitle];
+  if (@available(macOS 10.10, *)) {
+    NSString* viewsValue = self.rootAccessibilityObject.accessibilityTitle;
+    return viewsValue ? viewsValue : [super accessibilityTitle];
+  }
+  NSString* viewsValue = [(id)self.rootAccessibilityObject
+      accessibilityAttributeValue:NSAccessibilityTitleAttribute];
+  return viewsValue
+             ? viewsValue
+             : [super
+                   accessibilityAttributeValue:NSAccessibilityTitleAttribute];
 }
 
 - (NSWindow<CommandDispatchingWindow>*)commandDispatchParent {

@@ -16,6 +16,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #import "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
+#include "legacy/apple/weak_key_map.h"
 
 namespace remote_cocoa {
 
@@ -91,7 +92,7 @@ bool IsEmergencyShutoffEnabled() {
     NSDictionary* window_manager_prefs = [NSUserDefaults.standardUserDefaults
         persistentDomainForName:@"com.apple.WindowManager"];
     NSNumber* value = base::apple::ObjCCast<NSNumber>(
-        window_manager_prefs[@"GloballyEnabled"]);
+        [window_manager_prefs objectForKey:@"GloballyEnabled"]);
     return value.boolValue;
   }();
 
@@ -134,7 +135,7 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
 @implementation WindowOcclusionCheckerMac {
   NSWindow* __weak _windowResizingOrMoving;
   NSWindow* __weak _windowReceivingFullscreenTransitionNotifications;
-  NSMapTable<NSWindow*, NSNumber*>* __strong _trackedWindows;
+  id __strong _trackedWindows;
   BOOL _displaysAreAsleep;
   BOOL _occlusionStateUpdatesAreScheduled;
   BOOL _updatingOcclusionStates;
@@ -199,7 +200,11 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
     base::debug::SetCrashKeyString(crash_key, "initialized");
   }
 
-  _trackedWindows = [NSMapTable weakToStrongObjectsMapTable];
+  if (@available(macOS 10.8, *)) {
+    _trackedWindows = [NSMapTable weakToStrongObjectsMapTable];
+  } else {
+    _trackedWindows = [[ChromiumLegacyWeakKeyMap alloc] init];
+  }
 
   [self setUpNotifications];
 
@@ -364,10 +369,12 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
              object:nil];
   }
 
-  [notificationCenter addObserver:self
-                         selector:@selector(windowChangedOcclusionState:)
-                             name:NSWindowDidChangeOcclusionStateNotification
-                           object:nil];
+  if (@available(macOS 10.9, *)) {
+    [notificationCenter addObserver:self
+                           selector:@selector(windowChangedOcclusionState:)
+                               name:NSWindowDidChangeOcclusionStateNotification
+                             object:nil];
+  }
 
   [notificationCenter addObserver:self
                          selector:@selector(fullscreenTransitionStarted:)
@@ -491,7 +498,9 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
 - (void)windowChangedOcclusionState:(NSNotification*)notification {
   // Ignore the occlusion notifications we generate.
   NSDictionary* userInfo = [notification userInfo];
-  if (userInfo[remote_cocoa::kWindowOcclusionCheckerNotificationUserInfoKey] !=
+  if ([userInfo
+          objectForKey:remote_cocoa::
+                           kWindowOcclusionCheckerNotificationUserInfoKey] !=
       nil) {
     return;
   }
@@ -610,7 +619,11 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
 // gfx::IsWindowVisibleAndFullyOpaque, which the Windows occlusion tracker
 // uses to ignore translucent layered windows and WS_EX_TRANSPARENT windows.
 - (BOOL)windowCanOccludeOtherWindows:(NSWindow*)window {
-  if (!([window occlusionState] & NSWindowOcclusionStateVisible)) {
+  if (@available(macOS 10.9, *)) {
+    if (!([window occlusionState] & NSWindowOcclusionStateVisible)) {
+      return NO;
+    }
+  } else if (!window.visible || !window.onActiveSpace || window.miniaturized) {
     return NO;
   }
   if ([window alphaValue] < 1.0 || [window ignoresMouseEvents]) {
@@ -640,8 +653,14 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
     return YES;
   }
 
+  // Before Mavericks only claim hidden/off-space windows here; the manual
+  // calculation below can still detect coverage by our own windows.
   BOOL windowOccludedPerMacOS =
-      !([window occlusionState] & NSWindowOcclusionStateVisible);
+      !window.visible || !window.onActiveSpace || window.miniaturized;
+  if (@available(macOS 10.9, *)) {
+    windowOccludedPerMacOS =
+        !([window occlusionState] & NSWindowOcclusionStateVisible);
+  }
   if (windowOccludedPerMacOS) {
     // If macOS says the window is occluded, take that answer.
     return YES;
@@ -763,13 +782,15 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
     objc_setAssociatedObject(self, kWindowIsOccludedKey, flag ? @YES : nil,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    [[NSNotificationCenter defaultCenter]
-        postNotificationName:NSWindowDidChangeOcclusionStateNotification
-                      object:self
-                    userInfo:@{
-                      remote_cocoa::
-                      kWindowOcclusionCheckerNotificationUserInfoKey : @YES
-                    }];
+    if (@available(macOS 10.9, *)) {
+      [[NSNotificationCenter defaultCenter]
+          postNotificationName:NSWindowDidChangeOcclusionStateNotification
+                        object:self
+                      userInfo:@{
+                        remote_cocoa::
+                        kWindowOcclusionCheckerNotificationUserInfoKey : @YES
+                      }];
+    }
   }
 
   // Let the views browser compositor know, after the synthetic notification

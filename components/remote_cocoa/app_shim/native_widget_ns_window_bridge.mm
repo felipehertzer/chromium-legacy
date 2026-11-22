@@ -44,6 +44,8 @@
 #import "components/remote_cocoa/app_shim/window_move_loop.h"
 #import "components/remote_cocoa/app_shim/window_occlusion_checker_mac.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
+#include "legacy/apple/secure_archive.h"
+#include "legacy/apple/sheet.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/cert/x509_util_apple.h"
 #include "ui/accelerated_widget_mac/window_resize_helper_mac.h"
@@ -114,8 +116,10 @@ display::Display GetDisplayForWindow(NSWindow* window) {
 }
 
 bool IsBackgroundEffectView(NSView* view) {
-  if ([view isKindOfClass:[NSVisualEffectView class]]) {
-    return true;
+  if (@available(macOS 10.10, *)) {
+    if ([view isKindOfClass:[NSVisualEffectView class]]) {
+      return true;
+    }
   }
 
   if (@available(macOS 26, *)) {
@@ -418,11 +422,13 @@ NativeWidgetMacNSWindow* NativeWidgetNSWindowBridge::CreateNSWindow(
   }
   ns_window.releasedWhenClosed = NO;
 
-  if (params->titlebar_appears_transparent) {
-    ns_window.titlebarAppearsTransparent = YES;
-  }
-  if (params->window_title_hidden) {
-    ns_window.titleVisibility = NSWindowTitleHidden;
+  if (@available(macOS 10.10, *)) {
+    if (params->titlebar_appears_transparent) {
+      ns_window.titlebarAppearsTransparent = YES;
+    }
+    if (params->window_title_hidden) {
+      ns_window.titleVisibility = NSWindowTitleHidden;
+    }
   }
   if (params->animation_enabled) {
     ns_window.animationBehavior = NSWindowAnimationBehaviorDocumentWindow;
@@ -877,9 +883,9 @@ void NativeWidgetNSWindowBridge::SetVisibilityState(
                length:pending_restoration_data_->appkit_restoration_data
                           .size()];
     RestorationOptionsKeyedUnarchiver* decoder =
-        [[RestorationOptionsKeyedUnarchiver alloc]
-            initForReadingFromData:restore_ns_data
-                             error:nil];
+        static_cast<RestorationOptionsKeyedUnarchiver*>(
+            chromium_legacy::SecureUnarchiver(
+                restore_ns_data, RestorationOptionsKeyedUnarchiver.class));
 
     // Standard macOS behavior is: if a user quits and relaunches an app, window
     // restoration code puts all restored windows onto the primary space. If the
@@ -907,20 +913,30 @@ void NativeWidgetNSWindowBridge::SetVisibilityState(
     // (FB22128526) so it is not used. When that API is revised so that it is
     // flexible enough, Chromium should switch to it.
 
-    if (base::mac::MacOSMajorVersion() >= 15) {
-      decoder.returnRestorationOptions =
-          pending_restoration_data_->restore_space;
-    } else if (pending_restoration_data_->restore_space) {
-      [NSUserDefaults.standardUserDefaults registerDefaults:@{
-        @"NSWindowRestoresWorkspaceAtLaunch" : @YES
-      }];
+    // Lion has no secure-coding API. Do not consume native state there.
+    if (decoder) {
+      if (base::mac::MacOSMajorVersion() >= 15) {
+        decoder.returnRestorationOptions =
+            pending_restoration_data_->restore_space;
+      } else if (pending_restoration_data_->restore_space) {
+        [NSUserDefaults.standardUserDefaults registerDefaults:@{
+          @"NSWindowRestoresWorkspaceAtLaunch" : @YES
+        }];
+      }
+      @try {
+        [window_ restoreStateWithCoder:decoder];
+        [decoder finishDecoding];
+        if (@available(macOS 10.11, *)) {
+          session_restore_in_progress = decoder.error == nil;
+        } else {
+          session_restore_in_progress = true;
+        }
+      } @catch (NSException* exception) {
+        (void)exception;
+        DLOG(WARNING) << "AppKit window restoration rejected its archive";
+      }
     }
-
-    [window_ restoreStateWithCoder:decoder];
-
     pending_restoration_data_.reset();
-
-    session_restore_in_progress = true;
   }
 
   // Ensure that:
@@ -1185,53 +1201,60 @@ void NativeWidgetNSWindowBridge::SetCursor(const ui::Cursor& cursor) {
 void NativeWidgetNSWindowBridge::EnableImmersiveFullscreen(
     uint64_t fullscreen_overlay_widget_id,
     uint64_t tab_widget_id) {
-  CHECK(!immersive_transparent_titlebar_controller_);
-  NativeWidgetNSWindowBridge* tab_widget_bridge = GetFromId(tab_widget_id);
-  if (tab_widget_bridge) {
-    NSWindow* tab_window = tab_widget_bridge->ns_window();
-    immersive_mode_controller_ =
-        std::make_unique<ImmersiveModeTabbedControllerCocoa>(
-            ns_window(), GetFromId(fullscreen_overlay_widget_id)->ns_window(),
-            tab_window);
-  } else {
-    immersive_mode_controller_ = std::make_unique<ImmersiveModeControllerCocoa>(
-        ns_window(), GetFromId(fullscreen_overlay_widget_id)->ns_window());
-  }
-  immersive_mode_controller_->Init();
+  if (@available(macOS 10.12, *)) {
+    CHECK(!immersive_transparent_titlebar_controller_);
+    NativeWidgetNSWindowBridge* tab_widget_bridge = GetFromId(tab_widget_id);
+    if (tab_widget_bridge) {
+      NSWindow* tab_window = tab_widget_bridge->ns_window();
+      immersive_mode_controller_ =
+          std::make_unique<ImmersiveModeTabbedControllerCocoa>(
+              ns_window(), GetFromId(fullscreen_overlay_widget_id)->ns_window(),
+              tab_window);
+    } else {
+      immersive_mode_controller_ =
+          std::make_unique<ImmersiveModeControllerCocoa>(
+              ns_window(),
+              GetFromId(fullscreen_overlay_widget_id)->ns_window());
+    }
+    immersive_mode_controller_->Init();
 
-  // It is possible for the fullscreen transition to complete before the
-  // immersive mode controller is created. Mark the transition as complete as
-  // needed here.
-  if (!fullscreen_controller_.IsInFullscreenTransition() &&
-      fullscreen_controller_.GetTargetFullscreenState()) {
-    immersive_mode_controller_->FullscreenTransitionCompleted();
-  }
+    // It is possible for the fullscreen transition to complete before the
+    // immersive mode controller is created. Mark the transition as complete as
+    // needed here.
+    if (!fullscreen_controller_.IsInFullscreenTransition() &&
+        fullscreen_controller_.GetTargetFullscreenState()) {
+      immersive_mode_controller_->FullscreenTransitionCompleted();
+    }
 
-  // Reveal locks can outlive immersive_mode_controller_, re-establish any
-  // outstanding locks.
-  for (int i = 0; i < immersive_fullscreen_reveal_lock_count_; ++i) {
-    immersive_mode_controller_->RevealLock();
+    // Reveal locks can outlive immersive_mode_controller_, re-establish any
+    // outstanding locks.
+    for (int i = 0; i < immersive_fullscreen_reveal_lock_count_; ++i) {
+      immersive_mode_controller_->RevealLock();
+    }
   }
 }
 
 void NativeWidgetNSWindowBridge::
     EnableImmersiveFullscreenWithTransparentTitlebar() {
-  CHECK(!immersive_mode_controller_);
-  immersive_transparent_titlebar_controller_ =
-      std::make_unique<ImmersiveModeTransparentTitlebarControllerCocoa>(
-          window_,
-          // Unretained is safe: `this` owns the controller.
-          base::BindRepeating(&NativeWidgetNSWindowBridge::
-                                  OnImmersiveFullscreenTitlebarFrameChanged,
-                              base::Unretained(this)));
-  immersive_transparent_titlebar_controller_->Init();
+  if (@available(macOS 11.0, *)) {
+    CHECK(!immersive_mode_controller_);
+    immersive_transparent_titlebar_controller_ =
+        std::make_unique<ImmersiveModeTransparentTitlebarControllerCocoa>(
+            window_,
+            // Unretained is safe: `this` owns the controller.
+            base::BindRepeating(&NativeWidgetNSWindowBridge::
+                                    OnImmersiveFullscreenTitlebarFrameChanged,
+                                base::Unretained(this)));
+    immersive_transparent_titlebar_controller_->Init();
 
-  // It is possible for the fullscreen transition to complete before the
-  // immersive mode controller is created. Mark the transition as complete as
-  // needed here.
-  if (!fullscreen_controller_.IsInFullscreenTransition() &&
-      fullscreen_controller_.GetTargetFullscreenState()) {
-    immersive_transparent_titlebar_controller_->FullscreenTransitionCompleted();
+    // It is possible for the fullscreen transition to complete before the
+    // immersive mode controller is created. Mark the transition as complete as
+    // needed here.
+    if (!fullscreen_controller_.IsInFullscreenTransition() &&
+        fullscreen_controller_.GetTargetFullscreenState()) {
+      immersive_transparent_titlebar_controller_
+          ->FullscreenTransitionCompleted();
+    }
   }
 }
 
@@ -1242,49 +1265,68 @@ void NativeWidgetNSWindowBridge::DisableImmersiveFullscreen() {
 
 void NativeWidgetNSWindowBridge::UpdateToolbarVisibility(
     remote_cocoa::mojom::ToolbarVisibilityStyle style) {
-  if (immersive_mode_controller_) {
-    immersive_mode_controller_->UpdateToolbarVisibility(style);
+  if (@available(macOS 10.12, *)) {
+    if (immersive_mode_controller_) {
+      immersive_mode_controller_->UpdateToolbarVisibility(style);
+    }
   }
-  if (immersive_transparent_titlebar_controller_) {
-    immersive_transparent_titlebar_controller_->UpdateToolbarVisibility(style);
+  if (@available(macOS 11.0, *)) {
+    if (immersive_transparent_titlebar_controller_) {
+      immersive_transparent_titlebar_controller_->UpdateToolbarVisibility(
+          style);
+    }
   }
 }
 
 void NativeWidgetNSWindowBridge::OnTopContainerViewBoundsChanged(
     const gfx::Rect& bounds) {
-  if (immersive_mode_controller_) {
-    immersive_mode_controller_->OnTopViewBoundsChanged(bounds);
+  if (@available(macOS 10.12, *)) {
+    if (immersive_mode_controller_) {
+      immersive_mode_controller_->OnTopViewBoundsChanged(bounds);
+    }
   }
-  if (immersive_transparent_titlebar_controller_) {
-    immersive_transparent_titlebar_controller_->OnTopViewBoundsChanged(bounds);
+  if (@available(macOS 11.0, *)) {
+    if (immersive_transparent_titlebar_controller_) {
+      immersive_transparent_titlebar_controller_->OnTopViewBoundsChanged(
+          bounds);
+    }
   }
 }
 
 void NativeWidgetNSWindowBridge::ImmersiveFullscreenRevealLock() {
   ++immersive_fullscreen_reveal_lock_count_;
-  if (immersive_mode_controller_) {
-    immersive_mode_controller_->RevealLock();
+  if (@available(macOS 10.12, *)) {
+    if (immersive_mode_controller_) {
+      immersive_mode_controller_->RevealLock();
+    }
   }
 }
 
 void NativeWidgetNSWindowBridge::ImmersiveFullscreenRevealUnlock() {
   --immersive_fullscreen_reveal_lock_count_;
   DCHECK(immersive_fullscreen_reveal_lock_count_ >= 0);
-  if (immersive_mode_controller_) {
-    immersive_mode_controller_->RevealUnlock();
+  if (@available(macOS 10.12, *)) {
+    if (immersive_mode_controller_) {
+      immersive_mode_controller_->RevealUnlock();
+    }
   }
 }
 
 bool NativeWidgetNSWindowBridge::ShouldUseCustomTitlebarHeightForFullscreen()
     const {
-  if (immersive_transparent_titlebar_controller_) {
-    return immersive_transparent_titlebar_controller_->is_initialized() &&
-           !immersive_transparent_titlebar_controller_->IsContentFullscreen();
+  if (@available(macOS 11.0, *)) {
+    if (immersive_transparent_titlebar_controller_) {
+      return immersive_transparent_titlebar_controller_->is_initialized() &&
+             !immersive_transparent_titlebar_controller_->IsContentFullscreen();
+    }
   }
-  return immersive_mode_controller_ &&
-         immersive_mode_controller_->is_initialized() &&
-         immersive_mode_controller_->IsTabbed() &&
-         !immersive_mode_controller_->IsContentFullscreen();
+  if (@available(macOS 10.12, *)) {
+    return immersive_mode_controller_ &&
+           immersive_mode_controller_->is_initialized() &&
+           immersive_mode_controller_->IsTabbed() &&
+           !immersive_mode_controller_->IsContentFullscreen();
+  }
+  return false;
 }
 
 void NativeWidgetNSWindowBridge::OnImmersiveFullscreenToolbarRevealChanged(
@@ -1384,11 +1426,16 @@ void NativeWidgetNSWindowBridge::UpdateWindowOcclusionTracking() {
 
 void NativeWidgetNSWindowBridge::SetColorMode(
     ui::ColorProviderKey::ColorMode color_mode) {
-  NSAppearance* appearance =
-      color_mode == ui::ColorProviderKey::ColorMode::kLight
-          ? [NSAppearance appearanceNamed:NSAppearanceNameAqua]
-          : [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-  [window_ setAppearance:appearance];
+  if (@available(macOS 10.9, *)) {
+    NSAppearance* appearance =
+        [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+    if (@available(macOS 10.14, *)) {
+      if (color_mode == ui::ColorProviderKey::ColorMode::kDark) {
+        appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+      }
+    }
+    [window_ setAppearance:appearance];
+  }
 }
 
 void NativeWidgetNSWindowBridge::BeginFileDrag(
@@ -1579,9 +1626,11 @@ void NativeWidgetNSWindowBridge::OnSpaceActivationMayHaveChanged() {
   bool is_visible_on_screen = window_.onActiveSpace;
   if (base::FeatureList::IsEnabled(
           ::features::kDetectSpaceChangeViaOcclusion)) {
-    is_visible_on_screen =
-        is_visible_on_screen ||
-        (([window_ occlusionState] & NSWindowOcclusionStateVisible) != 0);
+    if (@available(macOS 10.9, *)) {
+      is_visible_on_screen =
+          is_visible_on_screen ||
+          (([window_ occlusionState] & NSWindowOcclusionStateVisible) != 0);
+    }
   }
   host_->OnSpaceActivationChanged(is_visible_on_screen);
 }
@@ -1770,9 +1819,11 @@ void NativeWidgetNSWindowBridge::FullscreenControllerTransitionComplete(
   // Reset it only once the window has left fullscreen, so that the titlebar
   // doesn't turn opaque while it animates out. This is a no-op if the
   // transparency was never set.
-  if (!is_fullscreen) {
-    ImmersiveModeTransparentTitlebarControllerCocoa::ResetTitlebarTransparency(
-        window_);
+  if (@available(macOS 11.0, *)) {
+    if (!is_fullscreen) {
+      ImmersiveModeTransparentTitlebarControllerCocoa::
+          ResetTitlebarTransparency(window_);
+    }
   }
   UpdateWindowGeometry();
   UpdateWindowDisplay();
@@ -1781,11 +1832,16 @@ void NativeWidgetNSWindowBridge::FullscreenControllerTransitionComplete(
   OrderChildren();
 
   host_->OnWindowFullscreenTransitionComplete(is_fullscreen);
-  if (is_fullscreen && immersive_mode_controller_) {
-    immersive_mode_controller_->FullscreenTransitionCompleted();
+  if (@available(macOS 10.12, *)) {
+    if (is_fullscreen && immersive_mode_controller_) {
+      immersive_mode_controller_->FullscreenTransitionCompleted();
+    }
   }
-  if (is_fullscreen && immersive_transparent_titlebar_controller_) {
-    immersive_transparent_titlebar_controller_->FullscreenTransitionCompleted();
+  if (@available(macOS 11.0, *)) {
+    if (is_fullscreen && immersive_transparent_titlebar_controller_) {
+      immersive_transparent_titlebar_controller_
+          ->FullscreenTransitionCompleted();
+    }
   }
 }
 
@@ -1990,11 +2046,15 @@ void NativeWidgetNSWindowBridge::SetCanAppearInExistingFullscreenSpaces(
     bool can_appear_in_existing_fullscreen_spaces) {
   NSWindowCollectionBehavior collectionBehavior = window_.collectionBehavior;
   if (can_appear_in_existing_fullscreen_spaces) {
-    collectionBehavior &= ~NSWindowCollectionBehaviorPrimary;
+    if (@available(macOS 13, *)) {
+      collectionBehavior &= ~NSWindowCollectionBehaviorPrimary;
+    }
     collectionBehavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
     collectionBehavior &= ~NSWindowCollectionBehaviorFullScreenPrimary;
   } else {
-    collectionBehavior |= NSWindowCollectionBehaviorPrimary;
+    if (@available(macOS 13, *)) {
+      collectionBehavior |= NSWindowCollectionBehaviorPrimary;
+    }
     collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
     collectionBehavior &= ~NSWindowCollectionBehaviorFullScreenAuxiliary;
   }
@@ -2096,9 +2156,11 @@ void NativeWidgetNSWindowBridge::SetCALayerParams(
     // notification, manual occlusion detection (e.g.
     // WindowOcclusionCheckerMac) could miss that this window can now
     // occlude other windows beneath it which is needed for glass frame.
-    [[NSNotificationCenter defaultCenter]
-        postNotificationName:NSWindowDidChangeOcclusionStateNotification
-                      object:window_];
+    if (@available(macOS 10.9, *)) {
+      [[NSNotificationCenter defaultCenter]
+          postNotificationName:NSWindowDidChangeOcclusionStateNotification
+                        object:window_];
+    }
   }
 
   if (invalidate_shadow_on_frame_swap_) {
@@ -2165,11 +2227,16 @@ void NativeWidgetNSWindowBridge::SetWindowTitle(const std::u16string& title) {
 }
 
 void NativeWidgetNSWindowBridge::ClearTouchBar() {
-  [bridged_view_ setTouchBar:nil];
+  if (@available(macOS 10.12.2, *)) {
+    [bridged_view_ setTouchBar:nil];
+  }
 }
 
 void NativeWidgetNSWindowBridge::UpdateTooltip() {
-  NSPoint nspoint = [window_ convertPointFromScreen:NSEvent.mouseLocation];
+  NSPoint nspoint =
+      [window_ convertRectFromScreen:NSMakeRect(NSEvent.mouseLocation.x,
+                                                NSEvent.mouseLocation.y, 0, 0)]
+          .origin;
   // Note: flip in the view's frame, which matches the window's contentRect.
   gfx::Point point(nspoint.x, NSHeight([bridged_view_ frame]) - nspoint.y);
   [bridged_view_ updateTooltipIfRequiredAt:point bridge:this];
@@ -2227,9 +2294,11 @@ void NativeWidgetNSWindowBridge::OrderChildren() {
     } else {
       if (child_window.parentWindow == window)
         continue;
-      if (immersive_mode_controller_ &&
-          immersive_mode_controller_->overlay_window() == child_window) {
-        continue;
+      if (@available(macOS 10.12, *)) {
+        if (immersive_mode_controller_ &&
+            immersive_mode_controller_->overlay_window() == child_window) {
+          continue;
+        }
       }
       [window addChildWindow:child_window ordered:NSWindowAbove];
     }
@@ -2413,29 +2482,32 @@ void NativeWidgetNSWindowBridge::ShowAsModalSheet() {
         if (parent_window.attachedSheet == bridge->ns_window()) {
           return;
         }
-        [parent_window beginSheet:bridge->ns_window()
-                completionHandler:^(NSModalResponse return_code) {
-                  // This class, NativeWidgetNSWindowBridge, clears the window's
-                  // delegate as an indication of its death, in which case this
-                  // completion handler will no-op. This is necessary to handle
-                  // AppKit invoking this selector via a posted task. See
-                  // https://crbug.com/41393772
-                  NSWindow* window = weak_window;
-                  if (!window.delegate) {
-                    return;
-                  }
-                  // Make sure to mark ourselves as not wanting to be visible.
-                  // Otherwise if during the orderOut call our parent becomes
-                  // the key window, it would try to show us as a new modal
-                  // sheet.
-                  if (weak_this) {
-                    weak_this->wants_to_be_visible_ = false;
-                  }
-                  [window orderOut:nil];
-                  if (weak_this) {
-                    weak_this->OnWindowWillClose();
-                  }
-                }];
+        chromium_legacy::BeginSheet(parent_window, bridge->ns_window(),
+                                    ^(NSModalResponse return_code) {
+                                      // This class, NativeWidgetNSWindowBridge,
+                                      // clears the window's delegate as an
+                                      // indication of its death, in which case
+                                      // this completion handler will no-op.
+                                      // This is necessary to handle AppKit
+                                      // invoking this selector via a posted
+                                      // task. See https://crbug.com/41393772
+                                      NSWindow* window = weak_window;
+                                      if (!window.delegate) {
+                                        return;
+                                      }
+                                      // Make sure to mark ourselves as not
+                                      // wanting to be visible. Otherwise if
+                                      // during the orderOut call our parent
+                                      // becomes the key window, it would try to
+                                      // show us as a new modal sheet.
+                                      if (weak_this) {
+                                        weak_this->wants_to_be_visible_ = false;
+                                      }
+                                      [window orderOut:nil];
+                                      if (weak_this) {
+                                        weak_this->OnWindowWillClose();
+                                      }
+                                    });
       }));
 }
 

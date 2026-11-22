@@ -13,6 +13,10 @@
 
 namespace remote_cocoa {
 
+// Older windows may own a null pointer; Cocoa operations require this OS API.
+#pragma clang attribute push(                                 \
+    __attribute__((availability(macos, introduced = 10.12))), \
+    apply_to = function)
 class REMOTE_COCOA_APP_SHIM_EXPORT ImmersiveModeTabbedControllerCocoa
     : public ImmersiveModeControllerCocoa {
  public:
@@ -55,8 +59,10 @@ class REMOTE_COCOA_APP_SHIM_EXPORT ImmersiveModeTabbedControllerCocoa
 
   NativeWidgetMacOverlayNSWindow* __weak tab_window_;
   BridgedContentView* __weak tab_content_view_;
-  NSTitlebarAccessoryViewController* __strong tab_titlebar_view_controller_;
+  NSTitlebarAccessoryViewController* __strong tab_titlebar_view_controller_
+      API_AVAILABLE(macos(10.10));
 };
+#pragma clang attribute pop
 
 }  // namespace remote_cocoa
 

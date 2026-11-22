@@ -48,6 +48,10 @@ namespace remote_cocoa {
 // _NSFullScreenToolbarSurrogateWindow instead. For the same reason, the flag
 // must be reset before the window enters fullscreen again, see
 // ResetTitlebarTransparency().
+// Older windows may own a null pointer; Cocoa operations require this OS API.
+#pragma clang attribute push(                                \
+    __attribute__((availability(macos, introduced = 11.0))), \
+    apply_to = function)
 class REMOTE_COCOA_APP_SHIM_EXPORT
     ImmersiveModeTransparentTitlebarControllerCocoa {
  public:
@@ -141,8 +145,8 @@ class REMOTE_COCOA_APP_SHIM_EXPORT
   // Notification observers registered with NSNotificationCenter.
   NSMutableArray<id<NSObject>>* __strong notification_observers_;
 
-  NSTitlebarSeparatorStyle original_titlebar_separator_style_ =
-      NSTitlebarSeparatorStyleAutomatic;
+  NSTitlebarSeparatorStyle original_titlebar_separator_style_
+      API_AVAILABLE(macos(11.0)) = NSTitlebarSeparatorStyleAutomatic;
 
   bool initialized_ = false;
   bool fullscreen_transition_complete_ = false;
@@ -153,6 +157,7 @@ class REMOTE_COCOA_APP_SHIM_EXPORT
   base::WeakPtrFactory<ImmersiveModeTransparentTitlebarControllerCocoa>
       weak_ptr_factory_{this};
 };
+#pragma clang attribute pop
 
 }  // namespace remote_cocoa
 

@@ -16,6 +16,7 @@
 #include "components/remote_cocoa/app_shim/native_widget_ns_window_fullscreen_controller.h"
 #include "components/remote_cocoa/app_shim/native_widget_ns_window_host_helper.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
+#include "legacy/apple/sheet.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/gfx/geometry/resize_utils.h"
 
@@ -317,7 +318,7 @@
   [self windowEndMove];
 
   NSWindow* window = _parent->ns_window();
-  if (NSWindow* sheetParent = [window sheetParent]) {
+  if (NSWindow* sheetParent = chromium_legacy::SheetParent(window)) {
     // On no! Something called -[NSWindow close] on a sheet rather than calling
     // -[NSWindow endSheet:] on its parent. If the modal session is not ended
     // then the parent will never be able to show another sheet. But calling
@@ -326,7 +327,7 @@
     // -endSheet: must be retained.
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(^{
-          [sheetParent endSheet:window];
+          chromium_legacy::EndSheet(sheetParent, window);
         }));
   }
   DCHECK([window isEqual:[notification object]]);
@@ -335,9 +336,8 @@
   // |parent_| _will_ be deleted for sure.
 
   // Note OnWindowWillClose() will clear the NSWindow delegate. That is, |self|.
-  // That guarantees that the task possibly-posted above will never call into
-  // our -sheetDidEnd:. (The task's purpose is just to unblock the modal session
-  // on the parent window.)
+  // The sheet completion checks the cleared delegate before accessing the
+  // bridge. The task above only unblocks the parent's modal session.
   DCHECK(![window delegate]);
 }
 
