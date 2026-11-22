@@ -115,6 +115,13 @@ int main(int argc, char** argv) {
       AXPlatformNodeCocoa* cocoa = child.Cocoa();
       Check(cocoa != nil && [cocoa instanceActive],
             "real Chromium node created");
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+      Check(![cocoa isAccessibilitySelectorAllowed:@selector(description)],
+            "legacy selector permission excludes NSObject helpers");
+      Check([cocoa
+                isAccessibilitySelectorAllowed:NSSelectorFromString(@"AXRole")],
+            "legacy selector permission retains accessibility getters");
+#endif
       Check([[cocoa accessibilityAttributeValue:NSAccessibilityRoleAttribute]
                 isEqual:NSAccessibilityButtonRole],
             "legacy role lookup");

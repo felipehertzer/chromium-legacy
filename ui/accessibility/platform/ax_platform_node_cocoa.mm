@@ -3073,8 +3073,15 @@ const ui::CocoaActionList& GetCocoaActionListForTesting() {
 
   // TODO(crbug.com/41115917): What about role-specific selectors?
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
-  // NSObject has no property-based accessibility defaults. Only allow selectors
-  // actually implemented by this node, after the state/role checks above.
+  // NSObject has no property-based accessibility defaults. Keep permission
+  // limited to implemented accessibility selectors, after the state/role
+  // checks.
+  if (![selectorString hasPrefix:@"accessibility"] &&
+      ![selectorString hasPrefix:@"isAccessibility"] &&
+      ![selectorString hasPrefix:@"setAccessibility"] &&
+      ![selectorString hasPrefix:@"AX"]) {
+    return NO;
+  }
   return [super respondsToSelector:selector];
 #else
   return [super isAccessibilitySelectorAllowed:selector];

@@ -1787,8 +1787,10 @@ component("net") {
 
   if (is_mac) {
     libs = [ "resolv" ]
+
+    # CoreServices reexports CFNetwork at its OS-specific install name. Lion
+    # keeps CFNetwork nested inside CoreServices rather than at the modern path.
     frameworks = [
-      "CFNetwork.framework",
       "CoreServices.framework",
       "Foundation.framework",
       "Security.framework",

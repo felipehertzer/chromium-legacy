@@ -20,7 +20,8 @@ source_set("mac_api_wrapper") {
   ]
 
   frameworks = [
-    "CFNetwork.framework",
+    # Preserve CoreServices' CFNetwork reexport on older macOS.
+    "CoreServices.framework",
     "CoreFoundation.framework",
     "Foundation.framework",
     "SystemConfiguration.framework",
