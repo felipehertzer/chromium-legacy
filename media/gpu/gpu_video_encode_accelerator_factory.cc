@@ -103,8 +103,11 @@ std::unique_ptr<VideoEncodeAccelerator> CreateVTVEA(
     const gpu::GpuPreferences&,
     const gpu::GpuDriverBugWorkarounds&,
     const gpu::GPUInfo::GPUDevice&) {
-  return base::WrapUnique<VideoEncodeAccelerator>(
-      new VTVideoEncodeAccelerator());
+  if (__builtin_available(macOS 10.9, *)) {
+    return base::WrapUnique<VideoEncodeAccelerator>(
+        new VTVideoEncodeAccelerator());
+  }
+  return nullptr;
 }
 #endif
 

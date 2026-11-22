@@ -24,9 +24,12 @@ class GpuMojoMediaClientMac final : public GpuMojoMediaClient {
  protected:
   std::unique_ptr<VideoDecoder> CreatePlatformVideoDecoder(
       VideoDecoderTraits& traits) final {
-    return std::make_unique<VideoToolboxVideoDecoder>(
-        traits.task_runner, traits.media_log->Clone(), gpu_workarounds_,
-        gpu_task_runner_, traits.get_command_buffer_stub_cb);
+    if (__builtin_available(macOS 10.9, *)) {
+      return std::make_unique<VideoToolboxVideoDecoder>(
+          traits.task_runner, traits.media_log->Clone(), gpu_workarounds_,
+          gpu_task_runner_, traits.get_command_buffer_stub_cb);
+    }
+    return nullptr;
   }
 
   std::optional<SupportedAudioDecoderConfigs>
@@ -42,8 +45,11 @@ class GpuMojoMediaClientMac final : public GpuMojoMediaClient {
 
   std::optional<SupportedVideoDecoderConfigs>
   GetPlatformSupportedVideoDecoderConfigs() final {
-    return VideoToolboxVideoDecoder::GetSupportedVideoDecoderConfigs(
-        gpu_workarounds_);
+    if (__builtin_available(macOS 10.9, *)) {
+      return VideoToolboxVideoDecoder::GetSupportedVideoDecoderConfigs(
+          gpu_workarounds_);
+    }
+    return SupportedVideoDecoderConfigs();
   }
 
   std::unique_ptr<AudioDecoder> CreatePlatformAudioDecoder(

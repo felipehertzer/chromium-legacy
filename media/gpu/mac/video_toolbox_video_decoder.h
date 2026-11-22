@@ -42,7 +42,8 @@ class MediaLog;
 struct VideoToolboxDecodeMetadata;
 struct VideoToolboxDecompressionSessionMetadata;
 
-class MEDIA_GPU_EXPORT VideoToolboxVideoDecoder : public VideoDecoder {
+class MEDIA_GPU_EXPORT API_AVAILABLE(macos(10.9)) VideoToolboxVideoDecoder
+    : public VideoDecoder {
  public:
   using GetCommandBufferStubCB =
       base::RepeatingCallback<gpu::CommandBufferStub*()>;

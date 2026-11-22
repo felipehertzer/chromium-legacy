@@ -110,6 +110,11 @@ or replaces a Chromium 159 dependency.
   code uses the original Foundation selectors. Native appearance observation
   requires 10.14; system caption preferences require MediaAccessibility/10.9.
   Earlier systems retain WebVTT defaults and the base theme preferences.
+- Native VideoToolbox decoder/encoder construction requires 10.9; older systems
+  select the existing software-codec paths. Capability queries, format color
+  constants and HDR metadata use their respective OS APIs. SVC requires 11.3,
+  external per-frame QP requires 12, and reference-buffer controls require 13.
+  Unsupported controls are not advertised as available on Catalina.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -148,6 +153,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Bluetooth UUIDs/identity/state/umbrella binding, normal and forced legacy paths | 15 checks each, Intel and ARM | 15 checks each |
 | Sandbox logging/formatting, normal and forced legacy paths | 8 checks each | 8 checks each |
 | Accessibility announcements/search wire keys/Unicode casing | 72 normal and 70 forced legacy checks, Intel and ARM | 72 normal and 70 forced legacy checks |
+| Actual VideoToolbox capability/session/color-format helpers | 14 checks passed | 14 checks passed |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -158,8 +164,8 @@ application, SDK overlay preservation, and Mach-O audit behavior.
 An additional symbol audit compares the probes with the **actual Lion 10.7.5
 (11G63) libraries** extracted from Apple's official installer. The Rust,
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
-compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode, timers,
-atomics, and forced C++ runtime probes have no missing required symbols
+compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
+VideoToolbox helpers, timers, atomics, and forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
@@ -170,6 +176,9 @@ attributes, native traversal, disabled/read-only policy, and object lifetime.
 Its integration build is in progress; it has not yet been run. The standalone
 platform checks validate data and casing, without starting VoiceOver or testing
 assistive-technology navigation in the browser.
+The VideoToolbox checks create and release a real native H.264 software session,
+validate OS capability exports and production format dictionaries. They do not
+encode/decode frames or validate hardware video playback.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -195,6 +204,7 @@ python3 legacy/test_clipboard.py
 python3 legacy/test_display.py
 python3 legacy/test_core_animation.py
 python3 legacy/test_sandbox_logging.py
+python3 legacy/test_video_toolbox_platform.py
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

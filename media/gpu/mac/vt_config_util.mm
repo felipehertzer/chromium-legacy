@@ -26,7 +26,7 @@ void SetDictionaryValue(NSMutableDictionary<NSString*, id>* dictionary,
                         CFStringRef key,
                         id value) {
   if (value) {
-    dictionary[base::apple::CFToNSPtrCast(key)] = value;
+    [dictionary setObject:value forKey:base::apple::CFToNSPtrCast(key)];
   }
 }
 
@@ -44,7 +44,10 @@ CFStringRef GetPrimaries(media::VideoColorSpace::PrimaryID primary_id) {
       return kCMFormatDescriptionColorPrimaries_ITU_R_709_2;
 
     case media::VideoColorSpace::PrimaryID::BT2020:
-      return kCMFormatDescriptionColorPrimaries_ITU_R_2020;
+      if (@available(macOS 10.11, *)) {
+        return kCMFormatDescriptionColorPrimaries_ITU_R_2020;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::PrimaryID::SMPTE170M:
     case media::VideoColorSpace::PrimaryID::SMPTE240M:
@@ -58,10 +61,16 @@ CFStringRef GetPrimaries(media::VideoColorSpace::PrimaryID primary_id) {
       return kCMFormatDescriptionColorPrimaries_EBU_3213;
 
     case media::VideoColorSpace::PrimaryID::SMPTEST431_2:
-      return kCMFormatDescriptionColorPrimaries_DCI_P3;
+      if (@available(macOS 10.11, *)) {
+        return kCMFormatDescriptionColorPrimaries_DCI_P3;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::PrimaryID::SMPTEST432_1:
-      return kCMFormatDescriptionColorPrimaries_P3_D65;
+      if (@available(macOS 10.11, *)) {
+        return kCMFormatDescriptionColorPrimaries_P3_D65;
+      }
+      return nullptr;
 
     default:
       DLOG(ERROR) << "Unsupported primary id: " << static_cast<int>(primary_id);
@@ -73,14 +82,20 @@ CFStringRef GetTransferFunction(
     media::VideoColorSpace::TransferID transfer_id) {
   switch (transfer_id) {
     case media::VideoColorSpace::TransferID::LINEAR:
-      return kCMFormatDescriptionTransferFunction_Linear;
+      if (@available(macOS 10.14, *)) {
+        return kCMFormatDescriptionTransferFunction_Linear;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::TransferID::GAMMA22:
     case media::VideoColorSpace::TransferID::GAMMA28:
       return kCMFormatDescriptionTransferFunction_UseGamma;
 
     case media::VideoColorSpace::TransferID::IEC61966_2_1:
-      return kCVImageBufferTransferFunction_sRGB;
+      if (@available(macOS 10.13, *)) {
+        return kCVImageBufferTransferFunction_sRGB;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::TransferID::SMPTE170M:
     case media::VideoColorSpace::TransferID::BT709:
@@ -90,19 +105,31 @@ CFStringRef GetTransferFunction(
 
     case media::VideoColorSpace::TransferID::BT2020_10:
     case media::VideoColorSpace::TransferID::BT2020_12:
-      return kCMFormatDescriptionTransferFunction_ITU_R_2020;
+      if (@available(macOS 10.11, *)) {
+        return kCMFormatDescriptionTransferFunction_ITU_R_2020;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::TransferID::SMPTEST2084:
-      return kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ;
+      if (@available(macOS 10.13, *)) {
+        return kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::TransferID::ARIB_STD_B67:
-      return kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG;
+      if (@available(macOS 10.13, *)) {
+        return kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::TransferID::SMPTE240M:
       return kCMFormatDescriptionTransferFunction_SMPTE_240M_1995;
 
     case media::VideoColorSpace::TransferID::SMPTEST428_1:
-      return kCMFormatDescriptionTransferFunction_SMPTE_ST_428_1;
+      if (@available(macOS 10.12, *)) {
+        return kCMFormatDescriptionTransferFunction_SMPTE_ST_428_1;
+      }
+      return nullptr;
 
     default:
       DLOG(ERROR) << "Unsupported transfer function: "
@@ -119,7 +146,10 @@ CFStringRef GetMatrix(media::VideoColorSpace::MatrixID matrix_id) {
       return kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2;
 
     case media::VideoColorSpace::MatrixID::BT2020_NCL:
-      return kCMFormatDescriptionYCbCrMatrix_ITU_R_2020;
+      if (@available(macOS 10.11, *)) {
+        return kCMFormatDescriptionYCbCrMatrix_ITU_R_2020;
+      }
+      return nullptr;
 
     case media::VideoColorSpace::MatrixID::FCC:
     case media::VideoColorSpace::MatrixID::SMPTE170M:

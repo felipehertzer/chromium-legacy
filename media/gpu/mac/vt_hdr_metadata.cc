@@ -113,11 +113,14 @@ std::vector<uint8_t> BuildHdrMetadataSeiNalu(VideoCodec codec,
     return {};
   }
 
-  const CFDataRef mdcv_data = GetDataExtension(
-      format_desc, kCMFormatDescriptionExtension_MasteringDisplayColorVolume);
-  const CFDataRef clli_data = GetDataExtension(
-      format_desc, kCMFormatDescriptionExtension_ContentLightLevelInfo);
-  return BuildHdrSeiNalu(codec, mdcv_data, clli_data);
+  if (__builtin_available(macOS 10.13, *)) {
+    const CFDataRef mdcv_data = GetDataExtension(
+        format_desc, kCMFormatDescriptionExtension_MasteringDisplayColorVolume);
+    const CFDataRef clli_data = GetDataExtension(
+        format_desc, kCMFormatDescriptionExtension_ContentLightLevelInfo);
+    return BuildHdrSeiNalu(codec, mdcv_data, clli_data);
+  }
+  return {};
 }
 
 }  // namespace media

@@ -9,7 +9,7 @@
 
 namespace media {
 
-namespace {
+namespace __attribute__((availability(macos, introduced=10.9))) {
 
 void OnOutputThunk(void* decompression_output_refcon,
                    void* source_frame_refcon,

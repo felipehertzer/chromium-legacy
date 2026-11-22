@@ -35,7 +35,7 @@ struct SharedImageEncodeAccess;
 // VideoToolbox.framework implementation of the VideoEncodeAccelerator
 // interface for MacOSX. VideoToolbox makes no guarantees that it is thread
 // safe, so this object is pinned to the thread on which it is constructed.
-class MEDIA_GPU_EXPORT VTVideoEncodeAccelerator
+class MEDIA_GPU_EXPORT API_AVAILABLE(macos(10.9)) VTVideoEncodeAccelerator
     : public VideoEncodeAccelerator {
  public:
   VTVideoEncodeAccelerator();

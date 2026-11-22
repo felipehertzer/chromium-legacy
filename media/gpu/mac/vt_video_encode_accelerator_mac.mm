@@ -89,7 +89,7 @@ struct SharedImageEncodeAccess
 
 using EncoderType = VideoEncodeAccelerator::Config::EncoderType;
 
-namespace {
+namespace __attribute__((availability(macos, introduced=10.9))) {
 
 constexpr size_t kMaxFrameRateNumerator = 120;
 constexpr size_t kMaxFrameRateDenominator = 1;
@@ -101,8 +101,8 @@ constexpr int kH26xMaxQp = 51;
 // format description of every encoded sample, and asking for metadata insertion
 // additionally gets it into the bitstream on encoders that implement it.
 void ConfigureVtSessionForHdrMetadata(
-    video_toolbox::SessionPropertySetter& session_property_setter,
-    const gfx::HDRMetadata& hdr_metadata) {
+    video_toolbox::SessionPropertySetter & session_property_setter,
+    const gfx::HDRMetadata& hdr_metadata) API_AVAILABLE(macos(10.13)) {
   if (session_property_setter.IsSupported(
           kVTCompressionPropertyKey_MasteringDisplayColorVolume)) {
     if (auto mdcv = gfx::GenerateMasteringDisplayColorVolume(
@@ -127,13 +127,15 @@ void ConfigureVtSessionForHdrMetadata(
     }
   }
 
-  if (session_property_setter.IsSupported(
-          kVTCompressionPropertyKey_HDRMetadataInsertionMode) &&
-      !session_property_setter.Set(
-          kVTCompressionPropertyKey_HDRMetadataInsertionMode,
-          kVTHDRMetadataInsertionMode_Auto)) {
-    DLOG(ERROR) << "Failed to set HDRMetadataInsertionMode on "
-                   "VTCompressionSession.";
+  if (@available(macOS 11.0, *)) {
+    if (session_property_setter.IsSupported(
+            kVTCompressionPropertyKey_HDRMetadataInsertionMode) &&
+        !session_property_setter.Set(
+            kVTCompressionPropertyKey_HDRMetadataInsertionMode,
+            kVTHDRMetadataInsertionMode_Auto)) {
+      DLOG(ERROR) << "Failed to set HDRMetadataInsertionMode on "
+                     "VTCompressionSession.";
+    }
   }
 }
 
@@ -283,7 +285,10 @@ bool IsSVCSupported(VideoCodecProfile profile) {
   }
 #endif  // BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER) &&
         // defined(ARCH_CPU_ARM_FAMILY)
-  return codec == VideoCodec::kH264;
+  if (@available(macOS 11.3, *)) {
+    return codec == VideoCodec::kH264;
+  }
+  return false;
 }
 
 bool IsManualQpSupported(VideoCodecProfile profile) {
@@ -295,7 +300,10 @@ bool IsManualQpSupported(VideoCodecProfile profile) {
   // `kVTVideoEncoderSpecification_EnableLowLatencyRateControl` set to
   // `true`. Thus, we assume external mode is supported if SVC is
   // supported.
-  return IsSVCSupported(profile);
+  if (@available(macOS 12.0, *)) {
+    return IsSVCSupported(profile);
+  }
+  return false;
 }
 
 static CFStringRef VideoCodecProfileToVTProfile(VideoCodecProfile profile,
@@ -416,16 +424,20 @@ bool IsHardwareEncoder(VTSessionRef compression_session) {
   }
   DVLOG(1) << "Couldn't read the UsingHardwareAcceleratedVideoEncoder property";
 
-  base::apple::ScopedCFTypeRef<CFStringRef> encoder_id;
-  if (VTSessionCopyProperty(
-          compression_session, kVTCompressionPropertyKey_EncoderID,
-          kCFAllocatorDefault, encoder_id.InitializeInto()) == noErr) {
-    if (std::ranges::contains(kRealtimeHardwareEncoderIDs,
-                              base::SysCFStringRefToUTF8(encoder_id.get()))) {
-      DVLOG(1) << "But " << encoder_id.get() << " is a known hardware encoder";
-      return true;
+  if (@available(macOS 10.13, *)) {
+    base::apple::ScopedCFTypeRef<CFStringRef> encoder_id;
+    if (VTSessionCopyProperty(
+            compression_session, kVTCompressionPropertyKey_EncoderID,
+            kCFAllocatorDefault, encoder_id.InitializeInto()) == noErr) {
+      if (std::ranges::contains(kRealtimeHardwareEncoderIDs,
+                                base::SysCFStringRefToUTF8(encoder_id.get()))) {
+        DVLOG(1) << "But " << encoder_id.get()
+                 << " is a known hardware encoder";
+        return true;
+      }
+      DVLOG(1) << "Assuming " << encoder_id.get()
+               << " to be a software encoder";
     }
-    DVLOG(1) << "Assuming " << encoder_id.get() << " to be a software encoder";
   }
 
   return false;
@@ -521,10 +533,12 @@ CreateCompressionSession(
   // fact, trying to use
   // `kVTVideoEncoderSpecification_EnableLowLatencyRateControl` with the SW
   // encoder leads to an initialization error.
-  if (required_encoder_type != EncoderType::kSoftware && require_low_delay &&
-      IsSVCSupported(profile)) {
-    encoder_spec[CFToNSPtrCast(
-        kVTVideoEncoderSpecification_EnableLowLatencyRateControl)] = @YES;
+  if (@available(macOS 11.3, *)) {
+    if (required_encoder_type != EncoderType::kSoftware && require_low_delay &&
+        IsSVCSupported(profile)) {
+      encoder_spec[CFToNSPtrCast(
+          kVTVideoEncoderSpecification_EnableLowLatencyRateControl)] = @YES;
+    }
   }
 
   // Create the compression session.
@@ -1348,13 +1362,15 @@ bool VTVideoEncodeAccelerator::EncodeWithPixelBuffer(
       (options.key_frame || force_keyframe_after_reset) ? @YES : @NO;
 
   std::optional<int> frame_qp;
-  if (IsManualQpSupported(profile_) &&
-      bitrate_.mode() == Bitrate::Mode::kExternal &&
-      options.quantizer.has_value()) {
-    DCHECK(require_low_delay_);
-    frame_qp = std::clamp(options.quantizer.value(), 1, kH26xMaxQp);
-    frame_props[CFToNSPtrCast(kVTEncodeFrameOptionKey_BaseFrameQP)] =
-        @(frame_qp.value());
+  if (@available(macOS 12.0, *)) {
+    if (IsManualQpSupported(profile_) &&
+        bitrate_.mode() == Bitrate::Mode::kExternal &&
+        options.quantizer.has_value()) {
+      DCHECK(require_low_delay_);
+      frame_qp = std::clamp(options.quantizer.value(), 1, kH26xMaxQp);
+      frame_props[CFToNSPtrCast(kVTEncodeFrameOptionKey_BaseFrameQP)] =
+          @(frame_qp.value());
+    }
   }
 
   // VideoToolbox uses timestamps for rate control purposes, but we can't rely
@@ -1889,16 +1905,22 @@ bool VTVideoEncodeAccelerator::ConfigureCompressionSession(VideoCodec codec) {
     return false;
   }
 
-  if (!session_property_setter.IsSupported(
-          kVTCompressionPropertyKey_BaseLayerFrameRateFraction)) {
+  if (@available(macOS 11.3, *)) {
+    if (!session_property_setter.IsSupported(
+            kVTCompressionPropertyKey_BaseLayerFrameRateFraction)) {
+      NotifyErrorStatus({EncoderStatus::Codes::kEncoderUnsupportedConfig,
+                         "BaseLayerFrameRateFraction is not supported"});
+      return false;
+    }
+    if (!session_property_setter.Set(
+            kVTCompressionPropertyKey_BaseLayerFrameRateFraction, 0.5)) {
+      NotifyErrorStatus({EncoderStatus::Codes::kEncoderUnsupportedConfig,
+                         "Setting BaseLayerFrameRate property failed"});
+      return false;
+    }
+  } else {
     NotifyErrorStatus({EncoderStatus::Codes::kEncoderUnsupportedConfig,
-                       "BaseLayerFrameRateFraction is not supported"});
-    return false;
-  }
-  if (!session_property_setter.Set(
-          kVTCompressionPropertyKey_BaseLayerFrameRateFraction, 0.5)) {
-    NotifyErrorStatus({EncoderStatus::Codes::kEncoderUnsupportedConfig,
-                       "Setting BaseLayerFrameRate property failed"});
+                       "Temporal layers require macOS 11.3"});
     return false;
   }
 
@@ -1914,17 +1936,19 @@ bool VTVideoEncodeAccelerator::ConfigureCompressionSession(VideoCodec codec) {
     // see the `unsupported-availability-guard` warning.
     skip_set_reference_buffer_count = (codec == VideoCodec::kH264);
   }
-  if (!skip_set_reference_buffer_count &&
-      session_property_setter.IsSupported(
-          kVTCompressionPropertyKey_ReferenceBufferCount)) {
-    if (!session_property_setter.Set(
-            kVTCompressionPropertyKey_ReferenceBufferCount, 1)) {
-      DLOG(WARNING) << "Setting ReferenceBufferCount property failed";
+  if (@available(macOS 13.0, *)) {
+    if (!skip_set_reference_buffer_count &&
+        session_property_setter.IsSupported(
+            kVTCompressionPropertyKey_ReferenceBufferCount)) {
+      if (!session_property_setter.Set(
+              kVTCompressionPropertyKey_ReferenceBufferCount, 1)) {
+        DLOG(WARNING) << "Setting ReferenceBufferCount property failed";
+      } else {
+        encoder_produces_svc_spec_compliant_bitstream_ = true;
+      }
     } else {
-      encoder_produces_svc_spec_compliant_bitstream_ = true;
+      DLOG(WARNING) << "ReferenceBufferCount is not supported";
     }
-  } else {
-    DLOG(WARNING) << "ReferenceBufferCount is not supported";
   }
 
   return true;
@@ -1987,9 +2011,12 @@ void VTVideoEncodeAccelerator::SetEncoderColorSpace() {
 
   // HDR10 is a PQ format. HLG signals its transfer function through the VUI and
   // must not get PQ-style mastering metadata.
-  if (encoder_color_space_.GetTransferID() == gfx::ColorSpace::TransferID::PQ) {
-    ConfigureVtSessionForHdrMetadata(session_property_setter,
-                                     encoder_hdr_metadata_);
+  if (@available(macOS 10.13, *)) {
+    if (encoder_color_space_.GetTransferID() ==
+        gfx::ColorSpace::TransferID::PQ) {
+      ConfigureVtSessionForHdrMetadata(session_property_setter,
+                                       encoder_hdr_metadata_);
+    }
   }
 }
 

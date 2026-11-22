@@ -42,13 +42,24 @@ namespace media {
 namespace {
 
 bool SupportsH264() {
-  return VTIsHardwareDecodeSupported(kCMVideoCodecType_H264);
+  if (__builtin_available(macOS 10.13, *)) {
+    return VTIsHardwareDecodeSupported(kCMVideoCodecType_H264);
+  }
+  // Earlier VideoToolbox versions discover H.264 support when the real
+  // hardware-required decompression session is created.
+  if (__builtin_available(macOS 10.9, *)) {
+    return true;
+  }
+  return false;
 }
 
 bool InitializeVP9() {
 #if BUILDFLAG(IS_MAC)
-  VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
-  return VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9);
+  if (__builtin_available(macOS 11.0, *)) {
+    VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
+    return VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9);
+  }
+  return false;
 #else
   // TODO(crbug.com/40269929): Enable VP9 on iOS.
   return false;
@@ -61,12 +72,18 @@ bool SupportsVP9() {
 }
 
 bool SupportsAV1() {
-  return VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1);
+  if (__builtin_available(macOS 10.13, *)) {
+    return VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1);
+  }
+  return false;
 }
 
 #if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
 bool SupportsHEVC() {
-  return base::FeatureList::IsEnabled(media::kPlatformHEVCDecoderSupport);
+  if (__builtin_available(macOS 10.13, *)) {
+    return base::FeatureList::IsEnabled(media::kPlatformHEVCDecoderSupport);
+  }
+  return false;
 }
 #endif  // BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
 

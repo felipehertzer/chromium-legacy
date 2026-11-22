@@ -31,7 +31,8 @@ struct VideoToolboxDecompressionSessionMetadata;
 
 // Handles creating VideoToolboxDecompressionSessions when reconfiguration is
 // required. Callbacks are never called re-entrantly or after destruction.
-class MEDIA_GPU_EXPORT VideoToolboxDecompressionSessionManager {
+class MEDIA_GPU_EXPORT API_AVAILABLE(macos(10.9))
+    VideoToolboxDecompressionSessionManager {
  public:
   using OutputCB = base::RepeatingCallback<void(
       base::apple::ScopedCFTypeRef<CVImageBufferRef>,

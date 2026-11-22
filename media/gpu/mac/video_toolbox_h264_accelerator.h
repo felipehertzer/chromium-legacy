@@ -28,7 +28,7 @@ namespace media {
 
 class MediaLog;
 
-class MEDIA_GPU_EXPORT VideoToolboxH264Accelerator
+class MEDIA_GPU_EXPORT API_AVAILABLE(macos(10.9)) VideoToolboxH264Accelerator
     : public H264Decoder::H264Accelerator {
  public:
   using DecodeCB = base::RepeatingCallback<void(

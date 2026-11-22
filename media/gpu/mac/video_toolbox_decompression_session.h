@@ -43,7 +43,8 @@ class MEDIA_GPU_EXPORT VideoToolboxDecompressionSession {
 // Standard implementation of VideoToolboxDecompressionSession. It's not quite
 // trivial, since it does handle hopping outputs (which arrive on any thread) to
 // |task_runner|.
-class MEDIA_GPU_EXPORT VideoToolboxDecompressionSessionImpl
+class MEDIA_GPU_EXPORT API_AVAILABLE(macos(10.9))
+    VideoToolboxDecompressionSessionImpl
     : public VideoToolboxDecompressionSession {
  public:
   using OutputCB = base::RepeatingCallback<void(
