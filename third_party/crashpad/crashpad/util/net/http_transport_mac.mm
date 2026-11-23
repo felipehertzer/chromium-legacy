@@ -128,20 +128,22 @@ namespace crashpad {
 
 namespace {
 
+API_AVAILABLE(macos(10.9))
 NSString* AppendEscapedFormat(NSString* base,
                               NSString* format,
                               NSString* data) {
-  return [base stringByAppendingFormat:
-                   format,
-                   [data stringByAddingPercentEncodingWithAllowedCharacters:
-                             [[NSCharacterSet
-                                 characterSetWithCharactersInString:
-                                     @"()<>@,;:\\\"/[]?={} \t"] invertedSet]]];
+  return [base
+      stringByAppendingFormat:
+          format, [data stringByAddingPercentEncodingWithAllowedCharacters:
+                            [[NSCharacterSet characterSetWithCharactersInString:
+                                                 @"()<>@,;:\\\"/[]?={} \t"]
+                                invertedSet]]];
 }
 
 // This builds the same User-Agent string that CFNetwork would build internally,
 // but it uses PACKAGE_NAME and PACKAGE_VERSION in place of values obtained from
 // the main bundle’s Info.plist.
+API_AVAILABLE(macos(10.9))
 NSString* UserAgentString() {
   NSString* user_agent = [NSString string];
 
@@ -213,93 +215,102 @@ class HTTPTransportMac final : public HTTPTransport {
   bool ExecuteSynchronously(std::string* response_body) override;
 };
 
-HTTPTransportMac::HTTPTransportMac() : HTTPTransport() {
-}
+HTTPTransportMac::HTTPTransportMac() : HTTPTransport() {}
 
-HTTPTransportMac::~HTTPTransportMac() {
-}
+HTTPTransportMac::~HTTPTransportMac() {}
 
 bool HTTPTransportMac::ExecuteSynchronously(std::string* response_body) {
   DCHECK(body_stream());
 
-  @autoreleasepool {
-    NSString* url_ns_string = base::SysUTF8ToNSString(url());
-    NSURL* url = [NSURL URLWithString:url_ns_string];
-    NSMutableURLRequest* request =
-        [NSMutableURLRequest requestWithURL:url
-                                cachePolicy:NSURLRequestUseProtocolCachePolicy
-                            timeoutInterval:timeout()];
-    [request setHTTPMethod:base::SysUTF8ToNSString(method())];
+  if (@available(macOS 10.9, *)) {
+    @autoreleasepool {
+      NSString* url_ns_string = base::SysUTF8ToNSString(url());
+      NSURL* url = [NSURL URLWithString:url_ns_string];
+      NSMutableURLRequest* request =
+          [NSMutableURLRequest requestWithURL:url
+                                  cachePolicy:NSURLRequestUseProtocolCachePolicy
+                              timeoutInterval:timeout()];
+      [request setHTTPMethod:base::SysUTF8ToNSString(method())];
 
-    // If left to its own devices, CFNetwork would build a user-agent string
-    // based on keys in the main bundle’s Info.plist, giving ugly results if
-    // there is no Info.plist. Provide a User-Agent string similar to the one
-    // that CFNetwork would use, but with appropriate values in place of the
-    // Info.plist-derived strings.
-    [request setValue:UserAgentString() forHTTPHeaderField:@"User-Agent"];
+      // If left to its own devices, CFNetwork would build a user-agent string
+      // based on keys in the main bundle’s Info.plist, giving ugly results if
+      // there is no Info.plist. Provide a User-Agent string similar to the one
+      // that CFNetwork would use, but with appropriate values in place of the
+      // Info.plist-derived strings.
+      [request setValue:UserAgentString() forHTTPHeaderField:@"User-Agent"];
 
-    for (const auto& pair : headers()) {
-      [request setValue:base::SysUTF8ToNSString(pair.second)
-          forHTTPHeaderField:base::SysUTF8ToNSString(pair.first)];
+      for (const auto& pair : headers()) {
+        [request setValue:base::SysUTF8ToNSString(pair.second)
+            forHTTPHeaderField:base::SysUTF8ToNSString(pair.first)];
+      }
+
+      NSInputStream* input_stream = [[CrashpadHTTPBodyStreamTransport alloc]
+          initWithBodyStream:body_stream()];
+      [request setHTTPBodyStream:input_stream];
+
+      __block NSData* body = nil;
+      __block NSURLResponse* response = nil;
+      __block NSError* error = nil;
+
+      dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+      CHECK(semaphore) << "dispatch_semaphore_create";
+      NSURLSession* session = [NSURLSession
+          sessionWithConfiguration:[NSURLSessionConfiguration
+                                       ephemeralSessionConfiguration]];
+      NSURLSessionDataTask* task = [session
+          dataTaskWithRequest:request
+            completionHandler:^(NSData* task_data, NSURLResponse* task_response,
+                                NSError* task_error) {
+              body = task_data;
+              response = task_response;
+              error = task_error;
+              dispatch_semaphore_signal(semaphore);
+            }];
+      [task resume];
+      dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+      [session finishTasksAndInvalidate];
+#if !OS_OBJECT_USE_OBJC
+      // A Lion deployment uses C dispatch references even on a newer runtime.
+      // The completion handler has signaled and will not use this semaphore
+      // again.
+      dispatch_release(semaphore);
+#endif
+
+      if (error) {
+        Metrics::CrashUploadErrorCode(error.code);
+        LOG(ERROR) << [[error localizedDescription] UTF8String] << " ("
+                   << [[error domain] UTF8String] << " " << [error code] << ")";
+        return false;
+      }
+      if (!response) {
+        LOG(ERROR) << "no response";
+        return false;
+      }
+      NSHTTPURLResponse* http_response =
+          base::apple::ObjCCast<NSHTTPURLResponse>(response);
+      if (!http_response) {
+        LOG(ERROR) << "no http_response";
+        return false;
+      }
+      NSInteger http_status = [http_response statusCode];
+      if (http_status < 200 || http_status > 203) {
+        LOG(ERROR) << base::StringPrintf("HTTP status %ld",
+                                         implicit_cast<long>(http_status));
+        return false;
+      }
+
+      if (response_body) {
+        response_body->assign(static_cast<const char*>([body bytes]),
+                              [body length]);
+      }
+
+      return true;
     }
-
-    NSInputStream* input_stream = [[CrashpadHTTPBodyStreamTransport alloc]
-        initWithBodyStream:body_stream()];
-    [request setHTTPBodyStream:input_stream];
-
-    __block NSData* body = nil;
-    __block NSURLResponse* response = nil;
-    __block NSError* error = nil;
-
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    CHECK(semaphore) << "dispatch_semaphore_create";
-    NSURLSession* session = [NSURLSession
-        sessionWithConfiguration:[NSURLSessionConfiguration
-                                     ephemeralSessionConfiguration]];
-    NSURLSessionDataTask* task =
-        [session dataTaskWithRequest:request
-                   completionHandler:^(NSData* task_data,
-                                       NSURLResponse* task_response,
-                                       NSError* task_error) {
-                     body = task_data;
-                     response = task_response;
-                     error = task_error;
-                     dispatch_semaphore_signal(semaphore);
-                   }];
-    [task resume];
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    [session finishTasksAndInvalidate];
-
-    if (error) {
-      Metrics::CrashUploadErrorCode(error.code);
-      LOG(ERROR) << [[error localizedDescription] UTF8String] << " ("
-                 << [[error domain] UTF8String] << " " << [error code] << ")";
-      return false;
-    }
-    if (!response) {
-      LOG(ERROR) << "no response";
-      return false;
-    }
-    NSHTTPURLResponse* http_response =
-        base::apple::ObjCCast<NSHTTPURLResponse>(response);
-    if (!http_response) {
-      LOG(ERROR) << "no http_response";
-      return false;
-    }
-    NSInteger http_status = [http_response statusCode];
-    if (http_status < 200 || http_status > 203) {
-      LOG(ERROR) << base::StringPrintf("HTTP status %ld",
-                                       implicit_cast<long>(http_status));
-      return false;
-    }
-
-    if (response_body) {
-      response_body->assign(static_cast<const char*>([body bytes]),
-                            [body length]);
-    }
-
-    return true;
   }
+  // Do not replace an ephemeral session with a shared cache/cookie session,
+  // change trust evaluation, or silently lower the transport's TLS policy.
+  LOG(ERROR) << "Crash upload requires the native ephemeral URL session API";
+  return false;
 }
 
 }  // namespace
