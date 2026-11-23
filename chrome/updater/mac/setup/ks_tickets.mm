@@ -11,6 +11,7 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
+#include "legacy/apple/secure_archive.h"
 
 NSString* const kCRUTicketBrandKey = @"KSBrandID";
 NSString* const kCRUTicketTagKey = @"KSChannelID";
@@ -46,33 +47,46 @@ NSString* const kCRUTicketTagKey = @"KSChannelID";
     return [NSDictionary dictionary];
   }
 
-  NSDictionary* store = nil;
-  NSKeyedUnarchiver* unpacker =
-      [[NSKeyedUnarchiver alloc] initForReadingFromData:storeData error:&error];
-  if (!unpacker) {
-    VLOG(0) << base::SysNSStringToUTF8(
-        [NSString stringWithFormat:@"Ticket error %@", error]);
-    return nil;
+  if (@available(macOS 10.8, *)) {
+    NSDictionary* store = nil;
+    NSKeyedUnarchiver* unpacker =
+        chromium_legacy::SecureUnarchiver(storeData, NSKeyedUnarchiver.class);
+    if (!unpacker) {
+      VLOG(0) << base::SysNSStringToUTF8(
+          [NSString stringWithFormat:@"Ticket error %@", error]);
+      return nil;
+    }
+    NSSet* classes = [NSSet
+        setWithObjects:[NSDictionary class], [KSTicket class],
+                       [KSPathExistenceChecker class],
+                       [KSLaunchServicesExistenceChecker class],
+                       [KSSpotlightExistenceChecker class], [NSArray class],
+                       [NSSet class], [NSURL class], [NSString class], nil];
+    @try {
+      NSString* rootKey = @"root";
+      if (@available(macOS 10.9, *)) {
+        rootKey = NSKeyedArchiveRootObjectKey;
+      }
+      store = [unpacker decodeObjectOfClasses:classes forKey:rootKey];
+      [unpacker finishDecoding];
+    } @catch (NSException* exception) {
+      VLOG(0) << "Error unpacking ticket store: " << exception;
+      return nil;
+    }
+    if (@available(macOS 10.11, *)) {
+      if (unpacker.error) {
+        VLOG(0) << "Error unpacking ticket store: " << unpacker.error;
+        return nil;
+      }
+    }
+    if (!store || ![store isKindOfClass:[NSDictionary class]]) {
+      VLOG(0) << "Ticket store is not a dictionary.";
+      return nil;
+    }
+    return store;
   }
-  unpacker.requiresSecureCoding = YES;
-  NSSet* classes = [NSSet
-      setWithObjects:[NSDictionary class], [KSTicket class],
-                     [KSPathExistenceChecker class],
-                     [KSLaunchServicesExistenceChecker class],
-                     [KSSpotlightExistenceChecker class], [NSArray class],
-                     [NSSet class], [NSURL class], [NSString class], nil];
-  store = [unpacker decodeObjectOfClasses:classes
-                                   forKey:NSKeyedArchiveRootObjectKey];
-  [unpacker finishDecoding];
-  if (unpacker.error) {
-    VLOG(0) << "Error unpacking ticket store: " << unpacker.error;
-    return nil;
-  }
-  if (!store || ![store isKindOfClass:[NSDictionary class]]) {
-    VLOG(0) << "Ticket store is not a dictionary.";
-    return nil;
-  }
-  return store;
+  VLOG(0) << "Secure ticket decoding is unavailable on this system";
+  return nil;
 }
 
 @end
@@ -85,7 +99,7 @@ NSString* const kCRUTicketTagKey = @"KSChannelID";
   return YES;
 }
 
-- (instancetype)initWithCoder:(NSCoder*)coder {
+- (instancetype)initWithCoder:(NSCoder*)coder API_AVAILABLE(macos(10.8)) {
   if ((self = [super init])) {
     path_ = [coder decodeObjectOfClass:[NSString class] forKey:@"path"];
   }
@@ -119,7 +133,7 @@ NSString* const kCRUTicketTagKey = @"KSChannelID";
   return YES;
 }
 
-- (instancetype)initWithCoder:(NSCoder*)coder {
+- (instancetype)initWithCoder:(NSCoder*)coder API_AVAILABLE(macos(10.8)) {
   if ((self = [super init])) {
     bundle_id_ = [coder decodeObjectOfClass:[NSString class]
                                      forKey:@"bundle_id"];
@@ -147,7 +161,7 @@ NSString* const kCRUTicketTagKey = @"KSChannelID";
   return YES;
 }
 
-- (instancetype)initWithCoder:(NSCoder*)coder {
+- (instancetype)initWithCoder:(NSCoder*)coder API_AVAILABLE(macos(10.8)) {
   if ((self = [super init])) {
     query_ = [coder decodeObjectOfClass:[NSString class] forKey:@"query"];
   }
@@ -212,7 +226,7 @@ NSString* const kKSTicketVersionKeyKey = @"versionKey";
 // Tries to obtain the server URL which may be NSURL or NSString object.
 // Verifies the read objects and guarantees that the returned object is NSURL.
 // The method may throw.
-- (NSURL*)decodeServerURL:(NSCoder*)decoder {
+- (NSURL*)decodeServerURL:(NSCoder*)decoder API_AVAILABLE(macos(10.8)) {
   id serverURL = [decoder decodeObjectOfClasses:[NSSet setWithArray:@[
                             [NSString class],
                             [NSURL class],
@@ -227,7 +241,7 @@ NSString* const kKSTicketVersionKeyKey = @"versionKey";
   return (NSURL*)serverURL;
 }
 
-- (instancetype)initWithCoder:(NSCoder*)coder {
+- (instancetype)initWithCoder:(NSCoder*)coder API_AVAILABLE(macos(10.8)) {
   if ((self = [super init])) {
     productID_ = [coder decodeObjectOfClass:[NSString class]
                                      forKey:kKSTicketProductIDKey];

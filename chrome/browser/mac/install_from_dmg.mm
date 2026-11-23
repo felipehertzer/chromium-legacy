@@ -194,7 +194,7 @@ RunningFromDiskImageResult IsPathOnReadOnlyDiskImage(const char path[]) {
   dmg_bsd_device_name = dmg_bsd_device_name.substr(dev_root.size());
 
   base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> match_dict(
-      IOBSDNameMatching(kIOMainPortDefault, /*options=*/0,
+      IOBSDNameMatching(MACH_PORT_NULL, /*options=*/0,
                         dmg_bsd_device_name.c_str()));
   if (!match_dict) {
     LOG(ERROR) << "IOBSDNameMatching " << dmg_bsd_device_name;
@@ -203,7 +203,7 @@ RunningFromDiskImageResult IsPathOnReadOnlyDiskImage(const char path[]) {
 
   base::mac::ScopedIOObject<io_iterator_t> iterator;
   kern_return_t kr = IOServiceGetMatchingServices(
-      kIOMainPortDefault, match_dict.release(), iterator.InitializeInto());
+      MACH_PORT_NULL, match_dict.release(), iterator.InitializeInto());
   if (kr != KERN_SUCCESS) {
     MACH_LOG(ERROR, kr) << "IOServiceGetMatchingServices";
     return {.status = DiskImageStatus::kFailure};
@@ -285,7 +285,12 @@ bool InstallFromDiskImage(base::mac::ScopedAuthorizationRef authorization,
                           NSString* target_path) {
   int exit_status;
   if (authorization) {
-    const char* installer_path_c = installer_url.fileSystemRepresentation;
+    base::FilePath installer_path = base::apple::NSURLToFilePath(installer_url);
+    if (installer_path.empty()) {
+      LOG(ERROR) << "Invalid installer file URL";
+      return false;
+    }
+    const char* installer_path_c = installer_path.value().c_str();
     const char* source_path_c = source_path.fileSystemRepresentation;
     const char* target_path_c = target_path.fileSystemRepresentation;
     const char* arguments[] = {source_path_c, target_path_c, nullptr};
@@ -300,11 +305,24 @@ bool InstallFromDiskImage(base::mac::ScopedAuthorizationRef authorization,
     }
   } else {
     NSError* error = nil;
-    NSTask* task =
-        [NSTask launchedTaskWithExecutableURL:installer_url
-                                    arguments:@[ source_path, target_path ]
-                                        error:&error
-                           terminationHandler:nil];
+    NSTask* task = nil;
+    if (@available(macOS 10.13, *)) {
+      task = [NSTask launchedTaskWithExecutableURL:installer_url
+                                        arguments:@[ source_path, target_path ]
+                                            error:&error
+                               terminationHandler:nil];
+    } else {
+      task = [[NSTask alloc] init];
+      task.launchPath = installer_url.path;
+      task.arguments = @[ source_path, target_path ];
+      @try {
+        [task launch];
+      } @catch (NSException* exception) {
+        LOG(ERROR) << "NSTask launch exception: "
+                   << base::SysNSStringToUTF8(exception.reason);
+        return false;
+      }
+    }
 
     if (!task) {
       LOG(ERROR) << "NSTask launch error: "
@@ -643,11 +661,22 @@ void EjectAndTrashDiskImage(const std::string& dmg_bsd_device_name) {
 
   NSURL* disk_image_path_nsurl =
       [NSURL fileURLWithPath:base::SysUTF8ToNSString(disk_image_path)];
-  NSError* error = nil;
-  if (![NSFileManager.defaultManager trashItemAtURL:disk_image_path_nsurl
-                                   resultingItemURL:nil
-                                              error:&error]) {
-    LOG(ERROR) << base::SysNSStringToUTF8(error.localizedDescription);
-    return;
+  if (@available(macOS 10.8, *)) {
+    NSError* error = nil;
+    if (![NSFileManager.defaultManager trashItemAtURL:disk_image_path_nsurl
+                                     resultingItemURL:nil
+                                                error:&error]) {
+      LOG(ERROR) << base::SysNSStringToUTF8(error.localizedDescription);
+    }
+  } else {
+    NSString* path = disk_image_path_nsurl.path;
+    if (![NSWorkspace.sharedWorkspace
+            performFileOperation:NSWorkspaceRecycleOperation
+                          source:path.stringByDeletingLastPathComponent
+                     destination:@""
+                           files:@[ path.lastPathComponent ]
+                             tag:nullptr]) {
+      LOG(ERROR) << "Failed to move installer disk image to Trash";
+    }
   }
 }

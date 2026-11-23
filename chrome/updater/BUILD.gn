@@ -466,7 +466,10 @@ if (is_win || is_mac || is_linux) {
         "mac/setup/ks_tickets.mm",
       ]
 
-      deps = [ "//base" ]
+      deps = [
+        "//base",
+        "//legacy:platform_support",
+      ]
     }
   }
 
