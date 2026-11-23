@@ -26,7 +26,10 @@ bool IsICloudKeychainConfiguredForPasskeys() {
       return device::fido::icloud_keychain::IsConfiguredForPasskeys();
     }
   }
-  return [NSFileManager defaultManager].ubiquityIdentityToken != nil;
+  if (@available(macOS 10.8, *)) {
+    return [NSFileManager defaultManager].ubiquityIdentityToken != nil;
+  }
+  return false;
 }
 
 ScopedICloudKeychainOverride::~ScopedICloudKeychainOverride() = default;

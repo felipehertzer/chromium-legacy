@@ -137,6 +137,7 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/buildflags/buildflags.h"
+#include "legacy/apple/user_activity.h"
 #include "net/base/apple/url_conversions.h"
 #include "net/base/filename_util.h"
 #include "ui/base/base_window.h"
@@ -163,6 +164,7 @@ bool g_is_opening_new_window = false;
 
 // Stores the pending web auth requests (typically while the profile is being
 // loaded) until they are passed to the AuthSessionRequest class.
+API_AVAILABLE(macos(10.15))
 NSMutableDictionary<NSUUID*, ASWebAuthenticationSessionRequest*>*
 GetPendingWebAuthRequests() {
   static NSMutableDictionary* g_pending_requests =
@@ -174,6 +176,7 @@ GetPendingWebAuthRequests() {
 bool IsProfileSignedOut(const base::FilePath& profile_path);
 
 // Starts a web authentication session request.
+API_AVAILABLE(macos(10.15))
 void BeginHandlingWebAuthenticationSessionRequestWithProfile(
     ASWebAuthenticationSessionRequest* request,
     Profile* profile) {
@@ -930,7 +933,9 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
 // (NSApplicationDelegate protocol) This is the Apple-approved place to override
 // the default handlers.
 - (void)applicationWillFinishLaunching:(NSNotification*)notification {
-  NSWindow.allowsAutomaticWindowTabbing = NO;
+  if (@available(macOS 10.12, *)) {
+    NSWindow.allowsAutomaticWindowTabbing = NO;
+  }
 
   [self initShareMenu];
 }
@@ -1191,8 +1196,8 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
     // for horizontal and vertical tab modes.
     CHECK_EQ(matchingItems.count, 2u);
 
-    NSMenuItem* horizontalItem = matchingItems[0];
-    NSMenuItem* verticalItem = matchingItems[1];
+    NSMenuItem* horizontalItem = [matchingItems objectAtIndex:0];
+    NSMenuItem* verticalItem = [matchingItems objectAtIndex:1];
 
     NSMenuItem* activeItem =
         horizontalItem.hidden ? verticalItem : horizontalItem;
@@ -1360,8 +1365,10 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
 
   _handoffObserver = std::make_unique<HandoffObserver>(self);
 
-  ASWebAuthenticationSessionWebBrowserSessionManager.sharedManager
-      .sessionHandler = self;
+  if (@available(macOS 10.15, *)) {
+    ASWebAuthenticationSessionWebBrowserSessionManager.sharedManager
+        .sessionHandler = self;
+  }
 
   [MenuControllerCocoa
       initializeWithNewMenuIconScheme:features::IsMenuSimplificationEnabled()];
@@ -1378,7 +1385,8 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
   // changes to activationPolicy and recreate `keepAlive_` to keep the browser
   // process alive even without windows present.
   CHECK([keyPath isEqualToString:@"activationPolicy"]);
-  if (![change[@"new"] isEqual:@(NSApplicationActivationPolicyProhibited)]) {
+  if (![[change objectForKey:@"new"]
+          isEqual:@(NSApplicationActivationPolicyProhibited)]) {
     [_runningApplication removeObserver:self
                              forKeyPath:@"activationPolicy"
                                 context:nullptr];
@@ -2477,16 +2485,20 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
 
 - (BOOL)application:(NSApplication*)application
     willContinueUserActivityWithType:(NSString*)userActivityType {
-  return [userActivityType isEqualToString:NSUserActivityTypeBrowsingWeb];
+  if (@available(macOS 10.10, *)) {
+    return [userActivityType
+        isEqualToString:chromium_legacy::BrowsingWebActivityType()];
+  }
+  return NO;
 }
 
 - (BOOL)application:(NSApplication*)application
     continueUserActivity:(NSUserActivity*)userActivity
       restorationHandler:
           (void (^)(NSArray<id<NSUserActivityRestoring>>*))restorationHandler
-{
+    API_AVAILABLE(macos(10.10)) {
   if (![userActivity.activityType
-          isEqualToString:NSUserActivityTypeBrowsingWeb]) {
+          isEqualToString:chromium_legacy::BrowsingWebActivityType()]) {
     return NO;
   }
 
@@ -2559,7 +2571,7 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
 // worker thread, so it's important to hop to the main thread.
 
 - (void)beginHandlingWebAuthenticationSessionRequest:
-    (ASWebAuthenticationSessionRequest*)request {
+    (ASWebAuthenticationSessionRequest*)request API_AVAILABLE(macos(10.15)) {
   dispatch_async(dispatch_get_main_queue(), ^{
     // Start tracking the pending request, so it's possible to cancel it before
     // the session actually starts.
@@ -2576,7 +2588,7 @@ class AppControllerProfileObserver : public ProfileAttributesStorage::Observer,
 }
 
 - (void)cancelWebAuthenticationSessionRequest:
-    (ASWebAuthenticationSessionRequest*)request {
+    (ASWebAuthenticationSessionRequest*)request API_AVAILABLE(macos(10.15)) {
   dispatch_async(dispatch_get_main_queue(), ^{
     if (NSUUID* key = request.UUID;
         [GetPendingWebAuthRequests() objectForKey:key]) {

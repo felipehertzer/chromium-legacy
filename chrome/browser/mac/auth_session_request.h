@@ -26,7 +26,7 @@ class Profile;
 
 // A class to manage the WebContents running an
 // ASWebAuthenticationSessionRequest.
-class AuthSessionRequest
+class API_AVAILABLE(macos(10.15)) AuthSessionRequest
     : public content::WebContentsObserver,
       public content::WebContentsUserData<AuthSessionRequest> {
  public:

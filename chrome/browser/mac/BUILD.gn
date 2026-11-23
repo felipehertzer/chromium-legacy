@@ -101,6 +101,7 @@ source_set("impl") {
     "//chrome/common:constants",
     "//components/policy/core/common",
     "//components/version_info",
+    "//legacy:platform_support",
   ]
 }
 

@@ -29,6 +29,7 @@ source_set("platform_support") {
     "apple/secure_archive.h",
     "apple/simd_math.h",
     "apple/window.h",
+    "apple/user_activity.h",
   ]
 }
 

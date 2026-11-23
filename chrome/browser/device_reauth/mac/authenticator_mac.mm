@@ -13,26 +13,39 @@ AuthenticatorMac::AuthenticatorMac() = default;
 AuthenticatorMac::~AuthenticatorMac() = default;
 
 bool AuthenticatorMac::CheckIfBiometricsAvailable() {
-  LAContext* context = [[LAContext alloc] init];
+  if (!@available(macOS 10.12.2, *)) {
+    return false;
+  }
   // FYI, these two LAPolicy constants are defined to be the same value (4), but
   // because the new constant has an annotation of macOS 15+ and the old
   // constant is marked as being deprecated, a runtime switch is forced.
   if (@available(macOS 15, *)) {
+    LAContext* context = [[LAContext alloc] init];
     return
         [context canEvaluatePolicy:
                      LAPolicyDeviceOwnerAuthenticationWithBiometricsOrCompanion
                              error:nil];
-  } else {
+  } else if (@available(macOS 10.15, *)) {
+    LAContext* context = [[LAContext alloc] init];
     return [context
         canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometricsOrWatch
                     error:nil];
+  } else if (@available(macOS 10.12.2, *)) {
+    LAContext* context = [[LAContext alloc] init];
+    return [context
+        canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+                    error:nil];
   }
+  return false;
 }
 
 bool AuthenticatorMac::CheckIfBiometricsOrScreenLockAvailable() {
-  LAContext* context = [[LAContext alloc] init];
-  return [context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
-                              error:nil];
+  if (@available(macOS 10.11, *)) {
+    LAContext* context = [[LAContext alloc] init];
+    return [context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
+                                error:nil];
+  }
+  return false;
 }
 
 bool AuthenticatorMac::AuthenticateUserWithNonBiometrics(

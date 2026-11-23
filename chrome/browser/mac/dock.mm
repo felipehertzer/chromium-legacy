@@ -39,6 +39,8 @@ CFURLRef _CFURLCreateFromPropertyListRepresentation(
 
 }  // extern "C"
 
+#include "legacy/apple/user_activity.h"
+
 namespace dock {
 namespace {
 
@@ -94,15 +96,15 @@ NSMutableArray<NSString*>* PathsFromAppList(NSArray* app_list) {
       return nil;
     }
 
-    NSDictionary* tile_data =
-        base::apple::ObjCCast<NSDictionary>(app[kDockTileDataKey]);
+    NSDictionary* tile_data = base::apple::ObjCCast<NSDictionary>(
+        [app objectForKey:kDockTileDataKey]);
     if (!tile_data) {
       LOG(ERROR) << "tile_data not NSDictionary";
       return nil;
     }
 
-    NSDictionary* file_data =
-        base::apple::ObjCCast<NSDictionary>(tile_data[kDockFileDataKey]);
+    NSDictionary* file_data = base::apple::ObjCCast<NSDictionary>(
+        [tile_data objectForKey:kDockFileDataKey]);
     if (!file_data) {
       // Some apps (e.g. Dashboard) have no file data, but instead have a
       // special value for the tile-type key. For these, add an empty string to
@@ -140,7 +142,8 @@ BOOL IsAppAtPathAWebBrowser(NSString* app_path) {
     return NO;
   }
 
-  return [activities containsObject:NSUserActivityTypeBrowsingWeb];
+  NSString* type = chromium_legacy::BrowsingWebActivityType();
+  return type && [activities containsObject:type];
 }
 
 // Restart the Dock process by sending it a SIGTERM.
@@ -175,7 +178,8 @@ NSArray* AppListFromDockPlist(NSDictionary* dock_plist, NSString* list_key) {
   if (!dock_plist) {
     return nil;
   }
-  NSArray* app_list = base::apple::ObjCCast<NSArray>(dock_plist[list_key]);
+  NSArray* app_list =
+      base::apple::ObjCCast<NSArray>([dock_plist objectForKey:list_key]);
   if (!app_list) {
     LOG(ERROR) << base::SysNSStringToUTF8(list_key) << " is not an NSArray";
     return nil;
@@ -224,7 +228,7 @@ RewriteDockPlistResult RewriteDockPlist(NSDictionary* dock_plist,
   NSUInteger already_installed_app_index = NSNotFound;
   NSUInteger app_index = NSNotFound;
   for (NSUInteger index = 0; index < persistent_apps.count; ++index) {
-    NSString* app_path = persistent_app_paths[index];
+    NSString* app_path = [persistent_app_paths objectAtIndex:index];
     if ([app_path isEqualToString:installed_path]) {
       // If the Dock already contains a reference to the newly installed
       // application, don't add another one.
@@ -258,7 +262,8 @@ RewriteDockPlistResult RewriteDockPlist(NSDictionary* dock_plist,
       // If an application with this name is already in the Dock, put the new
       // one right before it.
       for (NSUInteger index = 0; index < persistent_apps.count; ++index) {
-        NSString* dock_app_name = persistent_app_paths[index].lastPathComponent;
+        NSString* dock_app_name =
+            [persistent_app_paths objectAtIndex:index].lastPathComponent;
         if ([dock_app_name isEqualToString:app_name]) {
           app_index = index;
           break;
@@ -347,8 +352,8 @@ RewriteDockPlistResult RewriteDockPlist(NSDictionary* dock_plist,
   // Rewrite the plist.
   NSMutableDictionary* new_plist =
       [NSMutableDictionary dictionaryWithDictionary:dock_plist];
-  new_plist[kDockPersistentAppsKey] = persistent_apps;
-  new_plist[kDockRecentAppsKey] = recent_apps;
+  [new_plist setValue:persistent_apps forKey:kDockPersistentAppsKey];
+  [new_plist setValue:recent_apps forKey:kDockRecentAppsKey];
   return {.status = AddIconStatus::kSuccess, .result_plist = new_plist};
 }
 

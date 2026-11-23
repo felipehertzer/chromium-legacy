@@ -61,7 +61,7 @@ void AddMSAuthHeadersFromSSOCookiesResponse(
     net::HttpRequestHeaders& auth_headers,
     NSDictionary* sso_cookies_response,
     NSString* headers_key) {
-  NSArray* headers = sso_cookies_response[headers_key];
+  NSArray* headers = [sso_cookies_response objectForKey:headers_key];
   auto headers_key_str = base::SysNSStringToUTF8(headers_key);
   if (!headers) {
     VLOG_POLICY(2, EXTENSIBLE_SSO)
@@ -71,7 +71,7 @@ void AddMSAuthHeadersFromSSOCookiesResponse(
   }
 
   for (NSDictionary* header_data in headers) {
-    NSDictionary* header_definition = header_data[kHeader];
+    NSDictionary* header_definition = [header_data objectForKey:kHeader];
     if (!header_definition) {
       VLOG_POLICY(2, EXTENSIBLE_SSO)
           << "[ExtensibleEnterpriseSSO] No header definition found for key: "
@@ -88,14 +88,15 @@ void AddMSAuthHeadersFromSSOCookiesResponse(
         continue;
       }
 
-      if (!header_definition[key]) {
+      if (![header_definition objectForKey:key]) {
         VLOG_POLICY(2, EXTENSIBLE_SSO)
             << "[ExtensibleEnterpriseSSO] No header value found for key: "
             << headers_key_str << " : " << header_name;
         continue;
       }
-      auto header_value = base::SysNSStringToUTF8(
-          net::FixNSStringIncorrectlyDecodedAsLatin1(header_definition[key]));
+      auto header_value =
+          base::SysNSStringToUTF8(net::FixNSStringIncorrectlyDecodedAsLatin1(
+              [header_definition objectForKey:key]));
       if (header_value.empty() ||
           !net::HttpUtil::IsValidHeaderValue(header_value)) {
         VLOG_POLICY(2, EXTENSIBLE_SSO)

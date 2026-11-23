@@ -24,6 +24,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/location_bar_model.h"
+#include "legacy/apple/user_activity.h"
 #include "net/base/apple/url_conversions.h"
 #include "ui/base/accelerators/platform_accelerator_cocoa.h"
 #include "ui/base/base_window.h"
@@ -39,6 +40,13 @@
 // Private method, used to identify instantiated services.
 @interface NSSharingService (ExposeName)
 @property(readonly) NSString* name;
+@end
+
+@interface ShareMenuController ()
+- (void)updateSharingServicesMenu:(NSMenu*)menu API_AVAILABLE(macos(10.8));
+- (void)performShare:(NSMenuItem*)sender API_AVAILABLE(macos(10.8));
+- (NSMenuItem*)menuItemForService:(NSSharingService*)service
+    API_AVAILABLE(macos(10.8));
 @end
 
 namespace {
@@ -72,7 +80,16 @@ bool CanShare() {
 
   // The Reminders share extension reads title/URL from the currently active
   // activity.
-  NSUserActivity* __strong _activity;
+  NSObject* __strong _activity;
+}
+
+- (NSMenuItem*)emailMenuItem {
+  NSMenuItem* email = [[NSMenuItem alloc]
+      initWithTitle:l10n_util::GetNSString(IDS_EMAIL_LINK_MAC)
+             action:@selector(emailLink:)
+      keyEquivalent:[self keyEquivalentForMail]];
+  email.target = self;
+  return email;
 }
 
 // NSMenuDelegate
@@ -88,12 +105,7 @@ bool CanShare() {
     // the menu is actually opened (see menuNeedsUpdate:).
     // This prevents hangs on key presses when the menu is not open.
     // See https://crbug.com/40829755.
-    NSMenuItem* email = [[NSMenuItem alloc]
-        initWithTitle:l10n_util::GetNSString(IDS_EMAIL_LINK_MAC)
-               action:@selector(emailLink:)
-        keyEquivalent:[self keyEquivalentForMail]];
-    email.target = self;
-    [menu addItem:email];
+    [menu addItem:[self emailMenuItem]];
   }
   // Per tapted@'s comment in BookmarkMenuCocoaController, it's fine
   // to return NO here if an item will handle this. This is why it's
@@ -104,6 +116,15 @@ bool CanShare() {
 - (void)menuNeedsUpdate:(NSMenu*)menu {
   [menu removeAllItems];
 
+  if (@available(macOS 10.8, *)) {
+    [self updateSharingServicesMenu:menu];
+  } else {
+    // Populate the existing Email Link action without enumerating ShareKit.
+    [menu addItem:[self emailMenuItem]];
+  }
+}
+
+- (void)updateSharingServicesMenu:(NSMenu*)menu {
   // Fetching sharing services can take unbounded time since ShareKit enumerates
   // sharing service plugins from the filesystem. This can hang due to TCC
   // (Transparency, Consent, and Control) permissions or slow disk I/O. Never
@@ -170,33 +191,35 @@ bool CanShare() {
 // NSSharingServiceDelegate
 
 - (void)sharingService:(NSSharingService*)service
-         didShareItems:(NSArray*)items {
+         didShareItems:(NSArray*)items API_AVAILABLE(macos(10.8)) {
   UMA_HISTOGRAM_BOOLEAN("Mac.FileMenuNativeShare", true);
   [self clearTransitionData];
 }
 
 - (void)sharingService:(NSSharingService*)service
     didFailToShareItems:(NSArray*)items
-                  error:(NSError*)error {
+                  error:(NSError*)error API_AVAILABLE(macos(10.8)) {
   UMA_HISTOGRAM_BOOLEAN("Mac.FileMenuNativeShare", false);
   [self clearTransitionData];
 }
 
 - (NSRect)sharingService:(NSSharingService*)service
-    sourceFrameOnScreenForShareItem:(id)item {
+    sourceFrameOnScreenForShareItem:(id)item API_AVAILABLE(macos(10.8)) {
   return _rectForShare;
 }
 
 - (NSWindow*)sharingService:(NSSharingService*)service
     sourceWindowForShareItems:(NSArray*)items
-          sharingContentScope:(NSSharingContentScope*)scope {
+          sharingContentScope:(NSSharingContentScope*)scope
+    API_AVAILABLE(macos(10.8)) {
   *scope = NSSharingContentScopeFull;
   return _windowForShare;
 }
 
 - (NSImage*)sharingService:(NSSharingService*)service
     transitionImageForShareItem:(id)item
-                    contentRect:(NSRect*)contentRect {
+                    contentRect:(NSRect*)contentRect
+    API_AVAILABLE(macos(10.8)) {
   return _snapshotForShare;
 }
 
@@ -241,7 +264,9 @@ bool CanShare() {
   _windowForShare = nil;
   _rectForShare = NSZeroRect;
   _snapshotForShare = nil;
-  [_activity invalidate];
+  if (@available(macOS 10.10, *)) {
+    [(NSUserActivity*)_activity invalidate];
+  }
   _activity = nil;
 }
 
@@ -261,18 +286,25 @@ bool CanShare() {
   NSSharingService* service =
       base::apple::ObjCCastStrict<NSSharingService>(sender.representedObject);
   service.delegate = self;
-  service.subject = title;
-
-  if ([service.name isEqual:kRemindersSharingServiceName]) {
-    _activity = [[NSUserActivity alloc]
-        initWithActivityType:NSUserActivityTypeBrowsingWeb];
-    // webpageURL must be http or https or an exception is thrown.
-    if ([url.scheme hasPrefix:@"http"]) {
-      _activity.webpageURL = url;
-    }
-    _activity.title = title;
-    [_activity becomeCurrent];
+  if (@available(macOS 10.9, *)) {
+    service.subject = title;
   }
+
+  if (@available(macOS 10.10, *)) {
+    NSString* type = chromium_legacy::BrowsingWebActivityType();
+    if (type && [service.name isEqual:kRemindersSharingServiceName]) {
+      NSUserActivity* activity =
+          [[NSUserActivity alloc] initWithActivityType:type];
+      // webpageURL must be http or https or an exception is thrown.
+      if ([url.scheme hasPrefix:@"http"]) {
+        activity.webpageURL = url;
+      }
+      activity.title = title;
+      _activity = activity;
+      [activity becomeCurrent];
+    }
+  }
+
   base::RunLoop run_loop;
   auto done = run_loop.QuitClosure();
   [self saveTransitionDataFromBrowser:browser
@@ -310,17 +342,23 @@ bool CanShare() {
 // Returns the image to be used for the "More..." menu item, or nil on macOS
 // version where this private method is unsupported.
 - (NSImage*)moreImage {
-  if ([NSSharingServicePicker
-          respondsToSelector:@selector(sharedMoreMenuImage)]) {
-    return
-        [NSSharingServicePicker performSelector:@selector(sharedMoreMenuImage)];
+  if (@available(macOS 10.8, *)) {
+    if ([NSSharingServicePicker
+            respondsToSelector:@selector(sharedMoreMenuImage)]) {
+      return [NSSharingServicePicker
+          performSelector:@selector(sharedMoreMenuImage)];
+    }
   }
   return nil;
 }
 
 // Creates a menu item that calls |service| when invoked.
 - (NSMenuItem*)menuItemForService:(NSSharingService*)service {
-  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:service.menuItemTitle
+  NSString* title = service.title;
+  if (@available(macOS 10.9, *)) {
+    title = service.menuItemTitle;
+  }
+  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
                                                 action:@selector(performShare:)
                                          keyEquivalent:@""];
   item.target = self;

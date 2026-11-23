@@ -17,6 +17,7 @@ class HttpRequestHeaders;
 
 // Interface that provides a presentation context to the platform
 // and a delegate for the authorization controller.
+API_AVAILABLE(macos(12.0))
 @interface SSOServiceEntraAuthControllerDelegate
     : NSObject <ASAuthorizationControllerDelegate,
                 ASAuthorizationControllerPresentationContextProviding>

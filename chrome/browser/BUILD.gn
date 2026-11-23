@@ -44,6 +44,10 @@ import("//tools/grit/grit_rule.gni")
 import("//ui/base/ui_features.gni")
 import("//ui/webui/webui_features.gni")
 
+if (is_mac) {
+  import("//build/config/mac/mac_sdk.gni")
+}
+
 assert(enable_supervised_users)
 
 # //build/config/android/rules.gni imports //tools/grit/grit_rule.gni, which
@@ -1876,6 +1880,22 @@ source_set("core") {
       "UniformTypeIdentifiers.framework",
       "VideoToolbox.framework",
     ]
+    _legacy_mac_version = string_split(mac_deployment_target, ".")
+    if (current_cpu == "x64" && _legacy_mac_version[0] == "10" &&
+        _legacy_mac_version[1] == "7") {
+      # These native backends are runtime-gated and absent from Lion. Their
+      # frameworks must not prevent the browser from loading on the baseline.
+      weak_frameworks = [
+        "AuthenticationServices.framework",
+        "LocalAuthentication.framework",
+        "SafariServices.framework",
+        "ScreenCaptureKit.framework",
+        "UserNotifications.framework",
+        "UniformTypeIdentifiers.framework",
+        "VideoToolbox.framework",
+      ]
+      frameworks -= weak_frameworks
+    }
   }
 
   if (!is_win && !is_android) {

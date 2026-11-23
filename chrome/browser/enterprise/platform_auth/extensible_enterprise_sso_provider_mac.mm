@@ -37,6 +37,7 @@ namespace {
 
 // Empty function used to ensure SSOServiceEntraAuthControllerDelegate does not
 // get destroyed until the data is fetched.
+API_AVAILABLE(macos(12.0))
 void OnDataFetched(SSOServiceEntraAuthControllerDelegate*) {
   VLOG_POLICY(2, EXTENSIBLE_SSO) << "[ExtensibleEnterpriseSSO] Deleting "
                                     "SSOServiceEntraAuthControllerDelegate";
@@ -114,42 +115,46 @@ void ExtensibleEnterpriseSSOProvider::GetData(
   // TODO(b/564412659): Fail if the `url` does not match any entries from
   // `GetCurrentSsoExtensionConfig()->urls`.
 
-  NSURL* nativeUrl = net::NSURLWithGURL(url);
-  ASAuthorizationSingleSignOnProvider* auth_provider =
-      [ASAuthorizationSingleSignOnProvider
-          authorizationProviderWithIdentityProviderURL:nativeUrl];
+  if (@available(macOS 12.0, *)) {
+    NSURL* nativeUrl = net::NSURLWithGURL(url);
+    ASAuthorizationSingleSignOnProvider* auth_provider =
+        [ASAuthorizationSingleSignOnProvider
+            authorizationProviderWithIdentityProviderURL:nativeUrl];
 
-  metrics->url_is_supported = auth_provider.canPerformAuthorization;
+    metrics->url_is_supported = auth_provider.canPerformAuthorization;
 
-  if (!auth_provider.canPerformAuthorization) {
-    OnAuthorizationDone(std::move(callback), std::move(metrics), nullptr);
-    return;
-  }
-
-  const base::ListValue& supported_idps =
-      g_browser_process->local_state()->GetList(
-          prefs::kExtensibleEnterpriseSSOEnabledIdps);
-
-  for (const base::Value& idp_value : supported_idps) {
-    if (const std::string* idp = idp_value.GetIfString();
-        idp && *idp == kMicrosoftIdentityProvider) {
-      SSOServiceEntraAuthControllerDelegate* delegate =
-          [[SSOServiceEntraAuthControllerDelegate alloc]
-              initWithAuthorizationSingleSignOnProvider:auth_provider];
-
-      // Pass `delegate` as a callback parameter so that it lives beyond the
-      // scope of this function and until the callback is called.
-      auto final_callback = base::BindPostTaskToCurrentDefault(
-          base::BindOnce(&OnAuthorizationDone, std::move(callback),
-                         std::move(metrics))
-              .Then(base::BindRepeating(&OnDataFetched, delegate)));
-      [delegate getAuthHeaders:nativeUrl
-                  withCallback:std::move(final_callback)];
+    if (!auth_provider.canPerformAuthorization) {
+      OnAuthorizationDone(std::move(callback), std::move(metrics), nullptr);
       return;
     }
-  }
 
-  OnAuthorizationDone(std::move(callback), std::move(metrics), nullptr);
+    const base::ListValue& supported_idps =
+        g_browser_process->local_state()->GetList(
+            prefs::kExtensibleEnterpriseSSOEnabledIdps);
+
+    for (const base::Value& idp_value : supported_idps) {
+      if (const std::string* idp = idp_value.GetIfString();
+          idp && *idp == kMicrosoftIdentityProvider) {
+        SSOServiceEntraAuthControllerDelegate* delegate =
+            [[SSOServiceEntraAuthControllerDelegate alloc]
+                initWithAuthorizationSingleSignOnProvider:auth_provider];
+
+        // Pass `delegate` as a callback parameter so that it lives beyond the
+        // scope of this function and until the callback is called.
+        auto final_callback = base::BindPostTaskToCurrentDefault(
+            base::BindOnce(&OnAuthorizationDone, std::move(callback),
+                           std::move(metrics))
+                .Then(base::BindRepeating(&OnDataFetched, delegate)));
+        [delegate getAuthHeaders:nativeUrl
+                    withCallback:std::move(final_callback)];
+        return;
+      }
+    }
+
+    OnAuthorizationDone(std::move(callback), std::move(metrics), nullptr);
+  } else {
+    OnAuthorizationDone(std::move(callback), std::move(metrics), nullptr);
+  }
 }
 
 }  // namespace enterprise_auth

@@ -143,8 +143,9 @@ void AuthSessionRequest::StartNewAuthSession(
       error_string = [NSString
           stringWithFormat:@"Scheme '%@' is not valid as per RFC 3986.",
                            raw_scheme];
+    } else {
+      matching_scheme = *canonical_scheme;
     }
-    matching_scheme = canonical_scheme.value();
   }
 
   // Create a Browser with an empty tab.
@@ -392,11 +393,13 @@ WEB_CONTENTS_USER_DATA_KEY_IMPL(AuthSessionRequest);
 
 void MaybeCreateAndAddAuthSessionNavigationThrottle(
     content::NavigationThrottleRegistry& registry) {
-  AuthSessionRequest* request = AuthSessionRequest::FromWebContents(
-      registry.GetNavigationHandle().GetWebContents());
-  if (!request) {
-    return;
-  }
+  if (@available(macOS 10.15, *)) {
+    AuthSessionRequest* request = AuthSessionRequest::FromWebContents(
+        registry.GetNavigationHandle().GetWebContents());
+    if (!request) {
+      return;
+    }
 
-  return request->CreateAndAddNavigationThrottle(registry);
+    return request->CreateAndAddNavigationThrottle(registry);
+  }
 }
