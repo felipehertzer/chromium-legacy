@@ -18,6 +18,7 @@
 #include "base/time/time.h"
 #include "device/gamepad/dualshock4_controller.h"
 #include "device/gamepad/gamepad_blocklist.h"
+#include "device/gamepad/gamepad_buildflags.h"
 #include "device/gamepad/gamepad_device_mac.h"
 #include "device/gamepad/gamepad_id_list.h"
 #include "device/gamepad/gamepad_uma.h"
@@ -209,7 +210,8 @@ void GamepadPlatformDataFetcherMac::DeviceAdd(IOHIDDeviceRef device) {
 
   // The SteelSeries Nimbus and other Made for iOS gamepads should be handled
   // through the GameController interface.
-  if (gamepad_id == GamepadId::kSteelSeriesProduct1420) {
+  if (BUILDFLAG(ENABLE_APPLE_GAME_CONTROLLER) &&
+      gamepad_id == GamepadId::kSteelSeriesProduct1420) {
     RecordGamepadPlatformMacOutcome(GamepadPlatformMacOutcome::kIsMfiGamepad);
     return;
   }
@@ -361,6 +363,11 @@ void GamepadPlatformDataFetcherMac::ResetVibration(
 bool GamepadPlatformDataFetcherMac::IsSupportedByGameController(
     uint16_t vendor_id,
     uint16_t product_id) {
+#if !BUILDFLAG(ENABLE_APPLE_GAME_CONTROLLER)
+  (void)vendor_id;
+  (void)product_id;
+  return false;
+#else
   const auto& gamepad_id_list = GamepadIdList::Get();
   GamepadId gamepad_id =
       gamepad_id_list.GetGamepadId("", vendor_id, product_id);
@@ -386,6 +393,7 @@ bool GamepadPlatformDataFetcherMac::IsSupportedByGameController(
   }
 
   return false;
+#endif
 }
 
 }  // namespace device

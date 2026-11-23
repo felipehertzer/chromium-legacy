@@ -11,6 +11,7 @@
 #include "base/compiler_specific.h"
 #include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
+#include "device/gamepad/gamepad_buildflags.h"
 #include "device/gamepad/gamepad_data_fetcher.h"
 #include "device/gamepad/gamepad_data_fetcher_manager.h"
 #include "device/gamepad/public/cpp/gamepad_features.h"
@@ -25,7 +26,9 @@
 #include "device/gamepad/raw_input_data_fetcher_win.h"
 #include "device/gamepad/wgi_data_fetcher_win.h"
 #elif BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(ENABLE_APPLE_GAME_CONTROLLER)
 #include "device/gamepad/game_controller_data_fetcher_mac.h"
+#endif
 #if BUILDFLAG(IS_MAC)
 #include "device/gamepad/gamepad_platform_data_fetcher_mac.h"
 #include "device/gamepad/nintendo_data_fetcher.h"
@@ -57,7 +60,9 @@ void AddGamepadPlatformDataFetchers(GamepadDataFetcherManager* manager) {
 
 #elif BUILDFLAG(IS_APPLE)
 
+#if BUILDFLAG(ENABLE_APPLE_GAME_CONTROLLER)
   manager->AddFactory(new GameControllerDataFetcherMac::Factory());
+#endif
 #if BUILDFLAG(IS_MAC)
   manager->AddFactory(new GamepadPlatformDataFetcherMac::Factory());
   manager->AddFactory(new NintendoDataFetcher::Factory());

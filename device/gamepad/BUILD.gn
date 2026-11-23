@@ -3,11 +3,29 @@
 # found in the LICENSE file.
 
 import("//build/config/features.gni")
+import("//build/buildflag_header.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
   import("//third_party/jni_zero/jni_zero.gni")
+}
+
+_enable_apple_game_controller = is_apple
+if (is_mac) {
+  import("//build/config/mac/mac_sdk.gni")
+  _mac_version = string_split(mac_deployment_target, ".")
+  if (current_cpu == "x64" && _mac_version[0] == "10" &&
+      _mac_version[1] == "7") {
+    # Current GameController headers require Objective-C dispatch ownership,
+    # which cannot be deployed to Lion. Keep the current HID/USB backends.
+    _enable_apple_game_controller = false
+  }
+}
+
+buildflag_header("gamepad_buildflags") {
+  header = "gamepad_buildflags.h"
+  flags = [ "ENABLE_APPLE_GAME_CONTROLLER=$_enable_apple_game_controller" ]
 }
 
 component("gamepad") {
@@ -73,7 +91,10 @@ component("gamepad") {
     "//third_party/blink/public:blink_headers",
   ]
 
-  public_deps = [ "//services/device/public/mojom" ]
+  public_deps = [
+    ":gamepad_buildflags",
+    "//services/device/public/mojom",
+  ]
 
   defines = [ "DEVICE_GAMEPAD_IMPLEMENTATION" ]
 
@@ -142,19 +163,23 @@ component("gamepad") {
   }
 
   if (is_apple) {
-    sources += [
-      "game_controller_data_fetcher_mac.h",
-      "game_controller_data_fetcher_mac.mm",
-      "game_controller_gamepad.h",
-      "game_controller_gamepad.mm",
-      "gamepad_standard_mappings_mac.mm",
-    ]
+    sources += [ "gamepad_standard_mappings_mac.mm" ]
     frameworks = [
       "CoreFoundation.framework",
-      "CoreHaptics.framework",
       "Foundation.framework",
-      "GameController.framework",
     ]
+    if (_enable_apple_game_controller) {
+      sources += [
+        "game_controller_data_fetcher_mac.h",
+        "game_controller_data_fetcher_mac.mm",
+        "game_controller_gamepad.h",
+        "game_controller_gamepad.mm",
+      ]
+      frameworks += [
+        "CoreHaptics.framework",
+        "GameController.framework",
+      ]
+    }
 
     if (is_mac) {
       sources += [
