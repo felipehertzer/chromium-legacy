@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
+#include "base/mac/mac_util.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
@@ -90,6 +91,9 @@ NotificationPlatformBridgeMac::~NotificationPlatformBridgeMac() {
 // static
 std::unique_ptr<NotificationPlatformBridge>
 NotificationPlatformBridge::Create() {
+  if (base::mac::MacOSVersion() < 10'09'00) {
+    return nullptr;
+  }
   auto banner_dispatcher = std::make_unique<NotificationDispatcherMojo>(
       std::make_unique<MacNotificationProviderFactory>(
           mac_notifications::NotificationStyle::kBanner));
@@ -112,7 +116,8 @@ NotificationPlatformBridge::Create() {
 // static
 bool NotificationPlatformBridge::CanHandleType(
     NotificationHandler::Type notification_type) {
-  return notification_type != NotificationHandler::Type::TRANSIENT;
+  return base::mac::MacOSVersion() >= 10'09'00 &&
+         notification_type != NotificationHandler::Type::TRANSIENT;
 }
 
 void NotificationPlatformBridgeMac::Display(

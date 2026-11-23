@@ -28,6 +28,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
+API_AVAILABLE(macos(10.9))
 @interface AlertNSNotificationCenterDelegate
     : NSObject <NSUserNotificationCenterDelegate>
 - (instancetype)initWithActionHandler:
@@ -37,6 +38,7 @@
 
 namespace {
 
+API_AVAILABLE(macos(10.9))
 NotificationOperation GetNotificationOperationFromNotification(
     NSUserNotification* notification) {
   if (notification.activationType == NSUserNotificationActivationTypeNone) {
@@ -77,6 +79,7 @@ NotificationOperation GetNotificationOperationFromNotification(
   return NotificationOperation::kClick;
 }
 
+API_AVAILABLE(macos(10.9))
 int GetActionButtonIndexFromNotification(NSUserNotification* notification) {
   if (notification.activationType !=
           NSUserNotificationActivationTypeActionButtonClicked ||
@@ -100,6 +103,7 @@ int GetActionButtonIndexFromNotification(NSUserNotification* notification) {
   return [[notification valueForKey:@"_alternateActionIndex"] intValue];
 }
 
+API_AVAILABLE(macos(10.9))
 void AddActionButtons(
     NSUserNotification* notification,
     const std::vector<mac_notifications::mojom::NotificationActionButtonPtr>&

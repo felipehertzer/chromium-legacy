@@ -7,6 +7,8 @@
 
 #import <AppKit/AppKit.h>
 
+#include <os/availability.h>
+
 #include <vector>
 
 #include "base/cancelable_callback.h"
@@ -145,6 +147,7 @@ class AppShimController
   // Returns the current MacNotificationService instances as a
   // MacNotificationServiceUN, or nullptr if no notification service has been
   // created yet, or if it is of the wrong type.
+  API_AVAILABLE(macos(10.14))
   mac_notifications::MacNotificationServiceUN* notification_service_un();
 
  private:

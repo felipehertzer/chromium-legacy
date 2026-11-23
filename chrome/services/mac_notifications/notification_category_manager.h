@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import <UserNotifications/UserNotifications.h>
 
+#include <os/availability.h>
+
 #include <optional>
 #include <string>
 #include <tuple>
@@ -24,7 +26,7 @@ namespace mac_notifications {
 // categories that can be used on notifications shown with it. This class
 // manages that set and returns category identifiers for a given set of action
 // buttons.
-class NotificationCategoryManager {
+class API_AVAILABLE(macos(10.14)) NotificationCategoryManager {
  public:
   using Button = std::pair</*title*/ std::u16string,
                            /*placeholder*/ std::optional<std::u16string>>;

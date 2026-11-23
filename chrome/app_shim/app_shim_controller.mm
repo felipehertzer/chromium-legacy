@@ -217,17 +217,19 @@ AppShimController::AppShimController(const Params& params)
   // is harmless, and the only effect of not creating it early when we later
   // need it is that we might miss some notification actions, which again is
   // harmless.
-  if (ShouldCreateNotificationServiceUN()) {
-    // `notification_service_` needs to be created early during start up to make
-    // sure it is able to install its delegate before the OS attempts to inform
-    // it of any notification actions that might have happened.
-    notification_service_ =
-        std::make_unique<mac_notifications::MacNotificationServiceUN>(
-            std::move(notification_action_handler_remote_),
-            base::BindRepeating(
-                &AppShimController::NotificationPermissionStatusChanged,
-                base::Unretained(this)),
-            UNUserNotificationCenter.currentNotificationCenter);
+  if (@available(macOS 10.14, *)) {
+    if (ShouldCreateNotificationServiceUN()) {
+      // `notification_service_` needs to be created early during start up to
+      // make sure it is able to install its delegate before the OS attempts to
+      // inform it of any notification actions that might have happened.
+      notification_service_ =
+          std::make_unique<mac_notifications::MacNotificationServiceUN>(
+              std::move(notification_action_handler_remote_),
+              base::BindRepeating(
+                  &AppShimController::NotificationPermissionStatusChanged,
+                  base::Unretained(this)),
+              UNUserNotificationCenter.currentNotificationCenter);
+    }
   }
 }
 
@@ -414,8 +416,8 @@ bool AppShimController::FindOrLaunchChrome() {
       NSArray<NSRunningApplication*>* apps =
           NSWorkspace.sharedWorkspace.runningApplications;
       for (unsigned i = 0; i < apps.count; ++i) {
-        if (apps[i].processIdentifier == chrome_pid) {
-          chrome_to_connect_to_ = apps[i];
+        if ([apps objectAtIndex:i].processIdentifier == chrome_pid) {
+          chrome_to_connect_to_ = [apps objectAtIndex:i];
         }
       }
       if (!chrome_to_connect_to_) {
@@ -777,15 +779,17 @@ void AppShimController::OnShimConnectedResponse(
   // instance already, it is possible that the base::FeatureList state at the
   // time did not match the current Chrome state, so make sure to create the
   // service now if it wasn't created already.
-  if (!notification_service_ && ShouldCreateNotificationServiceUN()) {
-    CHECK(notification_action_handler_remote_);
-    notification_service_ =
-        std::make_unique<mac_notifications::MacNotificationServiceUN>(
-            std::move(notification_action_handler_remote_),
-            base::BindRepeating(
-                &AppShimController::NotificationPermissionStatusChanged,
-                base::Unretained(this)),
-            UNUserNotificationCenter.currentNotificationCenter);
+  if (@available(macOS 10.14, *)) {
+    if (!notification_service_ && ShouldCreateNotificationServiceUN()) {
+      CHECK(notification_action_handler_remote_);
+      notification_service_ =
+          std::make_unique<mac_notifications::MacNotificationServiceUN>(
+              std::move(notification_action_handler_remote_),
+              base::BindRepeating(
+                  &AppShimController::NotificationPermissionStatusChanged,
+                  base::Unretained(this)),
+              UNUserNotificationCenter.currentNotificationCenter);
+    }
   }
 
   shim_receiver_.Bind(std::move(app_shim_receiver),
@@ -836,40 +840,47 @@ void AppShimController::CreateCommandDispatcherForWidget(uint64_t widget_id) {
 void AppShimController::SetBadgeLabel(const std::string& badge_label,
                                       SetBadgeLabelCallback callback) {
   NSApp.dockTile.badgeLabel = base::SysUTF8ToNSString(badge_label);
-  if (!notification_service_un()) {
-    std::move(callback).Run(
-        chrome::mojom::AppShimBadgeResult::kNoPermissionService);
+  if (@available(macOS 10.14, *)) {
+    if (!notification_service_un()) {
+      std::move(callback).Run(
+          chrome::mojom::AppShimBadgeResult::kNoPermissionService);
+      return;
+    }
+    notification_service_un()->SynchronizePermissionStatus(
+        base::BindOnce([](mac_notifications::mojom::PermissionStatus status,
+                          bool badge_enabled) {
+          BadgeUpdateOSStatus os_status;
+          switch (status) {
+            case mac_notifications::mojom::PermissionStatus::kNotDetermined:
+              os_status = BadgeUpdateOSStatus::kNotDetermined;
+              break;
+            case mac_notifications::mojom::PermissionStatus::kPromptPending:
+              os_status = BadgeUpdateOSStatus::kPromptPending;
+              break;
+            case mac_notifications::mojom::PermissionStatus::kDenied:
+              os_status = BadgeUpdateOSStatus::kDenied;
+              break;
+            case mac_notifications::mojom::PermissionStatus::kGranted:
+              os_status = badge_enabled
+                              ? BadgeUpdateOSStatus::kGranted
+                              : BadgeUpdateOSStatus::kGrantedBadgeDisabled;
+              break;
+          }
+          base::UmaHistogramEnumeration(
+              "Notifications.Permissions.AppShim.BadgeUpdateOSStatus",
+              os_status);
+          return os_status == BadgeUpdateOSStatus::kGranted
+                     ? chrome::mojom::AppShimBadgeResult::kSuccess
+                     : chrome::mojom::AppShimBadgeResult::
+                           kBlockedByOSPermission;
+        })
+            .Then(mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+                std::move(callback),
+                chrome::mojom::AppShimBadgeResult::kNoPermissionService)));
     return;
   }
-  notification_service_un()->SynchronizePermissionStatus(
-      base::BindOnce([](mac_notifications::mojom::PermissionStatus status,
-                        bool badge_enabled) {
-        BadgeUpdateOSStatus os_status;
-        switch (status) {
-          case mac_notifications::mojom::PermissionStatus::kNotDetermined:
-            os_status = BadgeUpdateOSStatus::kNotDetermined;
-            break;
-          case mac_notifications::mojom::PermissionStatus::kPromptPending:
-            os_status = BadgeUpdateOSStatus::kPromptPending;
-            break;
-          case mac_notifications::mojom::PermissionStatus::kDenied:
-            os_status = BadgeUpdateOSStatus::kDenied;
-            break;
-          case mac_notifications::mojom::PermissionStatus::kGranted:
-            os_status = badge_enabled
-                            ? BadgeUpdateOSStatus::kGranted
-                            : BadgeUpdateOSStatus::kGrantedBadgeDisabled;
-            break;
-        }
-        base::UmaHistogramEnumeration(
-            "Notifications.Permissions.AppShim.BadgeUpdateOSStatus", os_status);
-        return os_status == BadgeUpdateOSStatus::kGranted
-                   ? chrome::mojom::AppShimBadgeResult::kSuccess
-                   : chrome::mojom::AppShimBadgeResult::kBlockedByOSPermission;
-      })
-          .Then(mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-              std::move(callback),
-              chrome::mojom::AppShimBadgeResult::kNoPermissionService)));
+  std::move(callback).Run(
+      chrome::mojom::AppShimBadgeResult::kNoPermissionService);
 }
 
 void AppShimController::UpdateProfileMenu(
@@ -925,17 +936,24 @@ void AppShimController::BindNotificationProvider(
 
 void AppShimController::RequestNotificationPermission(
     RequestNotificationPermissionCallback callback) {
-  if (!notification_service_un()) {
-    std::move(callback).Run(
-        mac_notifications::mojom::RequestPermissionResult::kRequestFailed);
+  if (@available(macOS 10.14, *)) {
+    if (!notification_service_un()) {
+      std::move(callback).Run(
+          mac_notifications::mojom::RequestPermissionResult::kRequestFailed);
+      return;
+    }
+    notification_service_un()->RequestPermission(std::move(callback));
     return;
   }
-  notification_service_un()->RequestPermission(std::move(callback));
+  std::move(callback).Run(
+      mac_notifications::mojom::RequestPermissionResult::kRequestFailed);
 }
 
 void AppShimController::SynchronizeNotificationPermissionStatus() {
-  if (auto* service = notification_service_un()) {
-    service->SynchronizePermissionStatus();
+  if (@available(macOS 10.14, *)) {
+    if (auto* service = notification_service_un()) {
+      service->SynchronizePermissionStatus();
+    }
   }
 }
 
@@ -950,19 +968,18 @@ void AppShimController::BindNotificationService(
   // default on supported platforms, change this to always use the
   // UNUserNotification API (and not support notification attribution on other
   // platforms at all).
-  if (WebAppIsAdHocSigned()) {
-    if (notification_service_un()) {
-      // Note that `handler` as passed in to this method is ignored.
-      // Notification actions instead will be dispatched to the app-shim scoped
-      // mojo pipe that was established earlier during startup, to allow
-      // notification actions to be triggered before the browser process tries
-      // to connect to the notification service.
-      notification_service_un()->Bind(std::move(service));
+  if (@available(macOS 10.14, *)) {
+    if (WebAppIsAdHocSigned()) {
+      if (notification_service_un()) {
+        // Keep action delivery on the app-shim scoped pipe established at
+        // startup, including actions received before the browser connects.
+        notification_service_un()->Bind(std::move(service));
+      }
+      return;
     }
-  } else {
-    // NSUserNotificationCenter is in the process of being replaced, and
-    // warnings about its deprecation are not helpful.
-    // https://crbug.com/40148499
+  }
+  if (@available(macOS 10.9, *)) {
+    // The legacy service uses the system's deprecated notification API.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     notification_service_ =
@@ -1097,14 +1114,14 @@ void AppShimController::BindChildHistogramFetcherFactory(
 }
 
 bool AppShimController::WebAppIsAdHocSigned() const {
-  NSNumber* isAdHocSigned =
-      base::apple::MainBundle()
-          .infoDictionary[app_mode::kCrAppModeIsAdHocSignedKey];
+  NSNumber* isAdHocSigned = [base::apple::MainBundle().infoDictionary
+      objectForKey:app_mode::kCrAppModeIsAdHocSignedKey];
   return isAdHocSigned.boolValue;
 }
 
 bool AppShimController::ShouldCreateNotificationServiceUN() const {
-  if (g_disable_notification_service_for_testing) {
+  if (base::mac::MacOSVersion() < 10'14'00 ||
+      g_disable_notification_service_for_testing) {
     return false;
   }
   if (!base::FeatureList::IsEnabled(

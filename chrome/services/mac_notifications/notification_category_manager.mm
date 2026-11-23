@@ -15,6 +15,7 @@ namespace mac_notifications {
 
 namespace {
 
+API_AVAILABLE(macos(10.14))
 UNNotificationAction* CreateAction(
     const NotificationCategoryManager::Button& button,
     NSString* identifier) {
@@ -33,6 +34,7 @@ UNNotificationAction* CreateAction(
                    options:UNNotificationActionOptionNone];
 }
 
+API_AVAILABLE(macos(10.14))
 NotificationCategoryManager::Button GetButtonFromAction(
     UNNotificationAction* action) {
   std::u16string title = base::SysNSStringToUTF16([action title]);

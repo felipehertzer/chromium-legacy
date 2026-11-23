@@ -38,9 +38,13 @@ void MacNotificationProviderImpl::BindNotificationService(
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-  service_ = std::make_unique<MacNotificationServiceNS>(
-      std::move(service), std::move(handler),
-      [NSUserNotificationCenter defaultUserNotificationCenter]);
+  if (@available(macOS 10.9, *)) {
+    service_ = std::make_unique<MacNotificationServiceNS>(
+        std::move(service), std::move(handler),
+        [NSUserNotificationCenter defaultUserNotificationCenter]);
+  }
+  // Otherwise the pending endpoints close, reporting a connection failure.
+  // The browser selects its Message Center before requesting a native provider.
 
 #pragma clang diagnostic pop
 }

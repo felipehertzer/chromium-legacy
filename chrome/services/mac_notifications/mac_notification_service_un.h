@@ -7,6 +7,8 @@
 
 #import <UserNotifications/UserNotifications.h>
 
+#include <os/availability.h>
+
 #include <cstddef>
 #include <vector>
 
@@ -30,7 +32,8 @@ namespace mac_notifications {
 
 // Implementation of the MacNotificationService mojo interface using the
 // UNNotification system API.
-class MacNotificationServiceUN : public mojom::MacNotificationService {
+class API_AVAILABLE(macos(10.14)) MacNotificationServiceUN
+    : public mojom::MacNotificationService {
  public:
   // Timer interval used to synchronize displayed notifications.
   static constexpr auto kSynchronizationInterval = base::Minutes(10);

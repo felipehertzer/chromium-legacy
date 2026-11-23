@@ -5,6 +5,7 @@
 #import "chrome/services/mac_notifications/mac_notification_service_un.h"
 
 #import <AppKit/AppKit.h>
+#import <CoreServices/CoreServices.h>
 #import <Foundation/Foundation.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
@@ -41,6 +42,7 @@
 #include "ui/gfx/image/image.h"
 #include "url/origin.h"
 
+API_AVAILABLE(macos(10.14))
 @interface AlertUNNotificationCenterDelegate
     : NSObject <UNUserNotificationCenterDelegate>
 - (instancetype)initWithActionHandler:
@@ -56,6 +58,7 @@ base::RepeatingClosure& GetOpenSystemSettingsCallbackOverride() {
   return *callback;
 }
 
+API_AVAILABLE(macos(10.14))
 NotificationOperation GetNotificationOperationFromAction(
     NSString* actionIdentifier) {
   if ([actionIdentifier isEqual:UNNotificationDismissActionIdentifier] ||
@@ -89,6 +92,7 @@ int GetActionButtonIndexFromAction(NSString* actionIdentifier) {
   return kNotificationInvalidButtonIndex;
 }
 
+API_AVAILABLE(macos(10.14))
 std::optional<std::u16string> GetReplyFromResponse(
     UNNotificationResponse* response) {
   if (![response isKindOfClass:[UNTextInputNotificationResponse class]])
@@ -117,6 +121,7 @@ base::ScopedTempFile WriteNotificationIconToTempFile(const gfx::Image& icon) {
   return temp_file;
 }
 
+API_AVAILABLE(macos(10.14))
 bool IsAttachmentError(NSError* _Nullable error) {
   if (!error || ![error.domain isEqualToString:UNErrorDomain]) {
     return false;
@@ -324,8 +329,14 @@ void MacNotificationServiceUN::DoDisplayNotification(
           base::MakeAbsoluteFilePath(icon_file.path()));
       // Since the temporary file is saved without a .png extension, |options|
       // is used to tell the system that the file is of type PNG.
+      NSString* png_type;
+      if (@available(macOS 11.0, *)) {
+        png_type = UTTypePNG.identifier;
+      } else {
+        png_type = (__bridge NSString*)kUTTypePNG;
+      }
       NSDictionary* options =
-          @{UNNotificationAttachmentOptionsTypeHintKey : UTTypePNG.identifier};
+          @{UNNotificationAttachmentOptionsTypeHintKey : png_type};
 
       UNNotificationAttachment* attachment =
           url ? [UNNotificationAttachment
@@ -1109,10 +1120,15 @@ void MacNotificationServiceUN::OnGotAuthorizationStatus(
              (void (^)(UNNotificationPresentationOptions options))
                  completionHandler {
   // Receiving a notification when the app is in the foreground.
-  completionHandler(UNNotificationPresentationOptionSound |
-                    UNNotificationPresentationOptionList |
-                    UNNotificationPresentationOptionBanner |
-                    UNNotificationPresentationOptionBadge);
+  UNNotificationPresentationOptions options =
+      UNNotificationPresentationOptionSound | UNNotificationPresentationOptionBadge;
+  if (@available(macOS 11.0, *)) {
+    options |= UNNotificationPresentationOptionList |
+               UNNotificationPresentationOptionBanner;
+  } else {
+    options |= UNNotificationPresentationOptionAlert;
+  }
+  completionHandler(options);
 }
 
 - (void)userNotificationCenter:(UNUserNotificationCenter*)center

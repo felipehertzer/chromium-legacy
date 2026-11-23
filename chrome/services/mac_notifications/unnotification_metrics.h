@@ -22,7 +22,8 @@ void LogUNNotificationRequestPermissionResult(
     mojom::RequestPermissionResult result);
 
 // Logs the current notifications settings and permissions.
-void LogUNNotificationSettings(UNNotificationSettings* settings);
+void LogUNNotificationSettings(UNNotificationSettings* settings)
+    API_AVAILABLE(macos(10.14));
 
 // Logs the result of adding a notification request to the system.
 void LogUNNotificationAddRequestResult(

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/mac/mac_sdk.gni")
+
 source_set("mac_notifications") {
   sources = [
     "mac_notification_provider_impl.h",
@@ -36,9 +38,14 @@ source_set("mac_notifications") {
 
   frameworks = [
     "AppKit.framework",
-    "UserNotifications.framework",
+    "CoreServices.framework",
     "Foundation.framework",
   ]
+  if (current_cpu == "x64" && mac_deployment_target == "10.7") {
+    weak_frameworks = [ "UserNotifications.framework" ]
+  } else {
+    frameworks += [ "UserNotifications.framework" ]
+  }
 }
 
 source_set("unit_tests") {

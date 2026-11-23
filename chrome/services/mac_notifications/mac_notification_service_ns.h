@@ -5,6 +5,8 @@
 #ifndef CHROME_SERVICES_MAC_NOTIFICATIONS_MAC_NOTIFICATION_SERVICE_NS_H_
 #define CHROME_SERVICES_MAC_NOTIFICATIONS_MAC_NOTIFICATION_SERVICE_NS_H_
 
+#include <os/availability.h>
+
 #include "chrome/services/mac_notifications/public/mojom/mac_notifications.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -23,7 +25,8 @@ namespace mac_notifications {
 
 // Implementation of the MacNotificationService mojo interface using the
 // NSUserNotification system API.
-class MacNotificationServiceNS : public mojom::MacNotificationService {
+class API_AVAILABLE(macos(10.9)) MacNotificationServiceNS
+    : public mojom::MacNotificationService {
  public:
   MacNotificationServiceNS(
       mojo::PendingReceiver<mojom::MacNotificationService> service,

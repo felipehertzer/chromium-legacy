@@ -23,8 +23,11 @@
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
-  id user_notification = [notification.userInfo
-      objectForKey:NSApplicationLaunchUserNotificationKey];
+  id user_notification = nil;
+  if (@available(macOS 10.8, *)) {
+    user_notification = [notification.userInfo
+        objectForKey:NSApplicationLaunchUserNotificationKey];
+  }
   NSNumber* is_default_launch_number =
       base::apple::ObjCCast<NSNumber>([notification.userInfo
           objectForKey:NSApplicationLaunchIsDefaultLaunchKey]);
@@ -71,10 +74,12 @@
   // Note that this unfortunately does not keep the app shim itself from being
   // activated by the OS. This merely prevents unexpected windows from being
   // opened.
-  if (_appShimController->notification_service_un() &&
-      _appShimController->notification_service_un()
-          ->DidRecentlyHandleClickAction()) {
-    return YES;
+  if (@available(macOS 10.14, *)) {
+    if (_appShimController->notification_service_un() &&
+        _appShimController->notification_service_un()
+            ->DidRecentlyHandleClickAction()) {
+      return YES;
+    }
   }
 
   _appShimController->host()->ReopenApp();
