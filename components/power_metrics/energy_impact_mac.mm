@@ -23,12 +23,11 @@ namespace {
 NSDictionary* MaybeGetDictionaryFromPath(const base::FilePath& path) {
   // The folder where the energy coefficient plist files are stored.
   return [NSDictionary
-      dictionaryWithContentsOfURL:base::apple::FilePathToNSURL(path)
-                            error:nil];
+      dictionaryWithContentsOfURL:base::apple::FilePathToNSURL(path)];
 }
 
 double GetNamedCoefficientOrZero(NSDictionary* dict, NSString* key) {
-  NSNumber* num = base::apple::ObjCCast<NSNumber>(dict[key]);
+  NSNumber* num = base::apple::ObjCCast<NSNumber>([dict objectForKey:key]);
   return num.floatValue;
 }
 
@@ -121,7 +120,7 @@ std::optional<EnergyImpactCoefficients> ReadCoefficientsFromPath(
       return std::nullopt;
     }
 
-    NSDictionary* energy_constants = dict[@"energy_constants"];
+    NSDictionary* energy_constants = [dict objectForKey:@"energy_constants"];
     if (!energy_constants) {
       return std::nullopt;
     }
@@ -180,7 +179,7 @@ std::optional<EnergyImpactCoefficients> ReadCoefficientsForBoardIdOrDefault(
 
 std::optional<std::string> GetBoardIdForThisMachine() {
   base::mac::ScopedIOObject<io_service_t> platform_expert(
-      IOServiceGetMatchingService(kIOMainPortDefault,
+      IOServiceGetMatchingService(MACH_PORT_NULL,
                                   IOServiceMatching("IOPlatformExpertDevice")));
   if (!platform_expert)
     return std::nullopt;
