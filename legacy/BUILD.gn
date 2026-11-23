@@ -90,6 +90,15 @@ if (is_mac) {
     ]
   }
 
+  executable("sensor_reading_probe") {
+    testonly = true
+    sources = [ "tests/sensor_reading_probe.cc" ]
+    deps = [
+      "//base",
+      "//services/device/public/cpp/generic_sensor",
+    ]
+  }
+
   executable("property_list_probe") {
     testonly = true
     sources = [ "tests/property_list_probe.mm" ]
