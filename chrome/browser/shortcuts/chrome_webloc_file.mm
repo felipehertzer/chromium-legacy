@@ -33,24 +33,35 @@ ChromeWeblocFile::~ChromeWeblocFile() = default;
 // static
 std::optional<ChromeWeblocFile> ChromeWeblocFile::LoadFromFile(
     const base::FilePath& file_path) {
-  NSDictionary* contents;
-  NSError* error;
+  NSDictionary* contents = nil;
+  NSError* error = nil;
   {
     base::ScopedBlockingCall scoped_blocking_call(
         FROM_HERE, base::BlockingType::MAY_BLOCK);
-    contents = [NSDictionary
-        dictionaryWithContentsOfURL:base::apple::FilePathToNSURL(file_path)
-                              error:&error];
+    NSData* data =
+        [NSData dataWithContentsOfURL:base::apple::FilePathToNSURL(file_path)
+                              options:0
+                                error:&error];
+    if (data) {
+      contents =
+          base::apple::ObjCCast<NSDictionary>([NSPropertyListSerialization
+              propertyListWithData:data
+                           options:NSPropertyListImmutable
+                            format:nullptr
+                             error:&error]);
+    }
   }
   if (!contents) {
     LOG(ERROR) << "Failed to read shortcut file from " << file_path << ": "
                << error;
     return std::nullopt;
   }
-  GURL target_url(base::SysNSStringToUTF8(contents[kUrlKey]));
+  GURL target_url(base::SysNSStringToUTF8(
+      base::apple::ObjCCast<NSString>([contents objectForKey:kUrlKey])));
   std::optional<base::SafeBaseName> profile_path_name =
       base::SafeBaseName::Create(
-          base::apple::NSStringToFilePath(contents[kProfileKey]));
+          base::apple::NSStringToFilePath(base::apple::ObjCCast<NSString>(
+              [contents objectForKey:kProfileKey])));
   if (!target_url.is_valid() || !profile_path_name.has_value() ||
       profile_path_name->path().empty()) {
     LOG(ERROR) << "Failed to parse URL or profile from " << file_path << " "
@@ -73,8 +84,14 @@ bool ChromeWeblocFile::SaveToFile(const base::FilePath& file_path) {
     base::ScopedBlockingCall scoped_blocking_call(
         FROM_HERE, base::BlockingType::MAY_BLOCK);
     NSError* error = nil;
-    if (![contents writeToURL:base::apple::FilePathToNSURL(file_path)
-                        error:&error]) {
+    NSData* data = [NSPropertyListSerialization
+        dataWithPropertyList:contents
+                      format:NSPropertyListXMLFormat_v1_0
+                     options:0
+                       error:&error];
+    if (!data || ![data writeToURL:base::apple::FilePathToNSURL(file_path)
+                           options:NSDataWritingAtomic
+                             error:&error]) {
       LOG(ERROR) << "Failed to create shortcut at " << file_path << ": "
                  << error;
       return false;

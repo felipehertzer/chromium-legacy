@@ -189,6 +189,17 @@ or replaces a Chromium 159 dependency.
   Native denied/restricted/undetermined states remain distinct, empty position
   updates are ignored and callbacks cannot use a destroyed provider. Older
   systems retain traditional altitude when the ellipsoidal getter is absent.
+- Media authorization functions/types require Mojave/10.14. The pre-Mojave
+  system-only result follows [upstream Chromium's original policy](https://chromium.googlesource.com/chromium/src/+/80.0.3987.149/chrome/browser/media/webrtc/system_media_capture_permissions_mac.mm#142);
+  the browser requests site permission before the system check. Mojave+ still
+  consults native authorization and retains denied/restricted/undetermined states.
+  The global legacy fallback-test flag cannot suppress this native privacy gate.
+- Shortcut files use typed property-list parsing and atomic NSData writes.
+  Malformed root/field types fail safely; existing SafeBaseName normalization
+  remains intact. Per-file default-app overrides require 12; earlier systems
+  use LaunchServices registration, which may select another installed channel.
+  Wi-Fi discovery uses the old named-interface lookup before 10.10 and Xbox
+  device discovery uses IOKit's original null default port.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -244,6 +255,8 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Native shape helpers/format enumeration/synthetic image/old face fallback | 11 normal and 9 forced checks | 11 normal and 9 forced checks |
 | SIMD scalar math/edge cases/native comparison, normal and forced old APIs | 1,743 checks each | 1,743 checks each |
 | Real geolocation provider/authorization/callbacks/lifetime with injected manager | 17 normal and 17 forced checks | 17 normal and 17 forced checks |
+| Actual shortcut file parsing/writing/Unicode/malformed inputs | 16 checks passed | 16 checks passed |
+| System media decisions/callbacks; native controls remain active with the global fallback-test flag | 18 checks each mode | 18 checks each mode |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -258,7 +271,7 @@ compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
 authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
-math, modal window helpers, geolocation callbacks, timers, atomics, and
+math, modal window helpers, geolocation callbacks, shortcut files, system media policy, timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -297,7 +310,13 @@ Geolocation checks inject an owned NSObject manager double using the existing
 production test seam, validate synthetic updates and both authorization paths,
 and never start native location requests, display permission prompts or query
 Wi-Fi. Actual OS permission prompts and position delivery still need runtime
-validation on the supported systems.
+validation on the supported systems. Shortcut checks only use owned temporary
+files and do not create Finder shortcuts or change default apps. Media policy
+checks use the existing wrapper test seam and do not access cameras/microphones,
+read real authorization decisions or display permission prompts. They verify the
+native decision mapping and callback contracts, including with the global
+fallback-test define; the pre-Mojave branch still needs Lion runtime validation.
+Wi-Fi discovery and Xbox device operations have compiler checks only.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -341,6 +360,9 @@ python3 legacy/test_attributed_string.py
 # Build geolocation_probe with -d keeprsp before these isolated checks:
 python3 legacy/test_geolocation.py
 python3 legacy/test_geolocation.py --force-legacy
+python3 legacy/test_shortcut_file.py
+python3 legacy/test_media_permissions.py
+python3 legacy/test_media_permissions.py --force-legacy
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

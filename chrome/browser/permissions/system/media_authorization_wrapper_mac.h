@@ -17,7 +17,7 @@ class MediaAuthorizationWrapper {
   virtual ~MediaAuthorizationWrapper() = default;
 
   virtual AVAuthorizationStatus AuthorizationStatusForMediaType(
-      NSString* media_type) = 0;
+      NSString* media_type) API_AVAILABLE(macos(10.14)) = 0;
   virtual void RequestAccessForMediaType(NSString* media_type,
                                          base::OnceClosure callback) = 0;
 };

@@ -194,7 +194,7 @@ void XboxDataFetcher::PendingServiceBecameAvailable(io_service_t service) {
 void XboxDataFetcher::RetryOpenDevice(uint64_t entry_id) {
   // IOServiceGetMatchingService() consumes the matching dictionary.
   base::mac::ScopedIOObject<io_service_t> service(IOServiceGetMatchingService(
-      kIOMainPortDefault, IORegistryEntryIDMatching(entry_id)));
+      MACH_PORT_NULL, IORegistryEntryIDMatching(entry_id)));
   if (!service) {
     // The device was removed while waiting to retry.
     return;
@@ -223,7 +223,7 @@ bool XboxDataFetcher::RegisterForNotifications() {
   if (listening_)
     return true;
   if (port_ == nullptr)
-    port_.reset(IONotificationPortCreate(kIOMainPortDefault));
+    port_.reset(IONotificationPortCreate(MACH_PORT_NULL));
   if (!port_.is_valid())
     return false;
   source_ = IONotificationPortGetRunLoopSource(port_.get());

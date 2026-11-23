@@ -46,6 +46,7 @@ class MediaAuthorizationWrapperImpl final : public MediaAuthorizationWrapper {
 
   ~MediaAuthorizationWrapperImpl() override = default;
 
+  API_AVAILABLE(macos(10.14))
   AVAuthorizationStatus AuthorizationStatusForMediaType(
       AVMediaType media_type) override {
     return [AVCaptureDevice authorizationStatusForMediaType:media_type];
@@ -53,14 +54,19 @@ class MediaAuthorizationWrapperImpl final : public MediaAuthorizationWrapper {
 
   void RequestAccessForMediaType(AVMediaType media_type,
                                  base::OnceClosure callback) override {
-    __block base::OnceClosure block_callback = std::move(callback);
-    __block scoped_refptr<base::SequencedTaskRunner> requesting_thread =
-        base::SequencedTaskRunner::GetCurrentDefault();
-    [AVCaptureDevice requestAccessForMediaType:media_type
-                             completionHandler:^(BOOL granted) {
-                               requesting_thread->PostTask(
-                                   FROM_HERE, std::move(block_callback));
-                             }];
+    if (@available(macOS 10.14, *)) {
+      __block base::OnceClosure block_callback = std::move(callback);
+      __block scoped_refptr<base::SequencedTaskRunner> requesting_thread =
+          base::SequencedTaskRunner::GetCurrentDefault();
+      [AVCaptureDevice requestAccessForMediaType:media_type
+                               completionHandler:^(BOOL granted) {
+                                 requesting_thread->PostTask(
+                                     FROM_HERE, std::move(block_callback));
+                               }];
+      return;
+    }
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
   }
 };
 
@@ -74,6 +80,7 @@ MediaAuthorizationWrapper& GetMediaAuthorizationWrapper() {
   return *media_authorization_wrapper;
 }
 
+API_AVAILABLE(macos(10.14))
 AVAuthorizationStatus MediaAuthorizationStatus(AVMediaType media_type) {
   return GetMediaAuthorizationWrapper().AuthorizationStatusForMediaType(
       media_type);
@@ -84,19 +91,26 @@ SystemPermission CheckSystemMediaCapturePermission(AVMediaType media_type) {
     return SystemPermission::kAllowed;
   }
 
-  AVAuthorizationStatus auth_status = MediaAuthorizationStatus(media_type);
-  switch (auth_status) {
-    case AVAuthorizationStatusNotDetermined:
-      return SystemPermission::kNotDetermined;
-    case AVAuthorizationStatusRestricted:
-      return SystemPermission::kRestricted;
-    case AVAuthorizationStatusDenied:
-      return SystemPermission::kDenied;
-    case AVAuthorizationStatusAuthorized:
-      return SystemPermission::kAllowed;
-    default:
-      NOTREACHED();
+  if (@available(macOS 10.14, *)) {
+    AVAuthorizationStatus auth_status = MediaAuthorizationStatus(media_type);
+    switch (auth_status) {
+      case AVAuthorizationStatusNotDetermined:
+        return SystemPermission::kNotDetermined;
+      case AVAuthorizationStatusRestricted:
+        return SystemPermission::kRestricted;
+      case AVAuthorizationStatusDenied:
+        return SystemPermission::kDenied;
+      case AVAuthorizationStatusAuthorized:
+        return SystemPermission::kAllowed;
+      default:
+        NOTREACHED();
+    }
   }
+  // Per-app camera/microphone system permissions start in Mojave. Preserve
+  // Chromium's historical pre-Mojave behavior; site permissions are enforced
+  // by PermissionBubbleMediaAccessHandler before this system-only check.
+  // https://chromium.googlesource.com/chromium/src/+/80.0.3987.149/chrome/browser/media/webrtc/system_media_capture_permissions_mac.mm#142
+  return SystemPermission::kAllowed;
 }
 
 void RequestSystemMediaCapturePermission(AVMediaType media_type,

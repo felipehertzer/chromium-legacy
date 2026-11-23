@@ -29,8 +29,17 @@ std::optional<std::string> GetWifiSSID(CWInterface* interface) {
 
 std::optional<std::string> MaybeGetWifiSSID(std::string_view if_name) {
   NSString* ns_ifname = base::SysUTF8ToNSString(if_name);
-  NSArray<CWInterface*>* all_interfaces =
-      [[CWWiFiClient sharedWiFiClient] interfaces];
+  if (!ns_ifname.length)
+    return std::nullopt;
+  NSArray<CWInterface*>* all_interfaces = nil;
+  if (@available(macOS 10.10, *)) {
+    all_interfaces = [[CWWiFiClient sharedWiFiClient] interfaces];
+  } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    CWInterface* interface = [CWInterface interfaceWithName:ns_ifname];
+    return interface ? GetWifiSSID(interface) : std::nullopt;
+#endif
+  }
   if (all_interfaces == nil) {
     return std::nullopt;
   }
