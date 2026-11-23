@@ -20,6 +20,7 @@ namespace webnn::coreml {
 
 namespace {
 
+API_AVAILABLE(macos(14.4))
 size_t GetDataTypeByteSize(MLMultiArrayDataType data_type) {
   // MLMultiArrayDataType values encode a format in the high bits (float =
   // 0x10000, int = 0x20000) and the size (in bits) in the lower 16 bits.

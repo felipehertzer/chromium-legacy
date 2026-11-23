@@ -15,12 +15,14 @@ namespace webnn::coreml {
 
 // Reads from `multi_array` into a newly-allocated `BigBuffer` containing the
 // read bytes.
+API_AVAILABLE(macos(14.4))
 mojo_base::BigBuffer COMPONENT_EXPORT(WEBNN_SERVICE)
     ReadFromMLMultiArray(MLMultiArray* multi_array);
 
 // Writes `bytes_to_write` into `multi_array`, overwriting any data
 // that was previously there. The length of `bytes_to_write` must exactly
 // match the number of bytes of data represented by `multi_array`.
+API_AVAILABLE(macos(14.4))
 void COMPONENT_EXPORT(WEBNN_SERVICE)
     WriteToMLMultiArray(MLMultiArray* multi_array,
                         base::span<const uint8_t> bytes_to_write);

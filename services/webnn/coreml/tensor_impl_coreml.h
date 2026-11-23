@@ -21,7 +21,8 @@ class WebNNContextImpl;
 
 namespace coreml {
 
-class TensorImplCoreml final : public WebNNTensorImpl {
+class API_AVAILABLE(macos(14.4)) TensorImplCoreml final
+    : public WebNNTensorImpl {
  public:
   static base::expected<scoped_refptr<WebNNTensorImpl>, mojom::ErrorPtr> Create(
       mojo::PendingAssociatedReceiver<mojom::WebNNTensor> receiver,

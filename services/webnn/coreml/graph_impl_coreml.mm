@@ -46,6 +46,7 @@
 #include "services/webnn/webnn_switches.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 
+API_AVAILABLE(macos(14.4))
 @interface WebNNMLFeatureProvider : NSObject <MLFeatureProvider>
 - (MLFeatureValue*)featureValueForName:(NSString*)featureName;
 @property(readonly, nonatomic) NSSet<NSString*>* featureNames;
@@ -73,6 +74,7 @@ namespace webnn::coreml {
 
 namespace {
 
+API_AVAILABLE(macos(14.4))
 base::expected<base::flat_map<std::string, OperandDescriptor>, mojom::ErrorPtr>
 BuildDescriptorsFromMLModel(
     const ContextProperties& context_properties,
