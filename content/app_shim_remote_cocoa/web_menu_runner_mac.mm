@@ -5,6 +5,7 @@
 #include "content/app_shim_remote_cocoa/web_menu_runner_mac.h"
 
 #include <AppKit/AppKit.h>
+#include <CoreText/CoreText.h>
 #include <Foundation/Foundation.h>
 #include <objc/runtime.h>
 #include <stddef.h>
@@ -112,11 +113,12 @@ static const char kMenuWasRunCallbackKey = 0;
           : NSWritingDirectionLeftToRight;
   paragraphStyle.baseWritingDirection = writingDirection;
   paragraphStyle.lineBreakMode = NSLineBreakByTruncatingTail;
-  attrs[NSParagraphStyleAttributeName] = paragraphStyle;
+  [attrs setObject:paragraphStyle forKey:NSParagraphStyleAttributeName];
 
   if (item->has_text_direction_override) {
-    attrs[NSWritingDirectionAttributeName] =
-        @[ @(long{writingDirection} | NSWritingDirectionOverride) ];
+    [attrs
+        setObject:@[ @(long{writingDirection} | kCTWritingDirectionOverride) ]
+           forKey:NSWritingDirectionAttributeName];
   }
 
   NSAttributedString* attrTitle =
@@ -198,8 +200,10 @@ static const char kMenuWasRunCallbackKey = 0;
   if (_rightAligned) {
     cell.userInterfaceLayoutDirection =
         NSUserInterfaceLayoutDirectionRightToLeft;
-    _menu.userInterfaceLayoutDirection =
-        NSUserInterfaceLayoutDirectionRightToLeft;
+    if (@available(macOS 10.11, *)) {
+      _menu.userInterfaceLayoutDirection =
+          NSUserInterfaceLayoutDirectionRightToLeft;
+    }
   }
 
   // When popping up a menu near the Dock, Cocoa restricts the menu size to not

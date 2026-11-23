@@ -145,11 +145,15 @@ base::File::Error CreateCowSwapFile(const storage::FileSystemURL& source_url,
   if (base::IsLink(swap_url.path())) {
     return base::File::Error::FILE_ERROR_EXISTS;
   }
-  return clonefile(source_url.path().value().c_str(),
-                   swap_url.path().value().c_str(),
-                   /*flags=*/0) == 0
-             ? base::File::Error::FILE_OK
-             : base::File::GetLastFileError();
+  if (__builtin_available(macOS 10.12, *)) {
+    return clonefile(source_url.path().value().c_str(),
+                     swap_url.path().value().c_str(),
+                     /*flags=*/0) == 0
+               ? base::File::Error::FILE_OK
+               : base::File::GetLastFileError();
+  }
+  // The existing caller falls back to its regular exclusive create-and-copy.
+  return base::File::FILE_ERROR_INVALID_OPERATION;
 }
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -1007,7 +1011,10 @@ void FileSystemAccessFileHandleImpl::GetUniqueId(GetUniqueIdCallback callback) {
 
 #if BUILDFLAG(IS_MAC)
 bool FileSystemAccessFileHandleImpl::CanUseCowSwapFile() const {
-  return url().type() == storage::kFileSystemTypeLocal;
+  if (__builtin_available(macOS 10.12, *)) {
+    return url().type() == storage::kFileSystemTypeLocal;
+  }
+  return false;
 }
 #endif  // BUILDFLAG(IS_MAC)
 

@@ -410,8 +410,8 @@ void WebContentsViewMac::OnMenuClosed() {
 gfx::Rect WebContentsViewMac::GetViewBounds() const {
   NSRect window_bounds =
       [GetInProcessNSView() convertRect:GetInProcessNSView().bounds toView:nil];
-  window_bounds.origin =
-      [GetInProcessNSView().window convertPointToScreen:window_bounds.origin];
+  window_bounds =
+      [GetInProcessNSView().window convertRectToScreen:window_bounds];
   return gfx::ScreenRectFromNSRect(window_bounds);
 }
 

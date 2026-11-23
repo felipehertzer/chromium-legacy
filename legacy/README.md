@@ -174,6 +174,15 @@ or replaces a Chromium 159 dependency.
   when newer ones are absent. Window accessibility labels use the old override
   mechanism before 10.10. Drag-item and print-settings selectors retain their
   original array/dictionary behavior on Lion.
+- Bookmark/font dictionaries retain their original selectors. Private bookmark
+  copies apply the current-host-only option only on 10.12+, where Universal
+  Clipboard exists, and reuse Chromium's existing URL pasteboard format.
+  Select menus retain Core Text's original writing-direction override value;
+  their newer menu-layout selector requires 10.11. Screen coordinates use the
+  original rect conversions, and unbounded surface colors retain owned CGColors.
+- File System Access clonefile optimization requires 10.12; older systems use
+  Chromium's existing exclusive create-and-copy path with its original locks,
+  permissions and error handling. The clone helper retains its symlink checks.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 

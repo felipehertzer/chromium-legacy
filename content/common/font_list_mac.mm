@@ -201,8 +201,9 @@ base::ListValue GetFontList_SlowBlocking() {
               base::apple::NSToCFPtrCast(family_name));
       DCHECK(cf_normalized_family_name)
           << "FontFamilyResolver::CopyLocalizedFamilyName returned null";
-      family_name_map[base::apple::CFToNSPtrCast(
-          cf_normalized_family_name.get())] = family_name;
+      [family_name_map setObject:family_name
+                          forKey:base::apple::CFToNSPtrCast(
+                                     cf_normalized_family_name.get())];
     }
 
     // The Apple documentation for CTFontManagerCopyAvailableFontFamilyNames
@@ -215,7 +216,8 @@ base::ListValue GetFontList_SlowBlocking() {
 
     base::ListValue font_list;
     for (NSString* localized_family_name in sorted_localized_family_names) {
-      NSString* family_name = family_name_map[localized_family_name];
+      NSString* family_name =
+          [family_name_map objectForKey:localized_family_name];
 
       base::ListValue font_list_item;
       font_list_item.reserve(2);

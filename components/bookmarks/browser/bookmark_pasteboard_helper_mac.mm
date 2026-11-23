@@ -17,6 +17,7 @@
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_constants.h"
+#include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/clipboard_util_mac.h"
 
 namespace bookmarks {
@@ -69,8 +70,8 @@ NSDictionary* DictionaryFromBookmarkMetaInfo(
   NSMutableDictionary* dictionary = [NSMutableDictionary dictionary];
 
   for (const auto& item : meta_info_map) {
-    dictionary[base::SysUTF8ToNSString(item.first)] =
-        base::SysUTF8ToNSString(item.second);
+    [dictionary setObject:base::SysUTF8ToNSString(item.second)
+                   forKey:base::SysUTF8ToNSString(item.first)];
   }
 
   return dictionary;
@@ -83,8 +84,8 @@ bool ConvertNSArrayToElements(NSArray* input,
     return false;
   }
   for (NSDictionary* bookmark_dict in input) {
-    NSString* type =
-        base::apple::ObjCCast<NSString>(bookmark_dict[kWebBookmarkTypeKey]);
+    NSString* type = base::apple::ObjCCast<NSString>(
+        [bookmark_dict objectForKey:kWebBookmarkTypeKey]);
     if (!type)
       continue;
 
@@ -92,8 +93,8 @@ bool ConvertNSArrayToElements(NSArray* input,
 
     GURL url = GURL();
     if (!is_folder) {
-      NSString* url_string =
-          base::apple::ObjCCast<NSString>(bookmark_dict[kURLStringKey]);
+      NSString* url_string = base::apple::ObjCCast<NSString>(
+          [bookmark_dict objectForKey:kURLStringKey]);
       if (!url_string)
         continue;
       url = GURL(base::SysNSStringToUTF8(url_string));
@@ -102,17 +103,18 @@ bool ConvertNSArrayToElements(NSArray* input,
     auto new_node = std::make_unique<BookmarkNode>(
         /*id=*/0, base::Uuid::GenerateRandomV4(), url);
 
-    NSNumber* node_id =
-        base::apple::ObjCCast<NSNumber>(bookmark_dict[kChromiumBookmarkIdKey]);
+    NSNumber* node_id = base::apple::ObjCCast<NSNumber>(
+        [bookmark_dict objectForKey:kChromiumBookmarkIdKey]);
     if (node_id)
       new_node->set_id(node_id.longLongValue);
 
     NSDictionary* meta_info = base::apple::ObjCCast<NSDictionary>(
-        bookmark_dict[kChromiumBookmarkMetaInfoKey]);
+        [bookmark_dict objectForKey:kChromiumBookmarkMetaInfoKey]);
     if (meta_info)
       new_node->SetMetaInfoMap(MetaInfoMapFromDictionary(meta_info));
 
-    NSString* title = base::apple::ObjCCast<NSString>(bookmark_dict[kTitleKey]);
+    NSString* title =
+        base::apple::ObjCCast<NSString>([bookmark_dict objectForKey:kTitleKey]);
     new_node->SetTitle(base::SysNSStringToUTF16(title));
 
     BookmarkNodeData::Element e = BookmarkNodeData::Element(new_node.get());
@@ -123,8 +125,9 @@ bool ConvertNSArrayToElements(NSArray* input,
     e.date_added = base::Time();
     e.date_folder_modified = base::Time();
 
-    if (is_folder && !ConvertNSArrayToElements(bookmark_dict[kChildrenKey],
-                                               &e.children, depth + 1)) {
+    if (is_folder &&
+        !ConvertNSArrayToElements([bookmark_dict objectForKey:kChildrenKey],
+                                  &e.children, depth + 1)) {
       return false;
     }
 
@@ -314,8 +317,10 @@ void WriteBookmarksToPasteboard(
 
   [pb clearContents];
   if (is_off_the_record) {
-    // Make the pasteboard content current host only.
-    [pb prepareForNewContentsWithOptions:NSPasteboardContentsCurrentHostOnly];
+    // Universal Clipboard and its current-host-only option both require 10.12.
+    if (@available(macOS 10.12, *)) {
+      [pb prepareForNewContentsWithOptions:NSPasteboardContentsCurrentHostOnly];
+    }
   }
   [pb writeObjects:items];
 }
@@ -341,7 +346,7 @@ bool PasteboardContainsBookmarks(NSPasteboard* pb) {
   NSArray* availableTypes = @[
     ui::kUTTypeWebKitWebUrlsWithTitles,
     ui::kUTTypeChromiumBookmarkDictionaryList,
-    NSPasteboardTypeURL,
+    ui::ClipboardFormatType::UrlType().ToNSString(),
   ];
   return [pb availableTypeFromArray:availableTypes] != nil;
 }

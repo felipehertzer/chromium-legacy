@@ -8,6 +8,7 @@
 
 #include "base/apple/foundation_util.h"
 #include "base/apple/owned_objc.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
@@ -161,7 +162,10 @@
   if (!self.window) {
     return NO;
   }
-  NSPoint location = [self.window convertPointFromScreen:NSEvent.mouseLocation];
+  NSPoint mouse = NSEvent.mouseLocation;
+  NSPoint location =
+      [self.window convertRectFromScreen:NSMakeRect(mouse.x, mouse.y, 0, 0)]
+          .origin;
   location = [self convertPoint:location fromView:nil];
   return [self mouse:location inRect:[self bounds]];
 }
@@ -461,10 +465,14 @@ void UnboundedSurfaceWindowMac::InitWindow(const gfx::Rect& bounds_in_screen) {
   [content_view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 
   CALayer* background_layer = [CALayer layer];
-  background_layer.backgroundColor = [[NSColor clearColor] CGColor];
+  base::apple::ScopedCFTypeRef<CGColorRef> clear_color(
+      CGColorCreateGenericRGB(0, 0, 0, 0));
+  background_layer.backgroundColor = clear_color.get();
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kUnboundedWindowDebug)) {
-    background_layer.borderColor = [[NSColor redColor] CGColor];
+    base::apple::ScopedCFTypeRef<CGColorRef> red_color(
+        CGColorCreateGenericRGB(1, 0, 0, 1));
+    background_layer.borderColor = red_color.get();
     background_layer.borderWidth = 3.0;
   }
 
