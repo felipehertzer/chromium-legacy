@@ -120,7 +120,8 @@ class CRYPTO_EXPORT FakeKeychainV2 : public KeychainV2 {
 #endif  // !BUILDFLAG(IS_IOS)
 #if !BUILDFLAG(IS_IOS_TVOS)
   BOOL LAContextCanEvaluatePolicy(LAPolicy policy,
-                                  NSError* __autoreleasing* error) override;
+                                  NSError* __autoreleasing* error) override
+      API_AVAILABLE(macos(10.10));
 #endif  // !BUILDFLAG(IS_IOS_TVOS)
 
  private:

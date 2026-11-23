@@ -96,10 +96,15 @@ bool HasDuplicateGenericPassword(
 bool ItemMatchesQuery(CFDictionaryRef query, CFDictionaryRef item) {
   for (CFStringRef attribute :
        {kSecClass, kSecAttrLabel, kSecAttrApplicationLabel,
-        kSecAttrApplicationTag, kSecAttrService, kSecAttrAccount,
-        kSecAttrAccessible}) {
+        kSecAttrApplicationTag, kSecAttrService, kSecAttrAccount}) {
     if (!Matches(CFDictionaryGetValue(query, attribute),
                  CFDictionaryGetValue(item, attribute))) {
+      return false;
+    }
+  }
+  if (@available(macOS 10.9, *)) {
+    if (!Matches(CFDictionaryGetValue(query, kSecAttrAccessible),
+                 CFDictionaryGetValue(item, kSecAttrAccessible))) {
       return false;
     }
   }
@@ -135,8 +140,10 @@ FakeKeychainV2::~FakeKeychainV2() {
 
 NSArray* FakeKeychainV2::GetTokenIDs() {
   base::AutoLock auto_lock(lock_);
-  if (is_secure_enclave_available_) {
-    return @[ base::apple::CFToNSPtrCast(kSecAttrTokenIDSecureEnclave) ];
+  if (@available(macOS 10.12, *)) {
+    if (is_secure_enclave_available_) {
+      return @[ base::apple::CFToNSPtrCast(kSecAttrTokenIDSecureEnclave) ];
+    }
   }
   return @[];
 }
@@ -144,94 +151,98 @@ NSArray* FakeKeychainV2::GetTokenIDs() {
 base::apple::ScopedCFTypeRef<SecKeyRef> FakeKeychainV2::KeyCreateRandomKey(
     CFDictionaryRef params,
     CFErrorRef* error) {
-  base::AutoLock auto_lock(lock_);
-  // Validate certain fields that we always expect to be set.
-  DCHECK(
-      base::apple::GetValueFromDictionary<CFStringRef>(params, kSecAttrLabel));
-  // kSecAttrApplicationTag is CFDataRef for new credentials and CFStringRef for
-  // version < 3. Keychain docs say it should be CFDataRef
-  // (https://developer.apple.com/documentation/security/ksecattrapplicationtag).
-  CFTypeRef application_tag = nil;
-  CFDictionaryGetValueIfPresent(params, kSecAttrApplicationTag,
-                                &application_tag);
-  if (application_tag) {
-    CHECK(base::apple::CFCast<CFDataRef>(application_tag) ||
-          base::apple::CFCast<CFStringRef>(application_tag));
+  if (@available(macOS 10.12, *)) {
+    base::AutoLock auto_lock(lock_);
+    // Validate certain fields that we always expect to be set.
+    DCHECK(base::apple::GetValueFromDictionary<CFStringRef>(params,
+                                                            kSecAttrLabel));
+    // kSecAttrApplicationTag is CFDataRef for new credentials and CFStringRef
+    // for version < 3. Keychain docs say it should be CFDataRef
+    // (https://developer.apple.com/documentation/security/ksecattrapplicationtag).
+    CFTypeRef application_tag = nil;
+    CFDictionaryGetValueIfPresent(params, kSecAttrApplicationTag,
+                                  &application_tag);
+    if (application_tag) {
+      CHECK(base::apple::CFCast<CFDataRef>(application_tag) ||
+            base::apple::CFCast<CFStringRef>(application_tag));
+    }
+    DCHECK(SameAttribute(base::apple::GetValueFromDictionary<CFStringRef>(
+                             params, kSecAttrTokenID),
+                         kSecAttrTokenIDSecureEnclave));
+    DCHECK(SameAttribute(base::apple::GetValueFromDictionary<CFStringRef>(
+                             params, kSecAttrAccessGroup),
+                         keychain_access_group_.get()));
+
+    // Call Keychain services to create a key pair, but first drop all
+    // parameters that aren't appropriate in tests.
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> params_copy(
+        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
+                                      params));
+    // Don't create a Secure Enclave key.
+    CFDictionaryRemoveValue(params_copy.get(), kSecAttrTokenID);
+    // Don't bind to a keychain-access-group, which would require an
+    // entitlement.
+    CFDictionaryRemoveValue(params_copy.get(), kSecAttrAccessGroup);
+
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> private_key_params(
+        CFDictionaryCreateMutableCopy(
+            kCFAllocatorDefault, /*capacity=*/0,
+            base::apple::GetValueFromDictionary<CFDictionaryRef>(
+                params_copy.get(), kSecPrivateKeyAttrs)));
+    DCHECK(SameAttribute(base::apple::GetValueFromDictionary<CFBooleanRef>(
+                             private_key_params.get(), kSecAttrIsPermanent),
+                         kCFBooleanTrue));
+    CFDictionarySetValue(private_key_params.get(), kSecAttrIsPermanent,
+                         kCFBooleanFalse);
+    CFDictionaryRemoveValue(private_key_params.get(), kSecAttrAccessControl);
+    CFDictionaryRemoveValue(private_key_params.get(),
+                            kSecUseAuthenticationContext);
+    CFDictionarySetValue(params_copy.get(), kSecPrivateKeyAttrs,
+                         private_key_params.get());
+    base::apple::ScopedCFTypeRef<SecKeyRef> private_key(
+        SecKeyCreateRandomKey(params_copy.get(), error));
+    if (!private_key) {
+      return base::apple::ScopedCFTypeRef<SecKeyRef>();
+    }
+
+    // Stash everything in `items_` so it can be  retrieved in with
+    // `ItemCopyMatching. This uses the original `params` rather than the
+    // modified copy so that `ItemCopyMatching()` will correctly filter on
+    // kSecAttrAccessGroup.
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> keychain_item(
+        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
+                                      params));
+    CFDictionarySetValue(keychain_item.get(), kSecValueRef, private_key.get());
+    // SecKeyCreateRandomKey() parameters don't carry a class, but the stored
+    // item needs one so that class-qualified queries match it, as they would
+    // in the real Keychain.
+    CFDictionarySetValue(keychain_item.get(), kSecClass, kSecClassKey);
+
+    // When left unset, the real keychain sets the application label to the hash
+    // of the public key on creation. We need to retrieve it to allow filtering
+    // for it later.
+    if (!base::apple::GetValueFromDictionary<CFDataRef>(
+            keychain_item.get(), kSecAttrApplicationLabel)) {
+      base::apple::ScopedCFTypeRef<CFDictionaryRef> key_metadata(
+          SecKeyCopyAttributes(private_key.get()));
+      CFDataRef application_label =
+          base::apple::GetValueFromDictionary<CFDataRef>(
+              key_metadata.get(), kSecAttrApplicationLabel);
+      CFDictionarySetValue(keychain_item.get(), kSecAttrApplicationLabel,
+                           application_label);
+    }
+
+    CFDateRef unix_epoch =
+        base::apple::NSToCFPtrCast(base::Time::UnixEpoch().ToNSDate());
+    CFDictionarySetValue(keychain_item.get(), kSecAttrCreationDate, unix_epoch);
+    CFDictionarySetValue(keychain_item.get(), kSecAttrModificationDate,
+                         unix_epoch);
+
+    items_.push_back(keychain_item);
+
+    return private_key;
   }
-  DCHECK(SameAttribute(
-      base::apple::GetValueFromDictionary<CFStringRef>(params, kSecAttrTokenID),
-      kSecAttrTokenIDSecureEnclave));
-  DCHECK(SameAttribute(base::apple::GetValueFromDictionary<CFStringRef>(
-                           params, kSecAttrAccessGroup),
-                       keychain_access_group_.get()));
-
-  // Call Keychain services to create a key pair, but first drop all parameters
-  // that aren't appropriate in tests.
-  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> params_copy(
-      CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
-                                    params));
-  // Don't create a Secure Enclave key.
-  CFDictionaryRemoveValue(params_copy.get(), kSecAttrTokenID);
-  // Don't bind to a keychain-access-group, which would require an entitlement.
-  CFDictionaryRemoveValue(params_copy.get(), kSecAttrAccessGroup);
-
-  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> private_key_params(
-      CFDictionaryCreateMutableCopy(
-          kCFAllocatorDefault, /*capacity=*/0,
-          base::apple::GetValueFromDictionary<CFDictionaryRef>(
-              params_copy.get(), kSecPrivateKeyAttrs)));
-  DCHECK(SameAttribute(base::apple::GetValueFromDictionary<CFBooleanRef>(
-                           private_key_params.get(), kSecAttrIsPermanent),
-                       kCFBooleanTrue));
-  CFDictionarySetValue(private_key_params.get(), kSecAttrIsPermanent,
-                       kCFBooleanFalse);
-  CFDictionaryRemoveValue(private_key_params.get(), kSecAttrAccessControl);
-  CFDictionaryRemoveValue(private_key_params.get(),
-                          kSecUseAuthenticationContext);
-  CFDictionarySetValue(params_copy.get(), kSecPrivateKeyAttrs,
-                       private_key_params.get());
-  base::apple::ScopedCFTypeRef<SecKeyRef> private_key(
-      SecKeyCreateRandomKey(params_copy.get(), error));
-  if (!private_key) {
-    return base::apple::ScopedCFTypeRef<SecKeyRef>();
-  }
-
-  // Stash everything in `items_` so it can be  retrieved in with
-  // `ItemCopyMatching. This uses the original `params` rather than the modified
-  // copy so that `ItemCopyMatching()` will correctly filter on
-  // kSecAttrAccessGroup.
-  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> keychain_item(
-      CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
-                                    params));
-  CFDictionarySetValue(keychain_item.get(), kSecValueRef, private_key.get());
-  // SecKeyCreateRandomKey() parameters don't carry a class, but the stored
-  // item needs one so that class-qualified queries match it, as they would
-  // in the real Keychain.
-  CFDictionarySetValue(keychain_item.get(), kSecClass, kSecClassKey);
-
-  // When left unset, the real keychain sets the application label to the hash
-  // of the public key on creation. We need to retrieve it to allow filtering
-  // for it later.
-  if (!base::apple::GetValueFromDictionary<CFDataRef>(
-          keychain_item.get(), kSecAttrApplicationLabel)) {
-    base::apple::ScopedCFTypeRef<CFDictionaryRef> key_metadata(
-        SecKeyCopyAttributes(private_key.get()));
-    CFDataRef application_label =
-        base::apple::GetValueFromDictionary<CFDataRef>(
-            key_metadata.get(), kSecAttrApplicationLabel);
-    CFDictionarySetValue(keychain_item.get(), kSecAttrApplicationLabel,
-                         application_label);
-  }
-
-  CFDateRef unix_epoch =
-      base::apple::NSToCFPtrCast(base::Time::UnixEpoch().ToNSDate());
-  CFDictionarySetValue(keychain_item.get(), kSecAttrCreationDate, unix_epoch);
-  CFDictionarySetValue(keychain_item.get(), kSecAttrModificationDate,
-                       unix_epoch);
-
-  items_.push_back(keychain_item);
-
-  return private_key;
+  return KeychainV2::KeyCreateRandomKey(params, error);
 }
 
 base::apple::ScopedCFTypeRef<CFDictionaryRef> FakeKeychainV2::KeyCopyAttributes(
@@ -257,178 +268,191 @@ base::apple::ScopedCFTypeRef<CFDictionaryRef> FakeKeychainV2::KeyCopyAttributes(
 
 OSStatus FakeKeychainV2::ItemAdd(CFDictionaryRef attributes,
                                  CFTypeRef* result) {
-  CHECK(attributes);
-  base::AutoLock auto_lock(lock_);
-  if (item_add_result_ != noErr) {
-    return item_add_result_;
-  }
-  if (!SameAttribute(CFDictionaryGetValue(attributes, kSecAttrAccessGroup),
-                     keychain_access_group_.get())) {
-    return errSecMissingEntitlement;
-  }
-  CFStringRef item_class =
-      base::apple::GetValueFromDictionary<CFStringRef>(attributes, kSecClass);
-  if (!item_class) {
-    // SecItemAdd() rejects items without a class.
-    return errSecParam;
-  }
-  CHECK(CFEqual(item_class, kSecClassKey) ||
-        CFEqual(item_class, kSecClassGenericPassword));
-  if (IsGenericPassword(attributes)) {
-    // Like SecItemAdd, reject a second generic password with the same service
-    // and account.
-    if (std::ranges::any_of(items_, [&](const auto& existing) {
-          return GenericPasswordsCollide(attributes, existing.get());
-        })) {
-      return errSecDuplicateItem;
+  if (@available(macOS 10.9, *)) {
+    CHECK(attributes);
+    base::AutoLock auto_lock(lock_);
+    if (item_add_result_ != noErr) {
+      return item_add_result_;
     }
+    if (!SameAttribute(CFDictionaryGetValue(attributes, kSecAttrAccessGroup),
+                       keychain_access_group_.get())) {
+      return errSecMissingEntitlement;
+    }
+    CFStringRef item_class =
+        base::apple::GetValueFromDictionary<CFStringRef>(attributes, kSecClass);
+    if (!item_class) {
+      // SecItemAdd() rejects items without a class.
+      return errSecParam;
+    }
+    CHECK(CFEqual(item_class, kSecClassKey) ||
+          CFEqual(item_class, kSecClassGenericPassword));
+    if (IsGenericPassword(attributes)) {
+      // Like SecItemAdd, reject a second generic password with the same service
+      // and account.
+      if (std::ranges::any_of(items_, [&](const auto& existing) {
+            return GenericPasswordsCollide(attributes, existing.get());
+          })) {
+        return errSecDuplicateItem;
+      }
+    }
+    // Store a mutable copy so caller edits after `ItemAdd()` don't affect
+    // `items_`, while existing tests that `const_cast` `items()` entries remain
+    // valid.
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> item(
+        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
+                                      attributes));
+    items_.push_back(std::move(item));
+    return errSecSuccess;
   }
-  // Store a mutable copy so caller edits after `ItemAdd()` don't affect
-  // `items_`, while existing tests that `const_cast` `items()` entries remain
-  // valid.
-  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> item(
-      CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
-                                    attributes));
-  items_.push_back(std::move(item));
-  return errSecSuccess;
+  return errSecUnimplemented;
 }
 
 OSStatus FakeKeychainV2::ItemCopyMatching(CFDictionaryRef query,
                                           CFTypeRef* result) {
-  CHECK(query);
-  base::AutoLock auto_lock(lock_);
-  if (CFTypeRef query_access_group =
-          CFDictionaryGetValue(query, kSecAttrAccessGroup);
-      query_access_group &&
-      !SameAttribute(query_access_group, keychain_access_group_.get())) {
-    return errSecMissingEntitlement;
-  }
-
-  CFStringRef match_limit =
-      base::apple::GetValueFromDictionary<CFStringRef>(query, kSecMatchLimit);
-  bool match_all = match_limit && CFEqual(match_limit, kSecMatchLimitAll);
-
-  // Filter the items based on `query`.
-  base::apple::ScopedCFTypeRef<CFMutableArrayRef> items(
-      CFArrayCreateMutable(nullptr, items_.size(), &kCFTypeArrayCallBacks));
-  for (auto& item : items_) {
-    // Each `FakeKeychainV2` instance operates only on items in its
-    // `keychain_access_group_`.
-    if (!SameAttribute(keychain_access_group_.get(),
-                       CFDictionaryGetValue(item.get(), kSecAttrAccessGroup))) {
-      continue;
+  if (@available(macOS 10.9, *)) {
+    CHECK(query);
+    base::AutoLock auto_lock(lock_);
+    if (CFTypeRef query_access_group =
+            CFDictionaryGetValue(query, kSecAttrAccessGroup);
+        query_access_group &&
+        !SameAttribute(query_access_group, keychain_access_group_.get())) {
+      return errSecMissingEntitlement;
     }
 
-    if (!ItemMatchesQuery(query, item.get())) {
-      continue;
-    }
-    if (match_all) {
-      base::apple::ScopedCFTypeRef<CFDictionaryRef> item_copy(
-          CFDictionaryCreateCopy(kCFAllocatorDefault, item.get()));
-      CFArrayAppendValue(items.get(), item_copy.get());
-    } else {
-      if (result) {
-        *result = CFDictionaryCreateCopy(kCFAllocatorDefault, item.get());
+    CFStringRef match_limit =
+        base::apple::GetValueFromDictionary<CFStringRef>(query, kSecMatchLimit);
+    bool match_all = match_limit && CFEqual(match_limit, kSecMatchLimitAll);
+
+    // Filter the items based on `query`.
+    base::apple::ScopedCFTypeRef<CFMutableArrayRef> items(
+        CFArrayCreateMutable(nullptr, items_.size(), &kCFTypeArrayCallBacks));
+    for (auto& item : items_) {
+      // Each `FakeKeychainV2` instance operates only on items in its
+      // `keychain_access_group_`.
+      if (!SameAttribute(
+              keychain_access_group_.get(),
+              CFDictionaryGetValue(item.get(), kSecAttrAccessGroup))) {
+        continue;
       }
-      return errSecSuccess;
+
+      if (!ItemMatchesQuery(query, item.get())) {
+        continue;
+      }
+      if (match_all) {
+        base::apple::ScopedCFTypeRef<CFDictionaryRef> item_copy(
+            CFDictionaryCreateCopy(kCFAllocatorDefault, item.get()));
+        CFArrayAppendValue(items.get(), item_copy.get());
+      } else {
+        if (result) {
+          *result = CFDictionaryCreateCopy(kCFAllocatorDefault, item.get());
+        }
+        return errSecSuccess;
+      }
     }
+    if (CFArrayGetCount(items.get()) == 0) {
+      return errSecItemNotFound;
+    }
+    if (result) {
+      *result = items.release();
+    }
+    return errSecSuccess;
   }
-  if (CFArrayGetCount(items.get()) == 0) {
-    return errSecItemNotFound;
-  }
-  if (result) {
-    *result = items.release();
-  }
-  return errSecSuccess;
+  return errSecUnimplemented;
 }
 
 OSStatus FakeKeychainV2::ItemDelete(CFDictionaryRef query) {
-  CHECK(query);
-  base::AutoLock auto_lock(lock_);
-  if (!SameAttribute(CFDictionaryGetValue(query, kSecAttrAccessGroup),
-                     keychain_access_group_.get())) {
-    return errSecMissingEntitlement;
-  }
-  // Validate certain fields that we always expect to be set, so that an
-  // under-specified query can't delete unrelated items.
-  CFStringRef query_class =
-      base::apple::GetValueFromDictionary<CFStringRef>(query, kSecClass);
-  if (!query_class) {
-    return errSecParam;
-  }
-  if (CFEqual(query_class, kSecClassGenericPassword)) {
-    CHECK(base::apple::GetValueFromDictionary<CFStringRef>(query,
-                                                           kSecAttrAccount));
-  } else {
-    CHECK(CFEqual(query_class, kSecClassKey));
-    CHECK(base::apple::GetValueFromDictionary<CFDataRef>(
-        query, kSecAttrApplicationLabel));
-  }
+  if (@available(macOS 10.9, *)) {
+    CHECK(query);
+    base::AutoLock auto_lock(lock_);
+    if (!SameAttribute(CFDictionaryGetValue(query, kSecAttrAccessGroup),
+                       keychain_access_group_.get())) {
+      return errSecMissingEntitlement;
+    }
+    // Validate certain fields that we always expect to be set, so that an
+    // under-specified query can't delete unrelated items.
+    CFStringRef query_class =
+        base::apple::GetValueFromDictionary<CFStringRef>(query, kSecClass);
+    if (!query_class) {
+      return errSecParam;
+    }
+    if (CFEqual(query_class, kSecClassGenericPassword)) {
+      CHECK(base::apple::GetValueFromDictionary<CFStringRef>(query,
+                                                             kSecAttrAccount));
+    } else {
+      CHECK(CFEqual(query_class, kSecClassKey));
+      CHECK(base::apple::GetValueFromDictionary<CFDataRef>(
+          query, kSecAttrApplicationLabel));
+    }
 
-  const size_t n_erased = std::erase_if(
-      items_, [&](const base::apple::ScopedCFTypeRef<CFDictionaryRef>& item) {
-        return ItemMatchesQuery(query, item.get());
-      });
-  return n_erased != 0 ? errSecSuccess : errSecItemNotFound;
+    const size_t n_erased = std::erase_if(
+        items_, [&](const base::apple::ScopedCFTypeRef<CFDictionaryRef>& item) {
+          return ItemMatchesQuery(query, item.get());
+        });
+    return n_erased != 0 ? errSecSuccess : errSecItemNotFound;
+  }
+  return errSecUnimplemented;
 }
 
 OSStatus FakeKeychainV2::ItemUpdate(CFDictionaryRef query,
                                     CFDictionaryRef attributes_to_update) {
-  CHECK(query);
-  CHECK(attributes_to_update);
-  base::AutoLock auto_lock(lock_);
-  if (item_update_result_ != noErr) {
-    return item_update_result_;
-  }
-  if (!SameAttribute(CFDictionaryGetValue(query, kSecAttrAccessGroup),
-                     keychain_access_group_.get())) {
-    return errSecMissingEntitlement;
-  }
-  CFStringRef query_class =
-      base::apple::GetValueFromDictionary<CFStringRef>(query, kSecClass);
-  if (!query_class) {
-    return errSecParam;
-  }
-  CHECK(CFEqual(query_class, kSecClassKey) ||
-        CFEqual(query_class, kSecClassGenericPassword));
-  if (CFDictionaryContainsKey(attributes_to_update, kSecClass)) {
-    // SecItemUpdate() rejects kSecClass in the update dictionary.
-    return errSecParam;
-  }
-  if (CFTypeRef updated_access_group =
-          CFDictionaryGetValue(attributes_to_update, kSecAttrAccessGroup);
-      updated_access_group &&
-      !SameAttribute(updated_access_group, keychain_access_group_.get())) {
-    return errSecMissingEntitlement;
-  }
-
-  std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> new_items;
-  new_items.reserve(items_.size());
-  OSStatus result = errSecItemNotFound;
-  for (base::apple::ScopedCFTypeRef<CFDictionaryRef>& item : items_) {
-    if (!ItemMatchesQuery(query, item.get())) {
-      new_items.push_back(item);
-      continue;
+  if (@available(macOS 10.9, *)) {
+    CHECK(query);
+    CHECK(attributes_to_update);
+    base::AutoLock auto_lock(lock_);
+    if (item_update_result_ != noErr) {
+      return item_update_result_;
+    }
+    if (!SameAttribute(CFDictionaryGetValue(query, kSecAttrAccessGroup),
+                       keychain_access_group_.get())) {
+      return errSecMissingEntitlement;
+    }
+    CFStringRef query_class =
+        base::apple::GetValueFromDictionary<CFStringRef>(query, kSecClass);
+    if (!query_class) {
+      return errSecParam;
+    }
+    CHECK(CFEqual(query_class, kSecClassKey) ||
+          CFEqual(query_class, kSecClassGenericPassword));
+    if (CFDictionaryContainsKey(attributes_to_update, kSecClass)) {
+      // SecItemUpdate() rejects kSecClass in the update dictionary.
+      return errSecParam;
+    }
+    if (CFTypeRef updated_access_group =
+            CFDictionaryGetValue(attributes_to_update, kSecAttrAccessGroup);
+        updated_access_group &&
+        !SameAttribute(updated_access_group, keychain_access_group_.get())) {
+      return errSecMissingEntitlement;
     }
 
-    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> item_copy(
-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
-                                      item.get()));
-    [base::apple::CFToNSPtrCast(item_copy.get())
-        addEntriesFromDictionary:base::apple::CFToNSPtrCast(
-                                     attributes_to_update)];
-    new_items.push_back(std::move(item_copy));
-    // Succeed if we replaced at least one item matching the query.
-    result = errSecSuccess;
-  }
+    std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> new_items;
+    new_items.reserve(items_.size());
+    OSStatus result = errSecItemNotFound;
+    for (base::apple::ScopedCFTypeRef<CFDictionaryRef>& item : items_) {
+      if (!ItemMatchesQuery(query, item.get())) {
+        new_items.push_back(item);
+        continue;
+      }
 
-  if (result == errSecSuccess) {
-    if (HasDuplicateGenericPassword(new_items)) {
-      return errSecDuplicateItem;
+      base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> item_copy(
+          CFDictionaryCreateMutableCopy(kCFAllocatorDefault, /*capacity=*/0,
+                                        item.get()));
+      [base::apple::CFToNSPtrCast(item_copy.get())
+          addEntriesFromDictionary:base::apple::CFToNSPtrCast(
+                                       attributes_to_update)];
+      new_items.push_back(std::move(item_copy));
+      // Succeed if we replaced at least one item matching the query.
+      result = errSecSuccess;
     }
-    items_ = std::move(new_items);
+
+    if (result == errSecSuccess) {
+      if (HasDuplicateGenericPassword(new_items)) {
+        return errSecDuplicateItem;
+      }
+      items_ = std::move(new_items);
+    }
+    return result;
   }
-  return result;
+  return errSecUnimplemented;
 }
 
 // `FindGenericPassword()` and `AddGenericPassword()` intentionally do not
@@ -487,21 +511,35 @@ BOOL FakeKeychainV2::LAContextCanEvaluatePolicy(
     LAPolicy policy,
     NSError* __autoreleasing* error) {
   base::AutoLock auto_lock(lock_);
-  switch (policy) {
-    case LAPolicyDeviceOwnerAuthentication:
-      return uv_method_ == UVMethod::kBiometrics ||
-             uv_method_ == UVMethod::kPasswordOnly;
-    case LAPolicyDeviceOwnerAuthenticationWithBiometrics:
-      return uv_method_ == UVMethod::kBiometrics;
 #if !BUILDFLAG(IS_IOS)
-    case LAPolicyDeviceOwnerAuthenticationWithBiometricsOrCompanion:
+  if (@available(macOS 15.0, *)) {
+    if (policy == LAPolicyDeviceOwnerAuthenticationWithBiometricsOrCompanion) {
       return uv_method_ == UVMethod::kBiometrics;
-#endif        // !BUILDFLAG(IS_IOS)
-    default:  // Avoid needing to refer to values not available in the minimum
-              // supported macOS version.
-      NOTIMPLEMENTED();
-      return false;
+    }
+  } else if (@available(macOS 10.15, *)) {
+    if (policy == LAPolicyDeviceOwnerAuthenticationWithBiometricsOrWatch) {
+      return uv_method_ == UVMethod::kBiometrics;
+    }
   }
+#endif
+  if (@available(macOS 10.12.2, *)) {
+    switch (policy) {
+      case LAPolicyDeviceOwnerAuthentication:
+        return uv_method_ == UVMethod::kBiometrics ||
+               uv_method_ == UVMethod::kPasswordOnly;
+      case LAPolicyDeviceOwnerAuthenticationWithBiometrics:
+        return uv_method_ == UVMethod::kBiometrics;
+      default:
+        NOTIMPLEMENTED();
+        return false;
+    }
+  }
+  if (@available(macOS 10.11, *)) {
+    if (policy == LAPolicyDeviceOwnerAuthentication) {
+      return uv_method_ == UVMethod::kPasswordOnly;
+    }
+  }
+  return false;
 }
 #endif  // !BUILDFLAG(IS_IOS_TVOS)
 
