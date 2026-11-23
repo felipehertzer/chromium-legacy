@@ -30,8 +30,8 @@ bool SystemHotkeyMap::ParseDictionary(NSDictionary* dictionary) {
     return false;
   }
 
-  NSDictionary* user_hotkey_dictionaries =
-      base::apple::ObjCCast<NSDictionary>(dictionary[@"AppleSymbolicHotKeys"]);
+  NSDictionary* user_hotkey_dictionaries = base::apple::ObjCCast<NSDictionary>(
+      [dictionary objectForKey:@"AppleSymbolicHotKeys"]);
   if (!user_hotkey_dictionaries) {
     return false;
   }
@@ -95,43 +95,45 @@ bool SystemHotkeyMap::ParseDictionary(NSDictionary* dictionary) {
     }
 
     NSDictionary* hotkey_dictionary = base::apple::ObjCCast<NSDictionary>(
-        hotkey_dictionaries[system_hotkey_identifier]);
+        [hotkey_dictionaries objectForKey:system_hotkey_identifier]);
     if (!hotkey_dictionary) {
       continue;
     }
 
-    NSNumber* enabled =
-        base::apple::ObjCCast<NSNumber>(hotkey_dictionary[@"enabled"]);
+    NSNumber* enabled = base::apple::ObjCCast<NSNumber>(
+        [hotkey_dictionary objectForKey:@"enabled"]);
     if (!enabled.boolValue) {
       continue;
     }
 
-    NSDictionary* value =
-        base::apple::ObjCCast<NSDictionary>(hotkey_dictionary[@"value"]);
+    NSDictionary* value = base::apple::ObjCCast<NSDictionary>(
+        [hotkey_dictionary objectForKey:@"value"]);
     if (!value) {
       continue;
     }
 
-    NSString* type = base::apple::ObjCCast<NSString>(value[@"type"]);
+    NSString* type =
+        base::apple::ObjCCast<NSString>([value objectForKey:@"type"]);
     if (![type isEqualToString:@"standard"]) {
       continue;
     }
 
-    NSArray* parameters = base::apple::ObjCCast<NSArray>(value[@"parameters"]);
+    NSArray* parameters =
+        base::apple::ObjCCast<NSArray>([value objectForKey:@"parameters"]);
     if (parameters.count != 3) {
       continue;
     }
 
     const int kKeyCodeIndex = 1;
-    NSNumber* key_code =
-        base::apple::ObjCCast<NSNumber>(parameters[kKeyCodeIndex]);
+    NSNumber* key_code = base::apple::ObjCCast<NSNumber>(
+        [parameters objectAtIndex:kKeyCodeIndex]);
     if (!key_code) {
       continue;
     }
 
     const int kModifierIndex = 2;
-    NSNumber* modifiers =
-        base::apple::ObjCCast<NSNumber>(parameters[kModifierIndex]);
+    NSNumber* modifiers = base::apple::ObjCCast<NSNumber>(
+        [parameters objectAtIndex:kModifierIndex]);
     if (!modifiers) {
       continue;
     }

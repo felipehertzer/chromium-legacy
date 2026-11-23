@@ -315,7 +315,7 @@ void ResumeAppleEventAndSendReply(NSAppleEventManagerSuspensionID suspension_id,
 
   NSDictionary* dictionary = command.evaluatedArguments;
 
-  NSURL* fileURL = dictionary[@"File"];
+  NSURL* fileURL = [dictionary objectForKey:@"File"];
   // Scripter has not specified the location at which to save, so we prompt for
   // it.
   if (!fileURL) {
@@ -330,7 +330,7 @@ void ResumeAppleEventAndSendReply(NSAppleEventManagerSuspensionID suspension_id,
   base::FilePath directoryPath = mainFile.RemoveExtension();
   directoryPath = directoryPath.InsertBeforeExtension(std::string("_files/"));
 
-  NSString* saveType = dictionary[@"FileType"];
+  NSString* saveType = [dictionary objectForKey:@"FileType"];
 
   content::SavePageType savePageType = content::SAVE_PAGE_TYPE_AS_COMPLETE_HTML;
   if (saveType) {
@@ -396,8 +396,8 @@ void ResumeAppleEventAndSendReply(NSAppleEventManagerSuspensionID suspension_id,
   content::RenderFrameHost::JavaScriptResultCallback callback =
       base::BindOnce(&ResumeAppleEventAndSendReply, suspensionID);
 
-  std::u16string script =
-      base::SysNSStringToUTF16(command.evaluatedArguments[@"javascript"]);
+  std::u16string script = base::SysNSStringToUTF16(
+      [command.evaluatedArguments objectForKey:@"javascript"]);
   frame->ExecuteJavaScriptInIsolatedWorld(script, std::move(callback),
                                           ISOLATED_WORLD_ID_APPLESCRIPT);
 

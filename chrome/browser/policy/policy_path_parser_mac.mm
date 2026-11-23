@@ -56,7 +56,7 @@ base::FilePath::StringType ExpandPathVariables(
       NSArray<NSString*>* search_paths = NSSearchPathForDirectoriesInDomains(
           mapping.search_path_directory, NSAllDomainsMask, true);
       if (search_paths.count > 0) {
-        NSString* variable_value = search_paths[0];
+        NSString* variable_value = [search_paths objectAtIndex:0];
         result.replace(position, strlen(mapping.name),
                        base::SysNSStringToUTF8(variable_value));
       }

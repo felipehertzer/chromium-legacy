@@ -48,9 +48,15 @@ void DispatchMouseEventToNativeView(const ui::MouseEvent& event,
     return;
   }
   const NSPoint location_in_screen =
-      [source_window convertPointToScreen:ns_event.locationInWindow];
+      [source_window
+          convertRectToScreen:NSMakeRect(ns_event.locationInWindow.x,
+                                         ns_event.locationInWindow.y, 0, 0)]
+          .origin;
   const NSPoint location_in_window =
-      [target_window convertPointFromScreen:location_in_screen];
+      [target_window
+          convertRectFromScreen:NSMakeRect(location_in_screen.x,
+                                           location_in_screen.y, 0, 0)]
+          .origin;
 
   // RootView synthesizes mouse entered/exited events by copying the current
   // mouse move, so their native event is the move. Re-create them as native
@@ -182,7 +188,9 @@ void WebUIToolbarEventForwarder::PressMonitor::OnEvent(const ui::Event& event) {
   // If there's no window, the event is already in screen coordinates.
   NSWindow* window = mac_event.window;
   if (window) {
-    mac_location = [window convertPointToScreen:mac_location];
+    mac_location = [window convertRectToScreen:NSMakeRect(mac_location.x,
+                                                          mac_location.y, 0, 0)]
+                       .origin;
   }
   auto location = gfx::ScreenPointFromNSPoint(mac_location);
 

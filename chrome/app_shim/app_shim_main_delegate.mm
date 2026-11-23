@@ -215,7 +215,7 @@ void AppShimMainDelegate::InitializeLocale() {
       language = @"sr_Latn_RS";
     } else {
       // Check for language support without the region component.
-      language = [language componentsSeparatedByString:@"_"][0];
+      language = [[language componentsSeparatedByString:@"_"] objectAtIndex:0];
     }
 
     if ([supported_languages containsObject:language]) {
@@ -227,7 +227,7 @@ void AppShimMainDelegate::InitializeLocale() {
     // clear match is found. e.g. if there is no specific match for
     // "sr_Latn_RS" in supported_languages, it can at least fall back to a
     // generic Serbian language code ("sr").
-    language = [language componentsSeparatedByString:@"_"][0];
+    language = [[language componentsSeparatedByString:@"_"] objectAtIndex:0];
     if ([supported_languages containsObject:language]) {
       preferred_localization = base::SysNSStringToUTF8(language);
       break;

@@ -18,7 +18,7 @@ content::SystemHotkeyMap LoadSystemHotkeyMap() {
   auto* hotkey_plist_url = base::apple::FilePathToNSURL(
       base::apple::GetUserLibraryPath().Append(kSystemHotkeyPlistPath));
   NSDictionary* dictionary =
-      [NSDictionary dictionaryWithContentsOfURL:hotkey_plist_url error:nil];
+      [NSDictionary dictionaryWithContentsOfURL:hotkey_plist_url];
 
   content::SystemHotkeyMap map;
   map.ParseDictionary(dictionary);

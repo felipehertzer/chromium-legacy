@@ -12,6 +12,7 @@
 #include "base/mac/launch_application.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
+#include "legacy/apple/drawing_image.h"
 #include "net/base/apple/url_conversions.h"
 #include "ui/base/models/image_model.h"
 #include "ui/gfx/image/image_skia.h"
@@ -32,13 +33,11 @@ std::string& FakeAppForTesting() {
 }
 
 NSImage* CreateRedIconForTesting() {
-  return [NSImage imageWithSize:NSMakeSize(16, 16)
-                        flipped:NO
-                 drawingHandler:^(NSRect rect) {
-                   [NSColor.redColor set];
-                   NSRectFill(rect);
-                   return YES;
-                 }];
+  return chromium_legacy::DrawingImage(NSMakeSize(16, 16), NO, ^(NSRect rect) {
+    [NSColor.redColor set];
+    NSRectFill(rect);
+    return YES;
+  });
 }
 
 MacAppInfo AppInfoForAppUrl(NSURL* app_url,
@@ -103,10 +102,11 @@ std::optional<MacAppInfo> FindMacAppForUrl(const GURL& url,
     return std::nullopt;
   }
 
-  SFUniversalLink* link = [[SFUniversalLink alloc] initWithWebpageURL:nsurl];
-
-  if (link) {
-    return AppInfoForAppUrl(link.applicationURL, icon_sizes);
+  if (@available(macOS 10.15, *)) {
+    SFUniversalLink* link = [[SFUniversalLink alloc] initWithWebpageURL:nsurl];
+    if (link) {
+      return AppInfoForAppUrl(link.applicationURL, icon_sizes);
+    }
   }
 
   return std::nullopt;

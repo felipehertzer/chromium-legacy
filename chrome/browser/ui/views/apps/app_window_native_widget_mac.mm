@@ -28,8 +28,10 @@ void AppWindowNativeWidgetMac::PopulateCreateWindowParams(
     params->window_class = remote_cocoa::mojom::WindowClass::kFrameless;
     params->style_mask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                          NSWindowStyleMaskMiniaturizable |
-                         NSWindowStyleMaskResizable |
-                         NSWindowStyleMaskFullSizeContentView;
+                         NSWindowStyleMaskResizable;
+    if (@available(macOS 10.10, *)) {
+      params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+    }
   }
 }
 

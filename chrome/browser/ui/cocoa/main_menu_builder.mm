@@ -648,7 +648,7 @@ NSMenuItem* BuildFileMenuForTesting(bool is_pwa) {
   // First is the App menu, then the File menu.
   const int kFileMenuItemIndex = 1;
 
-  return [mainMenu itemArray][kFileMenuItemIndex];
+  return [[mainMenu itemArray] objectAtIndex:kFileMenuItemIndex];
 }
 
 namespace internal {
@@ -725,8 +725,10 @@ NSMenuItem* MenuItemBuilder::Build() const {
   item.alternate = is_alternate_;
   item.hidden = is_hidden_;
   if (sf_symbol_name_) {
-    item.image = [NSImage imageWithSystemSymbolName:sf_symbol_name_
-                           accessibilityDescription:nil];
+    if (@available(macOS 11.0, *)) {
+      item.image = [NSImage imageWithSystemSymbolName:sf_symbol_name_
+                             accessibilityDescription:nil];
+    }
     if (@available(macOS 27, *)) {
       item.preferredImageVisibility = NSMenuItemImageVisibilityVisible;
     }

@@ -22,7 +22,9 @@ void DocumentPipNativeWidgetMac::PopulateCreateWindowParams(
   // gets the same rounded corners, drop shadow, and resize affordance as the
   // Browser-backed Document PiP window, while still drawing its own title bar.
   params->window_class = remote_cocoa::mojom::WindowClass::kFrameless;
-  params->style_mask = NSWindowStyleMaskFullSizeContentView |
-                       NSWindowStyleMaskTitled | NSWindowStyleMaskResizable;
+  params->style_mask = NSWindowStyleMaskTitled | NSWindowStyleMaskResizable;
+  if (@available(macOS 10.10, *)) {
+    params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+  }
   params->window_title_hidden = true;
 }

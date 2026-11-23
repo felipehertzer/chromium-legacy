@@ -103,7 +103,10 @@ bool MacInputAdapter::PostCapturedEvent(NSEvent* event) {
   NSPoint ns_screen_point = [NSEvent mouseLocation];
   if (event.window) {
     ns_screen_point =
-        [event.window convertPointToScreen:event.locationInWindow];
+        [event.window
+            convertRectToScreen:NSMakeRect(event.locationInWindow.x,
+                                           event.locationInWindow.y, 0, 0)]
+            .origin;
   }
   const gfx::Point screen_coords = gfx::ScreenPointFromNSPoint(ns_screen_point);
 

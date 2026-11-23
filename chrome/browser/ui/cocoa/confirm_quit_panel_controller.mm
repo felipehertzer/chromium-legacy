@@ -18,6 +18,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_registry_simple.h"
 #import "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
+#include "legacy/apple/accessibility.h"
 #include "ui/base/accelerators/accelerator.h"
 #import "ui/base/accelerators/platform_accelerator_cocoa.h"
 #include "ui/base/l10n/l10n_util_mac.h"
@@ -377,7 +378,7 @@ BOOL isKeyDownForKeyCode(unsigned short keyCode) {
   animation.delegate = self;
   animation.duration = 0.2;
   NSMutableDictionary* dictionary = [[window animations] mutableCopy];
-  dictionary[@"alphaValue"] = animation;
+  [dictionary setValue:animation forKey:@"alphaValue"];
   window.animations = dictionary;
   window.animator.alphaValue = 0.0;
 }
@@ -443,10 +444,8 @@ BOOL isKeyDownForKeyCode(unsigned short keyCode) {
       base::SysNSStringToUTF16(ConfirmQuitPanelController.keyCommandString));
 
   NSAccessibilityPostNotificationWithUserInfo(
-      NSApp.mainWindow, NSAccessibilityAnnouncementRequestedNotification, @{
-        NSAccessibilityAnnouncementKey : message,
-        NSAccessibilityPriorityKey : @(NSAccessibilityPriorityHigh),
-      });
+      NSApp.mainWindow, NSAccessibilityAnnouncementRequestedNotification,
+      chromium_legacy::AccessibilityAnnouncementInfo(message, true));
 }
 
 @end

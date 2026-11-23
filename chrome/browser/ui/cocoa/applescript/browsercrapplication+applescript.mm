@@ -73,7 +73,7 @@ using bookmarks::BookmarkModel;
 }
 
 - (void)removeFromAppleScriptWindowsAtIndex:(int)index {
-  [self.appleScriptWindows[index] handlesCloseScriptCommand:nil];
+  [[self.appleScriptWindows objectAtIndex:index] handlesCloseScriptCommand:nil];
 }
 
 - (NSScriptObjectSpecifier*)objectSpecifier {

@@ -201,8 +201,10 @@ void BrowserFrameViewMac::OnTabStripStateChanged() {
   // browser windows (not PWAs or anything using a remote `NSWindow`).
   const NSRect frame = [window frame];
   const NSUInteger style_mask = [window styleMask];
-  [window setStyleMask:style_mask ^ NSWindowStyleMaskFullSizeContentView];
-  [window setStyleMask:style_mask];
+  if (@available(macOS 10.10, *)) {
+    [window setStyleMask:style_mask ^ NSWindowStyleMaskFullSizeContentView];
+    [window setStyleMask:style_mask];
+  }
   [window setFrame:frame display:YES];
 }
 
@@ -219,8 +221,10 @@ bool BrowserFrameViewMac::CaptionButtonsOnLeadingEdge() const {
     return true;
   }
 
-  NSUserInterfaceLayoutDirection direction =
-      [window windowTitlebarLayoutDirection];
+  NSUserInterfaceLayoutDirection direction = NSApp.userInterfaceLayoutDirection;
+  if (@available(macOS 10.12, *)) {
+    direction = [window windowTitlebarLayoutDirection];
+  }
   return base::i18n::IsRTL() ==
          (direction == NSUserInterfaceLayoutDirectionRightToLeft);
 }
@@ -565,7 +569,10 @@ int BrowserFrameViewMac::TopUIFullscreenYOffset() const {
   // If there's a camera notch, the window is already below where the menu bar
   // will be, so we shouldn't account for it.
   NSScreen* screen = GetWidget()->GetNativeWindow().GetNativeNSWindow().screen;
-  NSEdgeInsets insets = screen.safeAreaInsets;
+  NSEdgeInsets insets = {};
+  if (@available(macOS 12.0, *)) {
+    insets = screen.safeAreaInsets;
+  }
   if (insets.top != 0) {
     menu_bar_height = 0;
   }

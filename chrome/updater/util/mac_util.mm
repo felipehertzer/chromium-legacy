@@ -284,7 +284,7 @@ std::optional<base::FilePath> GetWakeTaskPlistPath(UpdaterScope scope) {
     if ([library_paths count] < 1) {
       return std::nullopt;
     }
-    return base::apple::NSStringToFilePath(library_paths[0])
+    return base::apple::NSStringToFilePath([library_paths objectAtIndex:0])
         .Append(IsSystemInstall(scope) ? "LaunchDaemons" : "LaunchAgents")
         .Append(base::StrCat({GetWakeLaunchdName(scope), ".plist"}));
   }

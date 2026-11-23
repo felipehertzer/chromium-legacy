@@ -23,9 +23,9 @@ namespace {
 std::string ReadBrandFile(NSString* path) {
   NSURL* path_url = [NSURL fileURLWithPath:path];
   NSDictionary* brand_dictionary =
-      [NSDictionary dictionaryWithContentsOfURL:path_url error:nil];
-  return base::SysNSStringToUTF8(
-      base::apple::ObjCCast<NSString>(brand_dictionary[@"KSBrandID"]));
+      [NSDictionary dictionaryWithContentsOfURL:path_url];
+  return base::SysNSStringToUTF8(base::apple::ObjCCast<NSString>(
+      [brand_dictionary objectForKey:@"KSBrandID"]));
 }
 
 std::string GetBrandInternal() {
@@ -55,7 +55,7 @@ std::string GetBrandInternal() {
     return xattr_tag->brand_code;
   }
   NSString* app_bundle_brand_id = base::apple::ObjCCast<NSString>(
-      base::apple::OuterBundle().infoDictionary[@"KSBrandID"]);
+      [base::apple::OuterBundle().infoDictionary objectForKey:@"KSBrandID"]);
   if (app_bundle_brand_id) {
     return base::SysNSStringToUTF8(app_bundle_brand_id);
   }

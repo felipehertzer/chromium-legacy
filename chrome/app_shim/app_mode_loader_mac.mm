@@ -164,23 +164,23 @@ int LoadFrameworkAndStart(int argc, char** argv) {
       return kErrorReturnValue;
     }
 
-    const std::string app_mode_id =
-        base::SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutIDKey]);
+    const std::string app_mode_id = base::SysNSStringToUTF8(
+        [info_plist objectForKey:app_mode::kCrAppModeShortcutIDKey]);
     if (!app_mode_id.size()) {
       NSLog(@"Couldn't get app shortcut ID");
       return kErrorReturnValue;
     }
 
     const std::string app_mode_name = base::SysNSStringToUTF8(
-        info_plist[app_mode::kCrAppModeShortcutNameKey]);
-    const std::string app_mode_url =
-        base::SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutURLKey]);
+        [info_plist objectForKey:app_mode::kCrAppModeShortcutNameKey]);
+    const std::string app_mode_url = base::SysNSStringToUTF8(
+        [info_plist objectForKey:app_mode::kCrAppModeShortcutURLKey]);
 
     base::FilePath plist_user_data_dir = base::apple::NSStringToFilePath(
-        info_plist[app_mode::kCrAppModeUserDataDirKey]);
+        [info_plist objectForKey:app_mode::kCrAppModeUserDataDirKey]);
 
     base::FilePath profile_dir = base::apple::NSStringToFilePath(
-        info_plist[app_mode::kCrAppModeProfileDirKey]);
+        [info_plist objectForKey:app_mode::kCrAppModeProfileDirKey]);
 
     // ** 5: Open the framework.
     StartFun ChromeAppModeStart = nullptr;

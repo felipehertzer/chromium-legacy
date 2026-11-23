@@ -52,7 +52,10 @@
       base::apple::ObjCCastStrict<AppShimDelegate>(NSApp.delegate);
   [delegate enableAccessibilitySupport:
                 chrome::mojom::AppShimScreenReaderSupportMode::kPartial];
-  return [super accessibilityRole];
+  if (@available(macOS 10.10, *)) {
+    return [super accessibilityRole];
+  }
+  return [super accessibilityAttributeValue:NSAccessibilityRoleAttribute];
 }
 
 @end

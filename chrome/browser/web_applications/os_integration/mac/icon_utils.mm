@@ -345,7 +345,7 @@ NSImageRep* GetImageRepFromResourceBundle(int resource_id) {
   gfx::Image image = resource_bundle.GetNativeImageNamed(resource_id);
   NSArray* image_reps = image.AsNSImage().representations;
   CHECK_EQ(1u, image_reps.count, base::NotFatalUntil::M162);
-  return image_reps[0];
+  return [image_reps objectAtIndex:0];
 }
 
 }  // namespace

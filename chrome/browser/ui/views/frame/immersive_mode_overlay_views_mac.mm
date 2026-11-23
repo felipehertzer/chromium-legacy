@@ -57,9 +57,11 @@ std::unique_ptr<OverlayWidgetMac> OverlayWidgetMac::Create(
   // equality when determining whether the overlay should be moved offscreen
   // (e.g., if "Always Show Toolbar in Full Screen" is disabled), and rely on
   // these sizes being equal when the view is not obscured or otherwise hidden.
-  overlay_widget->GetNativeWindow()
-      .GetNativeNSWindow()
-      .contentView.clipsToBounds = YES;
+  if (@available(macOS 10.9, *)) {
+    overlay_widget->GetNativeWindow()
+        .GetNativeNSWindow()
+        .contentView.clipsToBounds = YES;
+  }
   overlay_widget->SetNativeWindowProperty(BrowserView::kBrowserViewKey,
                                           browser_view);
 

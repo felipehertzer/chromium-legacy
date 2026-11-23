@@ -57,7 +57,8 @@
 - (instancetype)init {
   // Check which mode to open a new window.
   NSScriptCommand* command = [NSScriptCommand currentCommand];
-  NSString* mode = command.evaluatedArguments[@"KeyDictionary"][@"mode"];
+  NSString* mode = [[command.evaluatedArguments objectForKey:@"KeyDictionary"]
+      objectForKey:@"mode"];
 
   Profile* lastProfile = AppController.sharedController.lastProfile;
   if (!lastProfile) {
@@ -80,7 +81,8 @@
     return nil;
   }
   // Set the mode to nil, to ensure that it is not set once more.
-  [command.evaluatedArguments[@"KeyDictionary"] setValue:nil forKey:@"mode"];
+  [[command.evaluatedArguments objectForKey:@"KeyDictionary"] setValue:nil
+                                                                forKey:@"mode"];
   return [self initWithProfile:profile];
 }
 

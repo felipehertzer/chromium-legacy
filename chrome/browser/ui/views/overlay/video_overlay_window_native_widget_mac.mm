@@ -20,5 +20,8 @@ void VideoOverlayWindowNativeWidgetMac::PopulateCreateWindowParams(
     const views::Widget::InitParams& widget_params,
     remote_cocoa::mojom::CreateWindowParams* params) {
   params->window_class = remote_cocoa::mojom::WindowClass::kFrameless;
-  params->style_mask = NSWindowStyleMaskFullSizeContentView;
+  params->style_mask = 0;
+  if (@available(macOS 10.10, *)) {
+    params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+  }
 }

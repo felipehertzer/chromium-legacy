@@ -53,7 +53,7 @@
                       ofObject:(id)object
                         change:(NSDictionary*)change
                        context:(void*)context {
-  NSNumber* newNumberValue = change[NSKeyValueChangeNewKey];
+  NSNumber* newNumberValue = [change objectForKey:NSKeyValueChangeNewKey];
   BOOL newValue = newNumberValue.boolValue;
   if (newValue) {
     // Note that a block is posted, which will hold a retain on `self`.

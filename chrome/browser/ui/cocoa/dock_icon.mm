@@ -147,8 +147,15 @@ constexpr struct {
   NSSize countSize = NSZeroSize;
   NSAttributedString* countAttrString = nil;
   while (true) {
-    NSFont* countFont = [NSFont systemFontOfSize:countFontSize
-                                          weight:NSFontWeightMedium];
+    NSFont* countFont;
+    if (@available(macOS 10.11, *)) {
+      countFont = [NSFont systemFontOfSize:countFontSize
+                                    weight:NSFontWeightMedium];
+    } else {
+      countFont = [NSFontManager.sharedFontManager
+          convertWeight:YES
+                 ofFont:[NSFont systemFontOfSize:countFontSize]];
+    }
 
     // This will generally be plain Helvetica.
     if (!countFont) {

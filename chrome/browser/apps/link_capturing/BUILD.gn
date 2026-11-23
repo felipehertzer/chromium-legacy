@@ -40,6 +40,10 @@ source_set("link_capturing") {
     "//third_party/abseil-cpp:absl",
     "//url",
   ]
+  if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
+  }
+
   if (enable_extensions) {
     deps += [ "//extensions/common" ]
   }

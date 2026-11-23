@@ -205,8 +205,8 @@ std::string DescriptionForNSEvent(NSEvent* event) {
   // on a notification we set up (vs. NSApplication, say).
   if ([keyPath isEqualToString:@"voiceOverEnabled"] &&
       context == content::BrowserAccessibilityState::GetInstance()) {
-    NSNumber* newValueNumber =
-        base::apple::ObjCCast<NSNumber>(change[NSKeyValueChangeNewKey]);
+    NSNumber* newValueNumber = base::apple::ObjCCast<NSNumber>(
+        [change objectForKey:NSKeyValueChangeNewKey]);
 
     if (newValueNumber) {
       [self voiceOverStateChanged:newValueNumber.boolValue];
@@ -501,7 +501,10 @@ std::string DescriptionForNSEvent(NSEvent* event) {
                                          ui::AXMode::kFromPlatform);
   }
 
-  return [super accessibilityRole];
+  if (@available(macOS 10.10, *)) {
+    return [super accessibilityRole];
+  }
+  return [super accessibilityAttributeValue:NSAccessibilityRoleAttribute];
 }
 
 - (void)addNativeEventProcessorObserver:

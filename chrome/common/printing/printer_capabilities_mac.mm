@@ -69,8 +69,7 @@ PrinterSemanticCapsAndDefaults::Papers GetMacCustomPaperSizesFromFile(
     base::ScopedBlockingCall scoped_block(FROM_HERE,
                                           base::BlockingType::MAY_BLOCK);
     custom_papers_dict = [[NSDictionary alloc]
-        initWithContentsOfURL:base::apple::FilePathToNSURL(path)
-                        error:nil];
+        initWithContentsOfURL:base::apple::FilePathToNSURL(path)];
     if (!custom_papers_dict) {
       return custom_paper_sizes;
     }
@@ -83,15 +82,15 @@ PrinterSemanticCapsAndDefaults::Papers GetMacCustomPaperSizesFromFile(
       continue;
     }
 
-    int size_width = [paper[@"width"] intValue];
-    int size_height = [paper[@"height"] intValue];
+    int size_width = [[paper objectForKey:@"width"] intValue];
+    int size_height = [[paper objectForKey:@"height"] intValue];
     if (size_width <= 0 || size_height <= 0 ||
         size_width > kMacPaperDimensionLimit ||
         size_height > kMacPaperDimensionLimit) {
       continue;
     }
 
-    NSString* name = paper[@"name"];
+    NSString* name = [paper objectForKey:@"name"];
     if (![name isKindOfClass:[NSString class]] || name.length == 0) {
       continue;
     }
@@ -100,10 +99,10 @@ PrinterSemanticCapsAndDefaults::Papers GetMacCustomPaperSizesFromFile(
         ConvertUnit(size_width, kPointsPerInch, kMicronsPerInch),
         ConvertUnit(size_height, kPointsPerInch, kMicronsPerInch));
 
-    int margin_left = [paper[@"left"] intValue];
-    int margin_bottom = [paper[@"bottom"] intValue];
-    int margin_right = [paper[@"right"] intValue];
-    int margin_top = [paper[@"top"] intValue];
+    int margin_left = [[paper objectForKey:@"left"] intValue];
+    int margin_bottom = [[paper objectForKey:@"bottom"] intValue];
+    int margin_right = [[paper objectForKey:@"right"] intValue];
+    int margin_top = [[paper objectForKey:@"top"] intValue];
     if (!IsValidMargin(margin_left) || !IsValidMargin(margin_bottom) ||
         !IsValidMargin(margin_right) || !IsValidMargin(margin_top)) {
       continue;

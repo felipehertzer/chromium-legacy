@@ -43,26 +43,32 @@ BrowserAccessibilityStateImplMac::BrowserAccessibilityStateImplMac() {
   //
   // BrowserAccessibilityStateImpl is a deliberately leaked singleton, so we
   // don't need to record the notification token for later cleanup.
-  [NSWorkspace.sharedWorkspace.notificationCenter
-      addObserverForName:
-          NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
-                  object:nil
-                   queue:nil
-              usingBlock:^(NSNotification* notification) {
-                gfx::Animation::UpdatePrefersReducedMotion();
-                NotifyWebContentsPreferencesChanged();
-              }];
+  if (@available(macOS 10.10, *)) {
+    [NSWorkspace.sharedWorkspace.notificationCenter
+        addObserverForName:
+            NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                    object:nil
+                     queue:nil
+                usingBlock:^(NSNotification* notification) {
+                  gfx::Animation::UpdatePrefersReducedMotion();
+                  NotifyWebContentsPreferencesChanged();
+                }];
+  }
 
   // Set up KVO monitoring of VoiceOver state changes. KVO best practices
   // recommend setting the context to the "address of a uniquely named
   // static variable within the class". This allows observers to disambiguate
   // notifications (where a class and its superclass, say, are observing the
   // same property). We'll use the global accessibility object.
-  [[NSWorkspace sharedWorkspace] addObserver:NSApp
-                                  forKeyPath:@"voiceOverEnabled"
-                                     options:(NSKeyValueObservingOptionInitial |
-                                              NSKeyValueObservingOptionNew)
-                                     context:this];
+  // Older systems retain the AXEnhancedUserInterface request path.
+  if (@available(macOS 10.13, *)) {
+    [[NSWorkspace sharedWorkspace]
+        addObserver:NSApp
+         forKeyPath:@"voiceOverEnabled"
+            options:(NSKeyValueObservingOptionInitial |
+                     NSKeyValueObservingOptionNew)
+            context:this];
+  }
 }
 
 void BrowserAccessibilityStateImplMac::RefreshAssistiveTech() {

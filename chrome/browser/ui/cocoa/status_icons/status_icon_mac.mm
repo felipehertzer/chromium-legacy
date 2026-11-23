@@ -24,16 +24,16 @@
 static const char kStatusItemControllerKey = 0;
 
 // This class bridges between the Objective-C API for status items and the C++
-// classes integrating with Chromium. Owned by the NSStatusBarButton as an
+// classes integrating with Chromium. Owned by the native status control as an
 // associated object with the key &kStatusItemControllerKey.
 @interface StatusItemController : NSObject
-// Designated initializer.
+// Designated initializer. Old systems use NSStatusItem itself as the control.
 - (instancetype)initWithStatusIconMac:(StatusIconMac*)icon
-                   forStatusBarButton:(NSStatusBarButton*)button;
+                           forControl:(NSObject*)control;
 
 // Returns the StatusItemController that is responsible for the specified
-// `button`.
-+ (instancetype)controllerForButton:(NSStatusBarButton*)button;
+// `control`.
++ (instancetype)controllerForControl:(NSObject*)control;
 
 // Clears all internal state.
 - (void)reset;
@@ -74,19 +74,21 @@ static const char kStatusItemControllerKey = 0;
   //
   // Therefore, swizzle the -[NSStatusBarButton rightMouseDown:] method to gain
   // control and achieve the desired behavior.
-  IMP imp = imp_implementationWithBlock(^(id object_self, NSEvent* event) {
-    StatusItemController* controller =
-        [StatusItemController controllerForButton:object_self];
-    [controller handleClick:nil isRightButton:YES];
-  });
+  if (@available(macOS 10.10, *)) {
+    IMP imp = imp_implementationWithBlock(^(id object_self, NSEvent* event) {
+      StatusItemController* controller =
+          [StatusItemController controllerForControl:object_self];
+      [controller handleClick:nil isRightButton:YES];
+    });
 
-  class_replaceMethod([NSStatusBarButton class], @selector(rightMouseDown:),
-                      imp, nullptr);
+    class_replaceMethod([NSStatusBarButton class], @selector(rightMouseDown:),
+                        imp, nullptr);
+  }
 }
 
 - (instancetype)initWithStatusIconMac:(StatusIconMac*)icon
-                   forStatusBarButton:(NSStatusBarButton*)button {
-  objc_setAssociatedObject(button, &kStatusItemControllerKey, self,
+                           forControl:(NSObject*)control {
+  objc_setAssociatedObject(control, &kStatusItemControllerKey, self,
                            OBJC_ASSOCIATION_RETAIN);
 
   _statusIcon = icon;
@@ -118,8 +120,8 @@ static const char kStatusItemControllerKey = 0;
   return self;
 }
 
-+ (instancetype)controllerForButton:(NSStatusBarButton*)button {
-  return objc_getAssociatedObject(button, &kStatusItemControllerKey);
++ (instancetype)controllerForControl:(NSObject*)control {
+  return objc_getAssociatedObject(control, &kStatusItemControllerKey);
 }
 
 - (void)reset {
@@ -145,9 +147,10 @@ static const char kStatusItemControllerKey = 0;
     // Otherwise, there is a menu. For "open menu with a secondary click", plain
     // left-clicks are dispatched normally, and secondary clicks open the menu.
     NSEvent* event = NSApp.currentEvent;
-    BOOL secondary_click =
-        isRightButton || (event.type == NSEventTypeLeftMouseDown &&
-                          event.modifierFlags & NSEventModifierFlagControl);
+    BOOL secondary_click = isRightButton ||
+                           event.type == NSEventTypeRightMouseDown ||
+                           (event.type == NSEventTypeLeftMouseDown &&
+                            event.modifierFlags & NSEventModifierFlagControl);
     if (secondary_click) {
       _statusIcon->CreateAndOpenMenu();
     } else if (event.type == NSEventTypeLeftMouseDown) {
@@ -181,8 +184,12 @@ StatusIconMac::~StatusIconMac() {
     // The controller has a raw_ptr to this object, so clear the pointer.
     // (Because it's not guaranteed that the association is the sole/last
     // reference to the controller, clearing the association is not sufficient.)
+    NSObject* control = item_;
+    if (@available(macOS 10.10, *)) {
+      control = item_.button;
+    }
     StatusItemController* controller =
-        [StatusItemController controllerForButton:item_.button];
+        [StatusItemController controllerForControl:control];
     [controller reset];
     [NSStatusBar.systemStatusBar removeStatusItem:item_];
   }
@@ -192,17 +199,26 @@ NSStatusItem* StatusIconMac::item() {
   if (!item_) {
     item_ = [NSStatusBar.systemStatusBar
         statusItemWithLength:NSSquareStatusItemLength];
-    NSStatusBarButton* item_button = item_.button;
-    item_button.enabled = YES;
-    NSButtonCell* item_button_cell = item_button.cell;
-    item_button_cell.highlightsBy =
-        NSContentsCellMask | NSChangeBackgroundCellMask;
-
-    StatusItemController* controller =
-        [[StatusItemController alloc] initWithStatusIconMac:this
-                                         forStatusBarButton:item_button];
-    item_button.target = controller;
-    item_button.action = @selector(handleClick:);
+    if (@available(macOS 10.10, *)) {
+      NSStatusBarButton* item_button = item_.button;
+      item_button.enabled = YES;
+      NSButtonCell* item_button_cell = item_button.cell;
+      item_button_cell.highlightsBy =
+          NSContentsCellMask | NSChangeBackgroundCellMask;
+      StatusItemController* controller =
+          [[StatusItemController alloc] initWithStatusIconMac:this
+                                                   forControl:item_button];
+      item_button.target = controller;
+      item_button.action = @selector(handleClick:);
+    } else {
+      item_.enabled = YES;
+      item_.highlightMode = YES;
+      StatusItemController* controller =
+          [[StatusItemController alloc] initWithStatusIconMac:this
+                                                   forControl:item_];
+      item_.target = controller;
+      item_.action = @selector(handleClick:);
+    }
   }
   return item_;
 }
@@ -211,13 +227,21 @@ void StatusIconMac::SetImage(const gfx::ImageSkia& image) {
   if (!image.isNull()) {
     NSImage* ns_image = gfx::Image(image).AsNSImage();
     if (ns_image) {
-      item().button.image = ns_image;
+      if (@available(macOS 10.10, *)) {
+        item().button.image = ns_image;
+      } else {
+        item().image = ns_image;
+      }
     }
   }
 }
 
 void StatusIconMac::SetToolTip(const std::u16string& tool_tip) {
-  item().button.toolTip = base::SysUTF16ToNSString(tool_tip);
+  if (@available(macOS 10.10, *)) {
+    item().button.toolTip = base::SysUTF16ToNSString(tool_tip);
+  } else {
+    item().toolTip = base::SysUTF16ToNSString(tool_tip);
+  }
 }
 
 void StatusIconMac::DisplayBalloon(
@@ -232,17 +256,30 @@ void StatusIconMac::DisplayBalloon(
 void StatusIconMac::SetOpenMenuWithSecondaryClick(
     bool open_menu_with_secondary_click) {
   open_menu_with_secondary_click_ = open_menu_with_secondary_click;
-  [item().button
-      sendActionOn:(NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown)];
+  if (@available(macOS 10.10, *)) {
+    [item().button
+        sendActionOn:(NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown)];
+  } else {
+    [item()
+        sendActionOn:(NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown)];
+  }
 }
 
 void StatusIconMac::SetImageTemplate(bool is_template) {
-  [item().button.image setTemplate:is_template];
+  if (@available(macOS 10.10, *)) {
+    [item().button.image setTemplate:is_template];
+  } else {
+    [item().image setTemplate:is_template];
+  }
 }
 
 void StatusIconMac::SetVisible(bool visible) {
   if (item_) {
-    item_.visible = visible;
+    if (@available(macOS 10.12, *)) {
+      item_.visible = visible;
+    } else {
+      item_.length = visible ? NSSquareStatusItemLength : 0;
+    }
   }
 }
 
@@ -257,7 +294,11 @@ bool StatusIconMac::HasStatusIconMenu() {
 
 void StatusIconMac::CreateAndOpenMenu() {
   CreateMenu(menu_model_);
-  [item().button performClick:nil];
+  if (@available(macOS 10.10, *)) {
+    [item().button performClick:nil];
+  } else {
+    [item() popUpStatusItemMenu:menu_.menu];
+  }
   item().menu = nil;
 }
 

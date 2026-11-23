@@ -12,11 +12,13 @@ namespace mac_notifications {
 
 NotificationStyle NotificationStyleFromAppBundle() {
   NSDictionary* infoDictionary = [base::apple::MainBundle() infoDictionary];
-  NSString* appModeShortcut = infoDictionary[@"CrAppModeShortcutID"];
+  NSString* appModeShortcut =
+      [infoDictionary objectForKey:@"CrAppModeShortcutID"];
   if (appModeShortcut != nil) {
     return NotificationStyle::kAppShim;
   }
-  NSString* alertStyle = infoDictionary[@"NSUserNotificationAlertStyle"];
+  NSString* alertStyle =
+      [infoDictionary objectForKey:@"NSUserNotificationAlertStyle"];
   return [alertStyle isEqualToString:@"alert"] ? NotificationStyle::kAlert
                                                : NotificationStyle::kBanner;
 }

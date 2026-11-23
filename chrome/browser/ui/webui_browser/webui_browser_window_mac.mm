@@ -166,8 +166,10 @@ class WebUIBrowserNativeWidgetMac : public views::NativeWidgetMac {
     // Loosely based on BrowserNativeWidgetMac::PopulateCreateWindowParams().
     params->style_mask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                          NSWindowStyleMaskMiniaturizable |
-                         NSWindowStyleMaskResizable |
-                         NSWindowStyleMaskFullSizeContentView;
+                         NSWindowStyleMaskResizable;
+    if (@available(macOS 10.10, *)) {
+      params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+    }
     params->window_class = remote_cocoa::mojom::WindowClass::kBrowser;
     // Ensure tabstrip/profile button are visible.
     params->titlebar_appears_transparent = true;

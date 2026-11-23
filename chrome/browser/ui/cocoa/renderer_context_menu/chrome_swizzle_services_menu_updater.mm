@@ -88,12 +88,15 @@ NSMutableArray* g_filtered_entries_array = nil;
   // Only apply this fix to contextual menus by checking the private
   // _isContextualMenu API. This ensures we don't inadvertently modify the
   // appearance of other menu types (e.g., the main menu bar).
-  if ([parentMenu respondsToSelector:@selector(_isContextualMenu)] &&
-      [parentMenu _isContextualMenu]) {
-    // Inherit the appearance from the key window to match the current UI theme.
-    NSWindow* window = [NSApp keyWindow];
-    if (window && [window appearance]) {
-      [menu setAppearance:[window appearance]];
+  if (@available(macOS 10.9, *)) {
+    if ([parentMenu respondsToSelector:@selector(_isContextualMenu)] &&
+        [parentMenu _isContextualMenu]) {
+      // Inherit the appearance from the key window to match the current UI
+      // theme.
+      NSWindow* window = [NSApp keyWindow];
+      if (window && [window appearance]) {
+        [menu setAppearance:[window appearance]];
+      }
     }
   }
 

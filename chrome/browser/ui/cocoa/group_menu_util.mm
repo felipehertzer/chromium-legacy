@@ -36,11 +36,17 @@ void UpdateGroupIndicatorForMenuItem(
   NSImage* image = NSImageFromImageSkia(group_icon);
 
   // Create text attachment to hold the group indicator image.
-  NSTextAttachment* attachment = [[NSTextAttachment alloc] initWithData:nil
-                                                                 ofType:nil];
-  attachment.image = image;
-  attachment.bounds =
-      NSMakeRect(0, 0, kTabGroupIndicatorSize, kTabGroupIndicatorSize);
+  NSTextAttachment* attachment;
+  if (@available(macOS 10.11, *)) {
+    attachment = [[NSTextAttachment alloc] initWithData:nil ofType:nil];
+    attachment.image = image;
+    attachment.bounds =
+        NSMakeRect(0, 0, kTabGroupIndicatorSize, kTabGroupIndicatorSize);
+  } else {
+    attachment = [[NSTextAttachment alloc] initWithFileWrapper:nil];
+    attachment.attachmentCell =
+        [[NSTextAttachmentCell alloc] initImageCell:image];
+  }
 
   // Add to the menu item by setting attributedTitle with the attachment
   NSMutableAttributedString* attrTitle = [[NSMutableAttributedString alloc]
