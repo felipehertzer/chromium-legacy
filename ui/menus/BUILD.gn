@@ -38,6 +38,7 @@ component("menus") {
   ]
 
   if (is_mac) {
+    deps = [ "//legacy:platform_support" ]
     public_deps += [ "//ui/strings:ui_strings_grit" ]
   }
   if (is_mac) {
@@ -45,12 +46,12 @@ component("menus") {
       "Accelerate.framework",
       "AppKit.framework",
       "AudioUnit.framework",
-      "AVFAudio.framework",
       "Carbon.framework",
       "CoreVideo.framework",
       "Foundation.framework",
       "QuartzCore.framework",
     ]
+    weak_frameworks = [ "AVFAudio.framework" ]
   }
 
   if (is_android) {

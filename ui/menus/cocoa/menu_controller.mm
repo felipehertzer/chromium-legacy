@@ -17,6 +17,7 @@
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/sys_string_conversions.h"
+#include "legacy/apple/drawing_image.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/accelerators/platform_accelerator_cocoa.h"
 #import "ui/base/cocoa/macos27_sdk.h"
@@ -126,10 +127,8 @@ void SetMenuItemIcon(NSMenuItem* menu_item,
 }
 
 NSImage* CreatePaddedImage(CGFloat width, NSImage* image) {
-  NSImage* result = [NSImage
-       imageWithSize:NSMakeSize(width, image.size.height)
-             flipped:NO
-      drawingHandler:^BOOL(NSRect dest_rect) {
+  NSImage* result = chromium_legacy::DrawingImage(
+      NSMakeSize(width, image.size.height), NO, ^BOOL(NSRect dest_rect) {
         if (image) {
           // Draw the image centered in the given space.
           CGFloat extra_width = dest_rect.size.width - image.size.width;
@@ -137,10 +136,15 @@ NSImage* CreatePaddedImage(CGFloat width, NSImage* image) {
           dest_rect =
               NSIntegralRect(NSInsetRect(dest_rect, /*dX=*/extra_width / 2,
                                          /*dY=*/extra_height / 2));
-          [image drawInRect:dest_rect];
+          [image drawInRect:dest_rect
+                    fromRect:NSZeroRect
+                   operation:NSCompositingOperationSourceOver
+                    fraction:1
+              respectFlipped:YES
+                       hints:nil];
         }
         return YES;
-      }];
+      });
   [result setTemplate:[image isTemplate]];
   return result;
 }
@@ -199,7 +203,7 @@ void CreateSharedIndentsForMenu(NSMenu* menu) {
   NSUInteger start_of_section = 0;
   bool section_has_image = false;
   for (NSUInteger i = 0; i < items.count; ++i) {
-    NSMenuItem* item = items[i];
+    NSMenuItem* item = [items objectAtIndex:i];
     if (!item.separatorItem) {
       section_has_image |= (item.image != nil);
       continue;
@@ -209,7 +213,7 @@ void CreateSharedIndentsForMenu(NSMenu* menu) {
     // pad all the images (and create empty pads for those items with no image).
     if (section_has_image) {
       for (NSUInteger j = start_of_section; j < i; ++j) {
-        NSMenuItem* section_item = items[j];
+        NSMenuItem* section_item = [items objectAtIndex:j];
         section_item.image =
             CreatePaddedImage(largest_image_width, section_item.image);
       }

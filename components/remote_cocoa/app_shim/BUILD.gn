@@ -106,8 +106,8 @@ component("app_shim") {
     "Cocoa.framework",
     "QuartzCore.framework",
     "SecurityInterface.framework",
-    "UniformTypeIdentifiers.framework",
   ]
+  weak_frameworks = [ "UniformTypeIdentifiers.framework" ]
 }
 
 component("features") {

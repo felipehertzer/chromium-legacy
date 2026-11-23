@@ -8,6 +8,7 @@
 #include "base/apple/foundation_util.h"
 #include "base/logging.h"
 #import "base/message_loop/message_pump_apple.h"
+#include "legacy/apple/drawing_image.h"
 #import "skia/ext/skia_utils_mac.h"
 #import "ui/base/cocoa/cocoa_base_utils.h"
 #include "ui/base/interaction/element_tracker_mac.h"
@@ -50,10 +51,8 @@ NSImage* NewBadgeImage(
 
   // 3. Craft the image.
 
-  return [NSImage
-       imageWithSize:canvas_size
-             flipped:NO
-      drawingHandler:^(NSRect dest_rect) {
+  return chromium_legacy::DrawingImage(
+      canvas_size, NO, ^BOOL(NSRect dest_rect) {
         NSRect badge_frame =
             NSInsetRect(dest_rect, params.badge_horizontal_margin, 0);
         NSBezierPath* rounded_badge_rect =
@@ -74,16 +73,14 @@ NSImage* NewBadgeImage(
         [badge_attr_string drawAtPoint:badge_text_location];
 
         return YES;
-      }];
+      });
 }
 
 NSImage* IPHDotImage(const remote_cocoa::mojom::MenuControllerParams& params) {
   // Embed horizontal centering space as NSMenuItem will otherwise left-align
   // it.
-  return [NSImage
-       imageWithSize:NSMakeSize(2 * kIPHDotSize, kIPHDotSize)
-             flipped:NO
-      drawingHandler:^(NSRect dest_rect) {
+  return chromium_legacy::DrawingImage(
+      NSMakeSize(2 * kIPHDotSize, kIPHDotSize), NO, ^BOOL(NSRect dest_rect) {
         NSBezierPath* dot_path = [NSBezierPath
             bezierPathWithOvalInRect:NSMakeRect(kIPHDotSize / 2, 0, kIPHDotSize,
                                                 kIPHDotSize)];
@@ -92,7 +89,7 @@ NSImage* IPHDotImage(const remote_cocoa::mojom::MenuControllerParams& params) {
         [dot_path fill];
 
         return YES;
-      }];
+      });
 }
 
 }  // namespace
@@ -148,21 +145,32 @@ NSImage* IPHDotImage(const remote_cocoa::mojom::MenuControllerParams& params) {
                     fromModel:(ui::MenuModel*)model
                       atIndex:(size_t)index {
   if (model->IsNewFeatureAt(index)) {
-    NSTextAttachment* attachment = [[NSTextAttachment alloc] initWithData:nil
-                                                                   ofType:nil];
-    attachment.image = NewBadgeImage(*_params);
-    NSSize newTagSize = attachment.image.size;
-
-    // The baseline offset of the badge image to the menu text baseline.
+    NSImage* image = NewBadgeImage(*_params);
     const int kBadgeBaselineOffset = -3;
-    attachment.bounds = NSMakeRect(0, kBadgeBaselineOffset, newTagSize.width,
-                                   newTagSize.height);
-
+    NSTextAttachment* attachment = nil;
+    if (@available(macOS 10.11, *)) {
+      attachment = [[NSTextAttachment alloc] initWithData:nil ofType:nil];
+      attachment.image = image;
+      attachment.bounds = NSMakeRect(0, kBadgeBaselineOffset, image.size.width,
+                                     image.size.height);
+    } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101100
+      attachment = [[NSTextAttachment alloc] initWithFileWrapper:nil];
+      attachment.attachmentCell =
+          [[NSTextAttachmentCell alloc] initImageCell:image];
+#endif
+    }
+    NSMutableAttributedString* badge = [[NSAttributedString
+        attributedStringWithAttachment:attachment] mutableCopy];
+    if (@available(macOS 10.11, *)) {
+    } else {
+      [badge addAttribute:NSBaselineOffsetAttributeName
+                    value:@(kBadgeBaselineOffset)
+                    range:NSMakeRange(0, badge.length)];
+    }
     NSMutableAttributedString* attrTitle =
         [[NSMutableAttributedString alloc] initWithString:menuItem.title];
-    [attrTitle
-        appendAttributedString:[NSAttributedString
-                                   attributedStringWithAttachment:attachment]];
+    [attrTitle appendAttributedString:badge];
     menuItem.attributedTitle = attrTitle;
 
     // VoiceOver will read the non-attributed string version of the title, so

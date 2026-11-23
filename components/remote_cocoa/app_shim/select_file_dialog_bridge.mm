@@ -24,6 +24,7 @@
 #include "components/remote_cocoa/app_shim/features.h"
 #import "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
 #import "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
+#include "legacy/apple/file_type.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 #include "ui/strings/grit/ui_strings.h"
 
@@ -34,15 +35,13 @@ const int kFileTypePopupTag = 1234;
 // Returns whether the Uniform Type system considers `ext` to be a valid file
 // extension.
 bool IsValidExtension(const base::FilePath::StringType& ext) {
-  UTType* type =
-      [UTType typeWithFilenameExtension:base::SysUTF8ToNSString(ext)];
-  return !!type;
+  return chromium_legacy::FileTypeForExtension(base::SysUTF8ToNSString(ext)) !=
+         nil;
 }
 
 NSString* GetDescriptionFromExtension(const base::FilePath::StringType& ext) {
-  UTType* type =
-      [UTType typeWithFilenameExtension:base::SysUTF8ToNSString(ext)];
-  NSString* description = type.localizedDescription;
+  NSString* description =
+      chromium_legacy::FileTypeDescription(base::SysUTF8ToNSString(ext));
 
   if (description.length) {
     return description;
@@ -58,11 +57,25 @@ NSString* GetDescriptionFromExtension(const base::FilePath::StringType& ext) {
 
 NSView* CreateAccessoryView() {
   // The label.
-  NSTextField* label =
-      [NSTextField labelWithString:l10n_util::GetNSString(
-                                       IDS_SAVE_PAGE_FILE_FORMAT_PROMPT_MAC)];
+  NSString* label_text =
+      l10n_util::GetNSString(IDS_SAVE_PAGE_FILE_FORMAT_PROMPT_MAC);
+  NSTextField* label = nil;
+  if (@available(macOS 10.12, *)) {
+    label = [NSTextField labelWithString:label_text];
+  } else {
+    label = [[NSTextField alloc] initWithFrame:NSZeroRect];
+    label.stringValue = label_text;
+    label.editable = NO;
+    label.selectable = NO;
+    label.bezeled = NO;
+    label.drawsBackground = NO;
+  }
   label.translatesAutoresizingMaskIntoConstraints = NO;
-  label.textColor = NSColor.secondaryLabelColor;
+  if (@available(macOS 10.10, *)) {
+    label.textColor = NSColor.secondaryLabelColor;
+  } else {
+    label.textColor = NSColor.disabledControlTextColor;
+  }
   if (base::mac::MacOSMajorVersion() >= 26) {
     label.font = [NSFont systemFontOfSize:NSFont.systemFontSize];
   } else {
@@ -100,69 +113,49 @@ NSView* CreateAccessoryView() {
   // │             ↕︎     │
   // └───────────────────┘
 
-  // Top.
-  [constraints
-      addObject:[popup.topAnchor constraintEqualToAnchor:group.topAnchor
-                                                constant:10]];
-
-  // Leading.
-  [constraints
-      addObject:[label.leadingAnchor constraintEqualToAnchor:group.leadingAnchor
-                                                    constant:10]];
-
-  // Horizontal and vertical between the label and popup.
-  [constraints addObject:[popup.leadingAnchor
-                             constraintEqualToAnchor:label.trailingAnchor
-                                            constant:8]];
-  if (base::mac::MacOSMajorVersion() >= 26) {
-    // Since macOS 26, using the firstBaselineAnchor property for auto layout
-    // with NSPopUpButton causes frequent computations on the main thread of the
-    // main process, resulting in higher CPU usage. Referring to Safari's
-    // implementation, switching to the centerYAnchor property reduces CPU
-    // overhead. Visually, since NSPopUpButton and label fonts share the same
-    // size on macOS, centering alignment creates little noticeable difference
-    // compared to the previous firstBaseline alignment.
-    [constraints addObject:[label.centerYAnchor
-                               constraintEqualToAnchor:popup.centerYAnchor]];
+  auto equal = ^NSLayoutConstraint*(NSView* first, NSLayoutAttribute attribute,
+                                    NSView* second, NSLayoutAttribute other,
+                                    CGFloat constant) {
+    return [NSLayoutConstraint constraintWithItem:first
+                                        attribute:attribute
+                                        relatedBy:NSLayoutRelationEqual
+                                           toItem:second
+                                        attribute:other
+                                       multiplier:1
+                                         constant:constant];
+  };
+  [constraints addObject:equal(popup, NSLayoutAttributeTop, group,
+                               NSLayoutAttributeTop, 10)];
+  [constraints addObject:equal(label, NSLayoutAttributeLeading, group,
+                               NSLayoutAttributeLeading, 10)];
+  [constraints addObject:equal(popup, NSLayoutAttributeLeading, label,
+                               NSLayoutAttributeTrailing, 8)];
+  if (@available(macOS 26, *)) {
+    [constraints addObject:equal(label, NSLayoutAttributeCenterY, popup,
+                                 NSLayoutAttributeCenterY, 0)];
+  } else if (@available(macOS 10.11, *)) {
+    [constraints addObject:equal(popup, NSLayoutAttributeFirstBaseline, label,
+                                 NSLayoutAttributeFirstBaseline, 0)];
   } else {
-    [constraints
-        addObject:[popup.firstBaselineAnchor
-                      constraintEqualToAnchor:label.firstBaselineAnchor]];
+    // Both controls have one line, so the original baseline has the same role.
+    [constraints addObject:equal(popup, NSLayoutAttributeBaseline, label,
+                                 NSLayoutAttributeBaseline, 0)];
   }
-
-  // Trailing.
-  [constraints addObject:[group.trailingAnchor
-                             constraintEqualToAnchor:popup.trailingAnchor
-                                            constant:10]];
-
-  // Bottom.
-  [constraints
-      addObject:[group.bottomAnchor constraintEqualToAnchor:popup.bottomAnchor
-                                                   constant:10]];
-
-  // Then the constraints centering the group in the accessory view. Vertical
-  // spacing is fully specified, but as the horizontal size of the accessory
-  // view will be forced to conform to the save dialog, only specify horizontal
-  // centering.
-  // ┌──────────────┐
-  // │      ↕︎       │
-  // │   ↔group↔︎    │
-  // │      ↕︎       │
-  // └──────────────┘
-
-  // Top.
-  [constraints
-      addObject:[group.topAnchor constraintEqualToAnchor:view.topAnchor]];
-
-  // Centering.
-  [constraints addObject:[group.centerXAnchor
-                             constraintEqualToAnchor:view.centerXAnchor]];
-
-  // Bottom.
-  [constraints
-      addObject:[view.bottomAnchor constraintEqualToAnchor:group.bottomAnchor]];
-
-  [NSLayoutConstraint activateConstraints:constraints];
+  [constraints addObject:equal(group, NSLayoutAttributeTrailing, popup,
+                               NSLayoutAttributeTrailing, 10)];
+  [constraints addObject:equal(group, NSLayoutAttributeBottom, popup,
+                               NSLayoutAttributeBottom, 10)];
+  [constraints addObject:equal(group, NSLayoutAttributeTop, view,
+                               NSLayoutAttributeTop, 0)];
+  [constraints addObject:equal(group, NSLayoutAttributeCenterX, view,
+                               NSLayoutAttributeCenterX, 0)];
+  [constraints addObject:equal(view, NSLayoutAttributeBottom, group,
+                               NSLayoutAttributeBottom, 0)];
+  if (@available(macOS 10.10, *)) {
+    [NSLayoutConstraint activateConstraints:constraints];
+  } else {
+    [view addConstraints:constraints];
+  }
 
   return view;
 }
@@ -281,10 +274,13 @@ NSSavePanel* __weak g_last_created_panel_for_testing = nil;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if (index < _fileExtensionLists.count && _fileExtensionLists[index].count) {
+  NSArray* extensions = index < _fileExtensionLists.count
+                            ? [_fileExtensionLists objectAtIndex:index]
+                            : nil;
+  if (extensions.count) {
     // For save dialogs, this causes the first item in the allowedFileTypes
     // array to be used as the extension for the save panel.
-    _dialog.allowedFileTypes = _fileExtensionLists[index];
+    _dialog.allowedFileTypes = extensions;
   } else {
     // The user selected "All files" option (or this is the error case where the
     // page specified literally no valid extensions).
@@ -420,7 +416,9 @@ void SelectFileDialogBridge::Show(
     // as a signal to macOS that we will handle all the file tagging; a
     // side-effect of setting the property to any value is that it turns off
     // the tag autosetter.
-    panel_.showsTagField = YES;
+    if (@available(macOS 10.9, *)) {
+      panel_.showsTagField = YES;
+    }
   } else {
     // This does not use ObjCCast because the underlying object could be a
     // non-exported AppKit type (https://crbug.com/41477018).
@@ -645,8 +643,10 @@ void SelectFileDialogBridge::OnPanelEnded(bool did_cancel) {
 
       // The tag autosetter was turned off when `showsTagField` was set above.
       // Retrieve the tags for assignment later.
-      for (NSString* tag in panel_.tagNames) {
-        file_tags.push_back(base::SysNSStringToUTF8(tag));
+      if (@available(macOS 10.9, *)) {
+        for (NSString* tag in panel_.tagNames) {
+          file_tags.push_back(base::SysNSStringToUTF8(tag));
+        }
       }
     } else {
       // This does not use ObjCCast because the underlying object could be a

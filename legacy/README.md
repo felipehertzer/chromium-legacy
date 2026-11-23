@@ -149,6 +149,12 @@ or replaces a Chromium 159 dependency.
 - Quarantine metadata uses LaunchServices FSRefs before 10.10 and URL resource
   properties later. Source/referrer values retain their documented URL types;
   existing quarantine marks, agent names and timestamps survive metadata updates.
+- Menu images retain the native lazy drawing handler on 10.8+, with an owned
+  raster representation on Lion. Image attachment cells preserve older menu
+  badges. File panels use LaunchServices extension identifiers/descriptions,
+  original Auto Layout equalities and labels on older systems; Finder tags
+  require 10.9. Headless windows do not swizzle an absent occlusion selector.
+  Optional AVFAudio/UniformTypeIdentifiers frameworks remain weak-linked.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -198,6 +204,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
 | HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
 | Quarantine attributes/flags/metadata, normal and forced old APIs | 11 checks each | 13 checks each |
+| Menu drawing/flipped context/file-extension types, normal and forced old APIs | 21 checks each | 21 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -210,7 +217,8 @@ An additional symbol audit compares the probes with the **actual Lion 10.7.5
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
-weak-key ownership, HTTP headers, quarantine metadata, timers, atomics, and
+weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
+timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -233,7 +241,9 @@ compiler verification only and still need full-browser integration tests. Native
 media controls and content-view behavior also have compiler verification only.
 Quarantine checks touch only owned temporary files, validate the preserved flag,
 agent, timestamp and (on Catalina) source/referrer URLs, and do not launch an app
-or validate the Gatekeeper user interface.
+or validate the Gatekeeper user interface. Menu platform checks render real
+pixels and validate file-type identifiers; complete menu/file-panel layout and
+headless-window behavior still need browser runtime tests.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -256,6 +266,8 @@ legacy/test_accessibility_platform.sh
 legacy/test_secure_archive.sh
 legacy/test_http_header.sh
 legacy/test_quarantine.sh
+# Requires the current Intel C++/ABI static libraries in out/Lion:
+legacy/test_menu_platform.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_sheet.sh
 legacy/test_weak_key_map.sh
