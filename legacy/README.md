@@ -97,8 +97,9 @@ or replaces a Chromium 159 dependency.
   reexports, preserving Lion's nested framework paths. The same executable can
   load on Lion, Catalina, and the current build host without hard-coding one
   leaf path. Linker warnings and required-symbol checks remain fatal.
-- Sandbox diagnostics retain unified logging on newer macOS and use syslog
-  before 10.12. The logger remains independent of libbase, keeps owned crash
+- Lion-deployment sandbox diagnostics use baseline syslog even on a newer host,
+  keeping bootstrap libraries independent of availability-check Cocoa imports.
+  Modern deployment builds retain unified logging. The logger remains independent of libbase, keeps owned crash
   annotations, and preserves the original error when reporting truncation.
   Missing abort-report SPI retains the existing fatal trap behavior.
 - Lion deployment builds keep owning NSObject wrappers and Chromium's existing
@@ -214,6 +215,94 @@ or replaces a Chromium 159 dependency.
   systems with the native notification API retain their original OS source.
   Missing/short native pressure sysctl replies no longer leave an uninitialized
   level. Sampling stops and clears cached data when its last observer leaves.
+- Minimal browser/helper/aperitif binaries retain the original strict library
+  allowlists. Lion bootstrap libc++ uses baseline clocks and pthread waits;
+  allocator-token aliases support small valid C alignments through POSIX
+  alignment promotion. Five original dynamic-library verifiers pass.
+- CoreML implementation declarations match the existing 14.4 factory gate and
+  weak framework binding. Earlier systems keep the current LiteRT/TFLite path;
+  native model inference has not been tested.
+- Current Web MIDI parsing keeps the protocol-aware API on 11+ and uses the
+  original MIDI packet transport earlier. Fragmentation preserves full timestamps
+  and permits only SysEx splitting. Tests do not open MIDI ports or devices.
+- Property-list consumers use typed immutable/mutable dictionary parsing and
+  atomic XML writes through NSData and NSPropertyListSerialization. Native read,
+  permission and parse errors remain distinguishable. Invalid writes preserve
+  existing files; web-app operations retain their commands and locks.
+- Sensor sharing retains the current one-writer seqlock and read-only reader
+  mapping. Lion transfers the representation with lock-free byte atomics,
+  avoiding an unavailable aggregate libatomic call. An independent process
+  performs 200,000 writes; tests preserve NaN payloads and reject torn snapshots.
+- File System Access uses original CFString FSEvents paths before 10.13 and
+  extended dictionaries later. Without OS file IDs, renames are reported as
+  separate create/delete changes instead of pairing unrelated paths. Tests use
+  owned files and cover real creation, renaming, modification, deletion and cancel.
+- Native speech retains Chromium 159's asynchronous voice loading and SSML/queue
+  handling. AVSpeech remains in use on 10.14+; earlier systems use the original
+  NSSpeechSynthesizer parameter mapping with per-utterance text ownership and
+  cancellation. Native tests synthesize into a temporary audio file without
+  playback; browser-level Web Speech integration remains untested.
+- CoreVideo pool cache trimming is optional on Lion: the SDK omits availability
+  metadata, but the original desktop framework lacks CVPixelBufferPoolFlush.
+  The real symbol is weak-imported for the Lion deployment. When absent, buffers
+  keep their original pool and allocation limits, and unused buffers follow
+  CoreVideo aging/destruction rather than explicit trimming.
+- Optional authentication is bounded by its native APIs: web-auth sessions need
+  10.15, silent Entra SSO needs 12 to prohibit native UI, biometrics need 10.12.2,
+  and screen-lock policy needs 10.11. Unavailable paths return no capability or
+  headers. Native prompts and enterprise authentication remain untested.
+- Enterprise Secure Enclave operations require the data-protection keychain
+  contract on 10.15+. Earlier systems report unsupported before querying,
+  deleting, updating or creating any key; signing/export leave output unchanged.
+  No software-key fallback is substituted for hardware-backed enterprise keys.
+  All 15 existing client tests and 2 forced unsupported tests passed on the host
+  and Catalina, using mocked persistent operations and nonpermanent test keys.
+  Real enterprise key enrollment and hardware remain untested.
+- Embedded biometric UI is created only on 12+; older systems or unavailable
+  biometrics complete with no authentication token rather than a pending result.
+  The native UI and actual authentication prompts remain untested.
+- Handoff remains inactive before 10.10. Its Foundation data export is optional
+  where SDK annotations are missing; no replacement value is fabricated. Old
+  sharing menus preserve the existing Email Link action, and ShareKit requires
+  10.8. Activity-type tests neither create nor publish browsing activities.
+- Lion-deployment controller builds retain the current HID, Xbox USB and Nintendo
+  backends. The optional GameController/CoreHaptics backend is excluded because
+  its current SDK headers require the newer Objective-C dispatch ownership ABI.
+  Modern deployment builds retain it. Legacy builds do not route PlayStation,
+  Xbox or MFi devices away from HID toward an absent backend. Five production
+  registration/transport objects compile; physical controllers and haptics remain
+  untested, including GameController-only capabilities in the legacy build.
+- Native Touch Bar controllers require 10.12.2; the browser and autofill popup
+  retain their normal lifecycle on earlier systems without creating a Touch Bar.
+  The six production controller/consumer objects compile for the Lion target.
+  Native color sampling uses NSColorSampler only on 10.15+, otherwise the existing
+  unsupported EyeDropper result is returned. UI interaction remains untested.
+- Installer process creation uses the matching NSTask API and preserves launch
+  failures and child exit codes. Lion uses its native recycle operation to move
+  a successfully ejected installer image to Trash; it never deletes the image
+  as a fallback. Installation, authorization and file recycling remain untested.
+- Keystone ticket migration keeps secure decoding on 10.8+ and refuses nonempty
+  archives on Lion where secure decoding is unavailable. Both original ticket
+  fixtures passed through modern and legacy secure decoders on the host and
+  Catalina. No installed ticket store was read or changed by these tests.
+- Crash uploads retain the native ephemeral URL session, caching/cookie behavior
+  and trust policy on 10.9+. On earlier systems upload returns failure without
+  creating a request; crash collection remains independent. This path compiles
+  but crash collection and uploads still need runtime validation.
+- Native notifications use their matching API floors (the identifier-based NS
+  service on 10.9+, UN service on 10.14+). Earlier systems select Chromium's
+  existing Message Center via the normal bridge fallback. Unsupported app-shim
+  permission requests fail and never report a display or permission success.
+  The native services/consumers compile; delivery, prompts and Message Center
+  presentation still need browser-level tests.
+- Local discovery uses Chromium's existing NSNetService browser before 10.15.
+  Catalina and newer retain the current Network browser and permission state
+  handling. Network objects use their real SDK C ownership for Lion deployment
+  and ARC ownership for modern deployment, including copies posted to tasks.
+  The endpoint ownership probe starts no network requests: 11 normal and 2
+  absent-path checks passed on Intel and ARM hosts and on Catalina; its 29
+  imports have no required symbols missing from the Lion reference.
+
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -237,7 +326,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Foundation/version probe | 24 checks passed | 24 checks passed |
 | Mach-port probe | 129 checks passed | 129 checks passed |
 | Filesystem/clock helpers | 64 checks passed | 64 checks passed |
-| Current C++ runtime and BoringSSL probe | 35 checks passed | 35 checks passed |
+| Current C++ runtime and BoringSSL probe | 41 checks passed | 41 checks passed |
 | Forced legacy C++ runtime backends | 35 checks passed | 35 checks passed |
 | Rust 1.101 runtime | 13 checks passed | 13 checks passed |
 | Forced legacy Rust runtime backends | 13 checks passed | 13 checks passed |
@@ -263,7 +352,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
 | HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
 | Quarantine attributes/flags/metadata, normal and forced old APIs | 11 checks each | 13 checks each |
-| Menu drawing/flipped context/file-extension types, normal and forced old APIs | 21 checks each | 21 checks each |
+| Menu drawing/file and MIME types/metadata/appearance context | 41 normal and 38 forced checks | 40 normal and 37 forced checks |
 | Native authentication context factory/eligibility/callbacks | 6 normal and 5 forced unavailable checks | 6 normal and 5 forced unavailable checks |
 | Attributed-text lifetime/Unicode/font/range conversion | 9 checks passed | 9 checks passed |
 | Native shape helpers/format enumeration/synthetic image/old face fallback | 11 normal and 9 forced checks | 11 normal and 9 forced checks |
@@ -273,6 +362,19 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | System media decisions/callbacks; native controls remain active with the global fallback-test flag | 18 checks each mode | 18 checks each mode |
 | Real printing factory/current PPD parser/duplex/paper/resolution/metadata, normal and forced PPD backend | 16 checks each | 16 checks each |
 | Real legacy Mach view/response bounds/current memory policy/votes/factory/sampling lifetime | 20 normal and 20 forced checks | 20 normal and 20 forced checks |
+| Current MIDI parser/packet transport without opening devices | 16 checks passed | 16 checks passed |
+| Property-list parsing/atomic writes/errors/permissions | 18 checks passed | 18 checks passed |
+| Independent sensor writer/read-only snapshots/bit-preserving transfer | 7 checks; 200,000 writes | 7 checks; over 915,000 snapshots |
+| Real FSEvents and current change tracker | 12 normal and 13 legacy-format checks | 12 normal and 13 legacy-format checks |
+| Native legacy speech parameters/lifetime/events/silent file synthesis | 14 checks passed | 14 checks passed |
+| Current CoreVideo pool/limits/reuse/lifetime, normal and absent flush | 8 checks each | 8 checks each |
+| Original FakeKeychainV2 tests; production objects target 10.7, fixtures 10.15 | 24 tests passed | 24 tests passed |
+| Optional native Handoff type export, normal and absent | 4 normal and 3 absent checks | 4 normal and 3 absent checks |
+| Original Keystone ticket fixtures, modern/legacy secure decoder | 2 each | 2 each |
+| Secure Enclave client, mocked persistence/nonpermanent keys | 15 original tests | 15 original tests |
+| Secure Enclave unsupported path, zero helper operations/output unchanged | 2 tests | 2 tests |
+| Current V8/Blink context generator with CoreVideo correction | passed | passed; identical snapshot |
+| Network object ownership, normal and no Network objects | 11 and 2 checks, Intel and ARM | 11 and 2 checks |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -287,8 +389,10 @@ compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
 authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
-math, modal window helpers, geolocation callbacks, shortcut files, system media policy, printing factory/PPD capabilities, memory-statistics/pressure handling, timers,
-atomics, and
+math, modal window helpers, geolocation callbacks, shortcut files, system media
+policy, printing factory/PPD capabilities, memory-statistics/pressure handling,
+MIDI, property lists, sensors, FSEvents, speech, CoreVideo pools, Handoff types,
+the current V8/Blink context generator, timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -343,7 +447,15 @@ free-memory policy with synthetic samples, and check factory selection and timer
 cancellation. They do not induce system memory pressure or modify kernel settings.
 After the Base change, the 35 C++/23 Base/13 Rust/5 original interoperability
 checks and SDK probe were freshly relinked and passed on the host and Catalina.
-The installer recovery system omits AVFoundation and Bluetooth libraries. Their
+The current runtime's 41 checks were freshly linked and passed on both machines.
+An isolated link of the actual V8/Blink context generator, with the corrected
+pool object, initializes the current engine on both machines and writes the same
+3,037,064-byte snapshot (SHA-256
+`837d17f014ad6bfcb15bc0861ec5bf5d5465ecc204a5b20421e4e5de0cc7ff4c`).
+Its 1,246 imports have no missing required Lion symbols or incomplete libraries;
+141 absent optional imports remain weak. This is a build-tool execution check,
+not a browser rendering, sandbox or browsing test.
+The installer recovery system omits AVFoundation, Bluetooth and CoreMIDI libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
 `audit_macho.py --supplemental-root PATH` fills absent libraries from that
@@ -367,6 +479,17 @@ legacy/test_http_header.sh
 legacy/test_quarantine.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_menu_platform.sh
+# Native speech into an owned temporary audio file (no playback):
+bash legacy/test_speech.sh
+# Optional Foundation activity-type binding (no activities are published):
+bash legacy/test_user_activity.sh
+bash legacy/test_network_object.sh
+# Requires base_probe and crubit_probe with retained response files:
+python3 legacy/test_secure_enclave.py
+python3 legacy/test_secure_enclave.py --force-unsupported
+python3 legacy/test_fake_keychain.py
+# Requires base_probe with a retained response file:
+python3 legacy/test_pixel_buffer_pool.py
 legacy/test_shape_platform.sh
 legacy/test_simd_math.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
@@ -431,12 +554,19 @@ python3 legacy/build_crubit.py --jobs 2
 cp legacy/args/lion.gn out/Lion/args.gn
 cat ../rust-lion-compiler.gni ../crubit-lion.gni >> out/Lion/args.gn
 buildtools/mac/gn gen out/Lion --fail-on-unused-args
-ninja -C out/Lion -j4 -d keeprsp runtime_probe rust_probe base_probe sdk_probe crubit_probe
+ninja -C out/Lion -j4 -d keeprsp runtime_probe rust_probe base_probe sdk_probe crubit_probe \
+  midi_packet_probe property_list_probe sensor_reading_probe \
+  fsevents_probe_normal fsevents_probe_fallback
 out/Lion/runtime_probe
 out/Lion/rust_probe
 out/Lion/base_probe
 out/Lion/sdk_probe
 out/Lion/crubit_probe
+out/Lion/midi_packet_probe
+out/Lion/property_list_probe
+out/Lion/sensor_reading_probe
+out/Lion/fsevents_probe_normal
+out/Lion/fsevents_probe_fallback
 ninja -C out/Lion -j4 chrome
 ```
 
@@ -446,8 +576,17 @@ then writes the host-library list and GN arguments to `rust-lion-compiler.gni`.
 It completes a second compiler build to install matching rustc-dev metadata, and
 provides the matching LLVM objcopy for Cargo release builds. Host stdlib inputs
 come from bootstrap's std artifact manifest. `build_crubit.py` builds the pinned
-Rust-to-C++ frontend, preserves the original tools/support sources, and emits
+Rust-to-C++ frontend, preserves the original packaged tools/support sources, and emits
 `crubit-lion.gni`.
+
+Crubit's pinned generated GN support files declare several public-header
+includes as private dependencies. `crubit_support_public_deps.json` records the
+exact revision, four original file hashes, and 61 required public edges. The
+builder applies that metadata correction to an owned 1.8 MB support copy,
+preserving every header/source byte and timestamp. Repeated verification is
+idempotent and refuses changed packages or overlays. The complete GN header
+check now passes for all 39,823 targets selected by the checkout's check policy;
+no include checks are disabled.
 
 Crubit uses date-based `rustversion` checks for unstable compiler APIs. Its
 explicit `RUSTVERSION=1` query goes through a wrapper that reports the verified
@@ -492,7 +631,9 @@ with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27
 The Rust minimum-version blocker is fixed and the linked integration probes run
 on Catalina. The complete browser build continues to expose other compatibility
 work. The custom compiler and Crubit now pass the original interoperability tests
-on Catalina; the remaining auxiliary host tools still need full-build validation.
+on Catalina. The current V8/Blink context generator also executes on the host
+and Catalina with byte-identical output; other auxiliary tools and the complete
+browser still need full-build validation.
 
 Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
 graphics, media, UI, and the remaining browser API usage still need build and
