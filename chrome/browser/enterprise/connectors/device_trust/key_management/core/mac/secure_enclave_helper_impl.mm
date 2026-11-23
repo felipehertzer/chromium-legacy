@@ -15,54 +15,98 @@
 
 namespace enterprise_connectors {
 
+namespace {
+// Permanent enclave keys use the data-protection keychain (10.15+). Keep
+// unsupported operations ahead of all queries, mutations and signing calls.
+bool SecureEnclaveAPIsEnabled() {
+#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  return false;
+#else
+  return true;
+#endif
+}
+}  // namespace
+
 SecureEnclaveHelperImpl::~SecureEnclaveHelperImpl() = default;
 
 base::apple::ScopedCFTypeRef<SecKeyRef>
 SecureEnclaveHelperImpl::CreateSecureKey(CFDictionaryRef attributes,
                                          OSStatus* error) {
-  base::apple::ScopedCFTypeRef<CFErrorRef> error_ref;
-  base::apple::ScopedCFTypeRef<SecKeyRef> key(
-      SecKeyCreateRandomKey(attributes, error_ref.InitializeInto()));
+  if (@available(macOS 10.15, *)) {
+    if (SecureEnclaveAPIsEnabled()) {
+      base::apple::ScopedCFTypeRef<CFErrorRef> error_ref;
+      base::apple::ScopedCFTypeRef<SecKeyRef> key(
+          SecKeyCreateRandomKey(attributes, error_ref.InitializeInto()));
 
-  // In the odd chance that the API did not populate `error_ref`, fallback to
-  // errSecCoreFoundationUnknown.
-  OSStatus status =
-      error_ref ? CFErrorGetCode(error_ref.get()) : errSecCoreFoundationUnknown;
-  if (error) {
-    *error = status;
+      // In the odd chance that the API did not populate `error_ref`, fallback
+      // to errSecCoreFoundationUnknown.
+      OSStatus status = error_ref ? CFErrorGetCode(error_ref.get())
+                                  : errSecCoreFoundationUnknown;
+      if (error) {
+        *error = status;
+      }
+
+      return key;
+    }
   }
-
-  return key;
+  if (error) {
+    *error = errSecUnimplemented;
+  }
+  return base::apple::ScopedCFTypeRef<SecKeyRef>();
 }
 
 base::apple::ScopedCFTypeRef<SecKeyRef> SecureEnclaveHelperImpl::CopyKey(
     CFDictionaryRef query,
     OSStatus* error) {
-  base::apple::ScopedCFTypeRef<SecKeyRef> key;
-  OSStatus status = SecItemCopyMatching(
-      query, const_cast<CFTypeRef*>(
-                 reinterpret_cast<const CFTypeRef*>(key.InitializeInto())));
+  if (@available(macOS 10.15, *)) {
+    if (SecureEnclaveAPIsEnabled()) {
+      base::apple::ScopedCFTypeRef<SecKeyRef> key;
+      OSStatus status = SecItemCopyMatching(
+          query, const_cast<CFTypeRef*>(
+                     reinterpret_cast<const CFTypeRef*>(key.InitializeInto())));
 
-  if (error) {
-    *error = status;
+      if (error) {
+        *error = status;
+      }
+
+      return key;
+    }
   }
-
-  return key;
+  if (error) {
+    *error = errSecUnimplemented;
+  }
+  return base::apple::ScopedCFTypeRef<SecKeyRef>();
 }
 
 OSStatus SecureEnclaveHelperImpl::Update(CFDictionaryRef query,
                                          CFDictionaryRef attributes_to_update) {
-  return SecItemUpdate(query, attributes_to_update);
+  if (@available(macOS 10.15, *)) {
+    if (SecureEnclaveAPIsEnabled()) {
+      return SecItemUpdate(query, attributes_to_update);
+    }
+  }
+  return errSecUnimplemented;
 }
 
 OSStatus SecureEnclaveHelperImpl::Delete(CFDictionaryRef query) {
-  return SecItemDelete(query);
+  if (@available(macOS 10.15, *)) {
+    if (SecureEnclaveAPIsEnabled()) {
+      return SecItemDelete(query);
+    }
+  }
+  return errSecUnimplemented;
 }
 
 bool SecureEnclaveHelperImpl::IsSecureEnclaveSupported() {
-  TKTokenWatcher* token_watcher = [[TKTokenWatcher alloc] init];
-  return ([token_watcher.tokenIDs
-      containsObject:base::apple::CFToNSPtrCast(kSecAttrTokenIDSecureEnclave)]);
+  if (@available(macOS 10.15, *)) {
+    if (SecureEnclaveAPIsEnabled()) {
+      TKTokenWatcher* token_watcher = [[TKTokenWatcher alloc] init];
+      return ([token_watcher.tokenIDs
+          containsObject:base::apple::CFToNSPtrCast(
+                             kSecAttrTokenIDSecureEnclave)]);
+    }
+  }
+  return false;
 }
 
 }  // namespace enterprise_connectors
