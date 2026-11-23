@@ -14,6 +14,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/local_discovery/service_discovery_shared_client.h"
+#include "legacy/apple/scoped_network.h"
 
 namespace base {
 class Thread;
@@ -92,7 +93,7 @@ class ServiceWatcherImplMac : public ServiceWatcher {
   // and `browser_` lives on the
   // `service_discovery_runner_`.
   //
-  nw_browser_t __strong nw_browser_;
+  chromium_legacy::ScopedNetworkObject<nw_browser_t> nw_browser_;
   NetServiceBrowser* __strong browser_;
 
   base::WeakPtrFactory<ServiceWatcherImplMac> weak_factory_{this};

@@ -81,6 +81,7 @@ const NSTimeInterval kResolveTimeout = 10.0;
 // before the permission state metric is recorded.
 constexpr base::TimeDelta kPermissionsMetricsDelay = base::Seconds(60);
 
+API_AVAILABLE(macos(10.15))
 void SetUpServiceBrowser(
     nw_browser_t browser,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -93,12 +94,14 @@ void SetUpServiceBrowser(
                  bool batch_complete) {
         nw_browse_result_change_t change =
             nw_browse_result_get_changes(old_result, new_result);
-        nw_endpoint_t new_endpoint = nw_browse_result_copy_endpoint(new_result);
-        nw_endpoint_t old_endpoint = nw_browse_result_copy_endpoint(old_result);
+        chromium_legacy::ScopedNetworkObject<nw_endpoint_t> new_endpoint(
+            nw_browse_result_copy_endpoint(new_result));
+        chromium_legacy::ScopedNetworkObject<nw_endpoint_t> old_endpoint(
+            nw_browse_result_copy_endpoint(old_result));
         const char* new_service_name =
-            nw_endpoint_get_bonjour_service_name(new_endpoint);
+            nw_endpoint_get_bonjour_service_name(new_endpoint.get());
         const char* old_service_name =
-            nw_endpoint_get_bonjour_service_name(old_endpoint);
+            nw_endpoint_get_bonjour_service_name(old_endpoint.get());
 
         switch (change) {
           case nw_browse_result_change_result_added:
@@ -176,17 +179,19 @@ void SetUpServiceBrowser(
 // counted, the strong references passed to these functions ensure the object
 // remains alive until for the duration of the operation.
 
+API_AVAILABLE(macos(10.15))
 void StartServiceBrowser(
-    nw_browser_t browser,
+    chromium_legacy::ScopedNetworkObject<nw_browser_t> browser,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
   CHECK(task_runner->RunsTasksInCurrentSequence(), base::NotFatalUntil::M161);
-  nw_browser_start(browser);
+  nw_browser_start(browser.get());
 }
+API_AVAILABLE(macos(10.15))
 void StopServiceBrowser(
-    nw_browser_t browser,
+    chromium_legacy::ScopedNetworkObject<nw_browser_t> browser,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
   CHECK(task_runner->RunsTasksInCurrentSequence(), base::NotFatalUntil::M161);
-  nw_browser_cancel(browser);
+  nw_browser_cancel(browser.get());
 }
 
 // DEPRECATED.
@@ -276,14 +281,22 @@ ServiceWatcherImplMac::ServiceWatcherImplMac(
     : service_type_(service_type),
       callback_(std::move(callback)),
       service_discovery_runner_(service_discovery_runner) {
-  force_enable_legacy_discovery_ = base::mac::MacOSMajorVersion() >= 15;
+  if (@available(macOS 10.15, *)) {
+    force_enable_legacy_discovery_ = base::mac::MacOSMajorVersion() >= 15;
+  } else {
+    force_enable_legacy_discovery_ = true;
+  }
 }
 
 ServiceWatcherImplMac::~ServiceWatcherImplMac() {
-  service_discovery_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&StopServiceBrowser, nw_browser_,
-                                service_discovery_runner_));
-  nw_browser_ = nil;
+  if (@available(macOS 10.15, *)) {
+    if (nw_browser_) {
+      service_discovery_runner_->PostTask(
+          FROM_HERE, base::BindOnce(&StopServiceBrowser, nw_browser_,
+                                   service_discovery_runner_));
+      nw_browser_.reset();
+    }
+  }
 
   if (force_enable_legacy_discovery_) {
     service_discovery_runner_->PostTask(
@@ -305,19 +318,22 @@ void ServiceWatcherImplMac::Start() {
   }
   VLOG(1) << "Listening for service" << service_info.value();
 
-  nw_browse_descriptor_t descriptor =
-      nw_browse_descriptor_create_bonjour_service(
-          service_info->service_type.c_str(), service_info->domain.c_str());
-  nw_parameters_t parameters = nw_parameters_create_secure_tcp(
-      NW_PARAMETERS_DISABLE_PROTOCOL, NW_PARAMETERS_DEFAULT_CONFIGURATION);
-  nw_browser_ = nw_browser_create(descriptor, parameters);
+  if (@available(macOS 10.15, *)) {
+    chromium_legacy::ScopedNetworkObject<nw_browse_descriptor_t> descriptor(
+        nw_browse_descriptor_create_bonjour_service(
+            service_info->service_type.c_str(), service_info->domain.c_str()));
+    chromium_legacy::ScopedNetworkObject<nw_parameters_t> parameters(
+        nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL,
+                                        NW_PARAMETERS_DEFAULT_CONFIGURATION));
+    nw_browser_.reset(nw_browser_create(descriptor.get(), parameters.get()));
 
-  SetUpServiceBrowser(
-      nw_browser_, base::SingleThreadTaskRunner::GetCurrentDefault(),
-      base::BindRepeating(&ServiceWatcherImplMac::OnServicesUpdate,
-                          weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&ServiceWatcherImplMac::RecordPermissionState,
-                          weak_factory_.GetWeakPtr()));
+    SetUpServiceBrowser(
+        nw_browser_.get(), base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::BindRepeating(&ServiceWatcherImplMac::OnServicesUpdate,
+                            weak_factory_.GetWeakPtr()),
+        base::BindRepeating(&ServiceWatcherImplMac::RecordPermissionState,
+                            weak_factory_.GetWeakPtr()));
+  }
 
   if (force_enable_legacy_discovery_) {
     browser_ = [[NetServiceBrowser alloc]
@@ -333,9 +349,11 @@ void ServiceWatcherImplMac::Start() {
 void ServiceWatcherImplMac::DiscoverNewServices() {
   CHECK(started_, base::NotFatalUntil::M161);
   VLOG(1) << "ServiceWatcherImplMac::DiscoverNewServices";
-  service_discovery_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&StartServiceBrowser, nw_browser_,
-                                service_discovery_runner_));
+  if (@available(macOS 10.15, *)) {
+    service_discovery_runner_->PostTask(
+        FROM_HERE, base::BindOnce(&StartServiceBrowser, nw_browser_,
+                                 service_discovery_runner_));
+  }
 
   if (force_enable_legacy_discovery_) {
     service_discovery_runner_->PostTask(
@@ -524,7 +542,7 @@ void ServiceResolverImplMac::StopResolving() {
     [netService stopMonitoring];
     [netService setDelegate:nil];
 
-    netService = _services[index];
+    netService = [_services objectAtIndex:index];
     [netService stopMonitoring];
     [netService setDelegate:nil];
 
