@@ -354,13 +354,13 @@ CGFloat GetBackingScaleFactorForRect(CGRect rect) {
     return 1.0;
   }
 
-  CGFloat primary_height = screens[0].frame.size.height;
+  CGFloat primary_height = [screens objectAtIndex:0].frame.size.height;
   flipped_rect.origin.y = primary_height - (rect.origin.y + rect.size.height);
 
   // We find the screen with the largest overlapping intersection area with our
   // rect. We do not use a simple contains check because the window might span
   // multiple monitors or be partially offscreen.
-  NSScreen* best_screen = screens[0];
+  NSScreen* best_screen = [screens objectAtIndex:0];
   CGFloat max_area = 0;
   for (NSScreen* screen in screens) {
     const NSRect intersection = NSIntersectionRect(screen.frame, flipped_rect);

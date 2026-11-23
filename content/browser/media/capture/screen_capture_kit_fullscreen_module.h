@@ -15,7 +15,8 @@
 
 namespace content {
 
-class CONTENT_EXPORT ScreenCaptureKitResetStreamInterface {
+class API_AVAILABLE(macos(12.3)) CONTENT_EXPORT
+    ScreenCaptureKitResetStreamInterface {
  public:
   // This function is called if the ScreenCaptureKitFullScreenModule detects a
   // fullscreen presentation that corresponds to the originally captured window.
@@ -24,7 +25,8 @@ class CONTENT_EXPORT ScreenCaptureKitResetStreamInterface {
   virtual void ResetStreamTo(SCWindow* window) = 0;
 };
 
-class CONTENT_EXPORT ScreenCaptureKitFullscreenModule {
+class API_AVAILABLE(macos(12.3)) CONTENT_EXPORT
+    ScreenCaptureKitFullscreenModule {
  public:
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
@@ -108,7 +110,7 @@ std::unique_ptr<ScreenCaptureKitFullscreenModule> CONTENT_EXPORT
 MaybeCreateScreenCaptureKitFullscreenModule(
     scoped_refptr<base::SingleThreadTaskRunner> device_task_runner,
     ScreenCaptureKitResetStreamInterface& reset_stream_interface,
-    SCWindow* original_window);
+    SCWindow* original_window) API_AVAILABLE(macos(12.3));
 
 }  // namespace content
 

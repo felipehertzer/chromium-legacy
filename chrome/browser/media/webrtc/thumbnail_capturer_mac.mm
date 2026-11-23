@@ -135,6 +135,7 @@ GetPipIdToExcludeFromScreenCaptureOnUIThread(
 // array containing the SCWindow object corresponding to the provided ID.
 // Returns an empty array if the ID is not provided or no matching window is
 // found.
+API_AVAILABLE(macos(12.3))
 NSArray<SCWindow*>* ConvertWindowIDToSCWindows(
     SCShareableContent* content,
     std::optional<content::DesktopMediaID::Id> excluded_window_id) {
@@ -151,6 +152,7 @@ NSArray<SCWindow*>* ConvertWindowIDToSCWindows(
   return @[];
 }
 
+API_AVAILABLE(macos(12.3))
 bool IsWindowFullscreen(SCWindow* window, NSArray<SCDisplay*>* displays) {
   for (SCDisplay* display in displays) {
     if (CGRectEqualToRect(window.frame, display.frame)) {
@@ -160,6 +162,7 @@ bool IsWindowFullscreen(SCWindow* window, NSArray<SCDisplay*>* displays) {
   return false;
 }
 
+API_AVAILABLE(macos(12.3))
 SCDisplay* FindDisplay(NSArray<SCDisplay*>* array,
                        CGDirectDisplayID display_id) {
   for (SCDisplay* display in array) {
@@ -170,6 +173,7 @@ SCDisplay* FindDisplay(NSArray<SCDisplay*>* array,
   return nil;
 }
 
+API_AVAILABLE(macos(12.3))
 SCWindow* FindWindow(NSArray<SCWindow*>* array, CGWindowID window_id) {
   for (SCWindow* window in array) {
     if ([window windowID] == window_id) {
@@ -198,7 +202,7 @@ CGWindowID GetWindowId(CFArrayRef window_array, CFIndex index) {
   return window_id;
 }
 
-class ScreenshotManagerCapturer {
+class API_AVAILABLE(macos(13.2)) ScreenshotManagerCapturer {
  public:
   using ContentFilterCallback = base::RepeatingCallback<
       SCContentFilter*(ThumbnailCapturer::SourceId source_id, CGRect& frame)>;
@@ -413,7 +417,8 @@ void ScreenshotManagerCapturer::SCScreenshotCaptureSource(
 
 // Context object to hold the results of the asynchronous operations (PiP IDs
 // and shareable content) so they can be processed together when both complete.
-struct UpdateContext : public base::RefCountedThreadSafe<UpdateContext> {
+struct API_AVAILABLE(macos(13.2)) UpdateContext
+    : public base::RefCountedThreadSafe<UpdateContext> {
   std::map<content::DesktopMediaID::Id,
            std::optional<content::DesktopMediaID::Id>>
       pip_ids;

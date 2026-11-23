@@ -33,6 +33,7 @@ using SampleCallback = base::RepeatingCallback<void(gfx::ScopedInUseIOSurface,
 using ErrorCallback = base::RepeatingCallback<void(NSError*)>;
 
 namespace {
+API_AVAILABLE(macos(13.2))
 std::tuple<std::optional<gfx::Rect>,
            std::optional<gfx::Size>,
            std::optional<float>>
@@ -130,6 +131,7 @@ gfx::Size CreateEvenSize(const gfx::Size& original_size) {
 // Given SCShareableContent, a PipScreenCaptureCoordinatorProxy and a media
 // source, returns an array containing the SCWindow object to be excluded from
 // the capture. Otherwise, returns an empty array.
+API_AVAILABLE(macos(13.2))
 NSArray<SCWindow*>* GetWindowsToExclude(
     SCShareableContent* content,
     content::PipScreenCaptureCoordinatorProxy* proxy,
@@ -154,6 +156,7 @@ NSArray<SCWindow*>* GetWindowsToExclude(
 }
 }  // namespace
 
+API_AVAILABLE(macos(13.2))
 @interface ScreenCaptureKitDeviceHelper
     : NSObject <SCStreamDelegate, SCStreamOutput>
 
@@ -251,7 +254,7 @@ namespace {
 BASE_FEATURE(kScreenCaptureKitFullDesktopFallback,
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-class ScreenCaptureKitDeviceMac
+class API_AVAILABLE(macos(13.2)) ScreenCaptureKitDeviceMac
     : public IOSurfaceCaptureDeviceBase,
       public ScreenCaptureKitResetStreamInterface,
       public content::PipScreenCaptureCoordinatorProxy::Observer {

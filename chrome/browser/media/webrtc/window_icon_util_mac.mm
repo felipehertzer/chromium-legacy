@@ -33,8 +33,8 @@ gfx::ImageSkia GetWindowIcon(content::DesktopMediaID id) {
   NSDictionary* window_dictionary =
       base::apple::ObjCCast<NSDictionary>(windows.firstObject);
 
-  NSNumber* pid = base::apple::ObjCCast<NSNumber>(
-      window_dictionary[base::apple::CFToNSPtrCast(kCGWindowOwnerPID)]);
+  NSNumber* pid = base::apple::ObjCCast<NSNumber>([window_dictionary
+      objectForKey:base::apple::CFToNSPtrCast(kCGWindowOwnerPID)]);
   if (!pid) {
     // This file relies heavily on the "send a message to nil and get a zero
     // back" behavior of Objective-C, to avoid constant nil-checks. However,

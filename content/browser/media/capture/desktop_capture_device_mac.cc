@@ -15,7 +15,8 @@ namespace content {
 
 namespace {
 
-class DesktopCaptureDeviceMac : public IOSurfaceCaptureDeviceBase {
+class API_AVAILABLE(macos(10.8)) DesktopCaptureDeviceMac
+    : public IOSurfaceCaptureDeviceBase {
  public:
   DesktopCaptureDeviceMac(CGDirectDisplayID display_id)
       : display_id_(display_id),
@@ -160,11 +161,15 @@ std::unique_ptr<media::VideoCaptureDevice> CreateDesktopCaptureDeviceMac(
     return nullptr;
   }
 
-  IncrementDesktopCaptureCounter(SCREEN_CAPTURER_CREATED);
-  IncrementDesktopCaptureCounter(source.audio_share
-                                     ? SCREEN_CAPTURER_CREATED_WITH_AUDIO
-                                     : SCREEN_CAPTURER_CREATED_WITHOUT_AUDIO);
-  return std::make_unique<DesktopCaptureDeviceMac>(source.id);
+  if (__builtin_available(macOS 10.8, *)) {
+    IncrementDesktopCaptureCounter(SCREEN_CAPTURER_CREATED);
+    IncrementDesktopCaptureCounter(source.audio_share
+                                       ? SCREEN_CAPTURER_CREATED_WITH_AUDIO
+                                       : SCREEN_CAPTURER_CREATED_WITHOUT_AUDIO);
+    return std::make_unique<DesktopCaptureDeviceMac>(source.id);
+  }
+  // The launcher keeps the current WebRTC desktop capturer as its fallback.
+  return nullptr;
 }
 
 }  // namespace content

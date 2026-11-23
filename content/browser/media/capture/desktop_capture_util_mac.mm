@@ -183,14 +183,14 @@ GetApplicationAudioCaptureIdForProcess(pid_t pid) {
       "AudioCaptureId: Found Chromium PWA. PWA PID: %d, PWA Bundle ID: %s, "
       "Browser PID: %d, Browser Bundle ID: %s, Truncated Bundle ID: %s. "
       "Duration: %.3f ms",
-      pid, bundle_id->c_str(), browser_apps[0].processIdentifier,
+      pid, bundle_id->c_str(), [browser_apps objectAtIndex:0].processIdentifier,
       pwa_installer_bundle_id->c_str(), truncated_chromium_bundle_id->c_str(),
       timer.Elapsed().InMillisecondsF()));
   RecordGetAppAudioCaptureIdMetrics(timer.Elapsed(),
                                     GetAppAudioCaptureIdMacResult::kSuccess);
   return std::make_optional<desktop_capture::ApplicationAudioCaptureId>(
       *truncated_chromium_bundle_id,
-      std::make_optional(browser_apps[0].processIdentifier));
+      std::make_optional([browser_apps objectAtIndex:0].processIdentifier));
 }
 
 void GetApplicationAudioCaptureIdInternal(

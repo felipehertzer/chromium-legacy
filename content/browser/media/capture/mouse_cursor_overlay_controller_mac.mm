@@ -174,7 +174,7 @@ class MouseCursorOverlayController::Observer {
       gfx::Rect subwindow_rect = target_web_contents_->GetViewBounds();
       NSRect ns_view_rect = [view_ convertRect:[view_ bounds] toView:nil];
       ns_view_rect.origin =
-          [[view_ window] convertPointToScreen:ns_view_rect.origin];
+          [[view_ window] convertRectToScreen:ns_view_rect].origin;
       gfx::Rect view_rect = gfx::ScreenRectFromNSRect(ns_view_rect);
 
       location_aura.x -= (subwindow_rect.x() - view_rect.x());
