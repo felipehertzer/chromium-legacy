@@ -13,6 +13,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -27,6 +28,11 @@
 #include "legacy/apple/audit_token.h"
 #include "legacy/apple/fd_io.h"
 #include "legacy/apple/rust_posix.h"
+
+extern "C" void* __alloc_token_aligned_alloc(size_t alignment,
+                                             size_t size,
+                                             size_t token)
+    __attribute__((weak_import));
 
 namespace {
 int failures = 0;
@@ -64,6 +70,28 @@ int main() {
   Check(reinterpret_cast<uintptr_t>(aligned.get()) % alignof(Aligned) == 0 &&
             aligned->value == 42,
         "aligned C++ allocation");
+  if (__alloc_token_aligned_alloc) {
+    void* token_aligned = __alloc_token_aligned_alloc(64, 128, 0);
+    Check(token_aligned && reinterpret_cast<uintptr_t>(token_aligned) % 64 == 0,
+          "bootstrap C allocation keeps alignment");
+    std::free(token_aligned);
+    void* byte_aligned = __alloc_token_aligned_alloc(1, 1, 0);
+    Check(byte_aligned, "bootstrap C allocation supports byte alignment");
+    std::free(byte_aligned);
+    void* small_aligned = __alloc_token_aligned_alloc(4, 12, 0);
+    Check(small_aligned && reinterpret_cast<uintptr_t>(small_aligned) % 4 == 0,
+          "bootstrap C allocation supports sub-pointer alignment");
+    std::free(small_aligned);
+    errno = 0;
+    Check(!__alloc_token_aligned_alloc(64, 129, 0) && errno == EINVAL,
+          "bootstrap C allocation rejects a nonmultiple size");
+    errno = 0;
+    Check(!__alloc_token_aligned_alloc(0, 128, 0) && errno == EINVAL,
+          "bootstrap C allocation rejects zero alignment");
+    errno = 0;
+    Check(!__alloc_token_aligned_alloc(3, 129, 0) && errno == EINVAL,
+          "bootstrap C allocation rejects invalid alignment");
+  }
   std::atomic<uint32_t> legacy_flag{0};
   std::atomic<int> legacy_result{-1};
   std::thread legacy_waiter([&] {

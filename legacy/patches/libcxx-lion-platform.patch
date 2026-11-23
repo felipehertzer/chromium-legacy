@@ -1,5 +1,5 @@
 diff --git a/src/atomic.cpp b/src/atomic.cpp
-index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f318073590 100644
+index c05940fb7315752c4195cae94a4a373d1cc93faf..2beb9bd402969118c3dfaecd3ceac92e3aa879e2 100644
 --- a/src/atomic.cpp
 +++ b/src/atomic.cpp
 @@ -16,6 +16,9 @@
@@ -12,7 +12,7 @@ index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f3
  
  // Determine whether to use the public os_sync API on Apple platforms based on the deployment target.
  // Otherwise we fall back to the private __ulock API.
-@@ -161,14 +164,29 @@ static void __platform_wake_by_address(void const* __ptr, bool __notify_one) {
+@@ -161,14 +164,30 @@ static void __platform_wake_by_address(void const* __ptr, bool __notify_one) {
  #  else // !_LIBCPP_USE_OS_SYNC -- fall back to the private __ulock API
  
  extern "C" int __ulock_wait(
@@ -28,9 +28,9 @@ index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f3
  
 +template <std::size_t _Size>
 +static bool __can_use_ulock() {
-+#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
++#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) || defined(CHROMIUM_LEGACY_BOOTSTRAP_RUNTIME)
 +  return false;
-+#endif
++#else
 +  if (!__ulock_wait || !__ulock_wake)
 +    return false;
 +  if constexpr (_Size == 8) {
@@ -39,12 +39,13 @@ index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f3
 +    return false;
 +  }
 +  return true;
++#endif
 +}
 +
  template <std::size_t _Size, class MaybeTimeout>
  static void __platform_wait_on_address(void const* __ptr, void const* __val, MaybeTimeout maybe_timeout_ns) {
    auto __timeout_us = [&] {
-@@ -193,6 +211,13 @@ static void __platform_wait_on_address(void const* __ptr, void const* __val, May
+@@ -193,6 +212,13 @@ static void __platform_wait_on_address(void const* __ptr, void const* __val, May
      }
    }();
  
@@ -58,7 +59,7 @@ index c05940fb7315752c4195cae94a4a373d1cc93faf..3251d84da2575a6926e5e5c542b621f3
    __ulock_wait(
        _Size == 4 ? UL_COMPARE_AND_WAIT : UL_COMPARE_AND_WAIT64, const_cast<void*>(__ptr), __value, __timeout_us);
  }
-@@ -201,6 +226,10 @@ template <std::size_t _Size>
+@@ -201,6 +227,10 @@ template <std::size_t _Size>
  static void __platform_wake_by_address(void const* __ptr, bool __notify_one) {
    static_assert(_Size == 8 || _Size == 4, "Can only wake up on 8 bytes or 4 bytes value");
  

@@ -541,6 +541,7 @@ if (is_win) {
   }
 
   mac_app_bundle("chrome_app") {
+    configs += [ "//content/public/app:minimal_macos_binary" ]
     output_name = chrome_product_full_name
 
     info_plist_target = ":chrome_app_plist"
@@ -824,6 +825,8 @@ if (is_win) {
           "app/llvm_profile_util.h",
         ]
       }
+
+      configs += [ "//content/public/app:minimal_macos_binary" ]
 
       defines = [ "HELPER_EXECUTABLE" ]
       if (defined(invoker.defines)) {

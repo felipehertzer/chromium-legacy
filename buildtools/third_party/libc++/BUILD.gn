@@ -417,6 +417,18 @@ if (use_clang_modules && use_unified_system_module) {
 }
 
 target(libcxx_target_type, "libc++") {
+  _legacy_lion_runtime = false
+  _legacy_file_manager_runtime = false
+  if (is_mac && current_cpu == "x64") {
+    _legacy_macos_parts = string_split(mac_deployment_target, ".")
+    if (_legacy_macos_parts[0] == "10") {
+      _legacy_lion_runtime = _legacy_macos_parts[1] == "7"
+      _legacy_file_manager_runtime =
+          _legacy_lion_runtime || _legacy_macos_parts[1] == "8" ||
+          _legacy_macos_parts[1] == "9"
+    }
+  }
+
   # Most things that need to depend on libc++ should do so via the implicit
   # 'common_deps' dependency below.  Some targets that package libc++.so may
   # need to explicitly depend on libc++.
@@ -556,7 +568,7 @@ target(libcxx_target_type, "libc++") {
   if (is_apple) {
     deps += [ "//legacy:platform_support" ]
   }
-  if (is_mac) {
+  if (_legacy_file_manager_runtime) {
     frameworks = [ "CoreServices.framework" ]
   }
 
@@ -586,6 +598,12 @@ target(libcxx_target_type, "libc++") {
   }
 
   defines = []
+  if (_legacy_lion_runtime) {
+    # These routines can run before the sandbox is installed. Clang's
+    # __builtin_available emits a CoreFoundation link requirement on Lion.
+    # Keep the bootstrap runtime on the tested baseline OS primitives.
+    defines += [ "CHROMIUM_LEGACY_BOOTSTRAP_RUNTIME=1" ]
+  }
   cflags = []
 
   if (!libcxx_is_shared && !is_win) {

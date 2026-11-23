@@ -61,7 +61,8 @@ inline int LegacyMonotonic(timespec* result) {
 }
 
 inline int Realtime(timespec* result) {
-#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) && \
+    !defined(CHROMIUM_LEGACY_BOOTSTRAP_RUNTIME)
   if (__builtin_available(macOS 10.12, *)) {
     return clock_gettime(CLOCK_REALTIME, result);
   }
@@ -70,7 +71,8 @@ inline int Realtime(timespec* result) {
 }
 
 inline int Monotonic(timespec* result) {
-#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) && \
+    !defined(CHROMIUM_LEGACY_BOOTSTRAP_RUNTIME)
   if (__builtin_available(macOS 10.12, *)) {
     return clock_gettime(CLOCK_MONOTONIC_RAW, result);
   }
@@ -79,7 +81,8 @@ inline int Monotonic(timespec* result) {
 }
 
 inline int ClockGettime(clockid_t clock, timespec* result) {
-#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) && \
+    !defined(CHROMIUM_LEGACY_BOOTSTRAP_RUNTIME)
   if (__builtin_available(macOS 10.12, *)) {
     return clock_gettime(clock, result);
   }

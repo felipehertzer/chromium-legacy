@@ -26,7 +26,8 @@ extern "C" {
 // system CrashReporter and Crashpad collect in crash reports. Using a Crashpad
 // `Annotation` would be preferable, but this module cannot depend on Crashpad
 // directly.
-void abort_report_np(const char* fmt, ...) __abortlike __printflike(1, 2);
+void abort_report_np(const char* fmt, ...) __abortlike __printflike(1, 2)
+    __attribute__((weak_import));
 }
 
 namespace content::aperitif {
@@ -42,7 +43,9 @@ FatalError(const char* format, ...) {
   if (rv >= 0) {
     UNSAFE_TODO(fprintf(stderr, "aperitif: %s\n", message));
     fflush(stderr);
-    UNSAFE_TODO(abort_report_np("aperitif: %s", message));
+    if (abort_report_np) {
+      UNSAFE_TODO(abort_report_np("aperitif: %s", message));
+    }
   }
   abort();
 }

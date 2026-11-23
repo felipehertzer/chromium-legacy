@@ -93,12 +93,23 @@ ALLOC_TOKEN_FALLBACK void* __alloc_token_aligned_alloc(size_t alignment,
   // aligned_alloc() is only available from API level 28.
   return memalign(alignment, size);
 #elif defined(__APPLE__)
+#if !defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) || \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101500
   if (__builtin_available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)) {
     return aligned_alloc(alignment, size);
   }
-  if (!alignment || size % alignment) {
+#endif
+  // This shim also runs before sandbox setup. On older Mac deployment targets,
+  // use the baseline allocator without Clang's CoreFoundation availability
+  // glue.
+  if (!alignment || (alignment & (alignment - 1)) || size % alignment) {
     errno = EINVAL;
     return NULL;
+  }
+  // C permits fundamental alignments smaller than sizeof(void*), while
+  // posix_memalign requires at least pointer alignment.
+  if (alignment < sizeof(void*)) {
+    alignment = sizeof(void*);
   }
   void* result = NULL;
   int error = posix_memalign(&result, alignment, size);

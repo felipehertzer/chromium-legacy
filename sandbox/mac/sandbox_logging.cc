@@ -44,7 +44,9 @@ namespace {
 
 enum class Level { FATAL, ERR, WARN, INFO };
 
-#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200
+// Availability builtins would force a framework load before sandbox setup.
 class API_AVAILABLE(macos(10.12)) OSLog {
  public:
   OSLog()
@@ -78,11 +80,10 @@ void SendUnifiedLog(Level level, const char* message) {
 #endif
 
 void SendLog(Level level, const char* message) {
-#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
-  if (__builtin_available(macOS 10.12, *)) {
-    SendUnifiedLog(level, message);
-  } else
-#endif
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200
+  SendUnifiedLog(level, message);
+#else
   {
     const int priority = [](Level level) {
       switch (level) {
@@ -98,6 +99,7 @@ void SendLog(Level level, const char* message) {
     }(level);
     UNSAFE_TODO(syslog(priority, "org.chromium.sandbox: %s", message));
   }
+#endif
 
   if (level == Level::ERR || level == Level::FATAL) {
     sandbox::crash_message::SetCrashMessage(message);

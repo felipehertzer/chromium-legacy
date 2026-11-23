@@ -98,6 +98,17 @@ if (is_component_build) {
 }
 
 if (is_mac) {
+  import("//build/config/mac/mac_sdk.gni")
+
+  # libc++'s legacy filesystem backend links CoreServices. The small binaries
+  # loaded before sandbox initialization must not load that unused framework.
+  # Keep the exact dynamic-library allowlists in chrome/BUILD.gn unchanged.
+  config("minimal_macos_binary") {
+    if (current_cpu == "x64" && mac_deployment_target == "10.7") {
+      ldflags = [ "-Wl,-dead_strip_dylibs" ]
+    }
+  }
+
   import("//build/util/branding.gni")
   import("//chrome/version.gni")
 
@@ -105,6 +116,7 @@ if (is_mac) {
     sources = [ "aperitif_mac.h" ]
 
     public_deps = [ "//content/app:aperitif" ]
+    configs += [ ":minimal_macos_binary" ]
 
     ldflags = [
       "-compatibility_version",
