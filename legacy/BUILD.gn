@@ -18,6 +18,7 @@ source_set("platform_support") {
     "apple/file_times.h",
     "apple/file_type.h",
     "apple/font_cascade.h",
+    "apple/fsevents.h",
     "apple/http_header.h",
     "apple/localized_string.h",
     "apple/location.h",
@@ -88,6 +89,37 @@ if (is_mac) {
       "//base",
       "//printing/backend",
     ]
+  }
+
+  foreach(mode, [ "normal", "fallback" ]) {
+    executable("fsevents_probe_${mode}") {
+      testonly = true
+      sources = [
+        "tests/fsevents_probe.cc",
+        "//content/common/content_export.h",
+        "//content/browser/file_system_access/features.cc",
+        "//content/browser/file_system_access/features.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher.cc",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_fsevents.cc",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_fsevents.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_fsevents_change_tracker.cc",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_fsevents_change_tracker.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_histogram.cc",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_histogram.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_kqueue.cc",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_kqueue.h",
+        "//content/browser/file_system_access/file_path_watcher/file_path_watcher_mac.cc",
+      ]
+      deps = [
+        ":platform_support",
+        "//base",
+      ]
+      frameworks = [ "CoreServices.framework" ]
+      if (mode == "fallback") {
+        defines = [ "CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS=1" ]
+      }
+    }
   }
 
   executable("sensor_reading_probe") {

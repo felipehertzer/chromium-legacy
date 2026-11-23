@@ -27,6 +27,7 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "content/browser/file_system_access/file_path_watcher/file_path_watcher.h"
 #include "content/browser/file_system_access/file_path_watcher/file_path_watcher_fsevents_change_tracker.h"
+#include "legacy/apple/fsevents.h"
 
 namespace content {
 
@@ -237,29 +238,14 @@ void FilePathWatcherFSEvents::FSEventsCallback(
       root_change_at = std::min(root_change_at, event_id);
     }
 
-    // Determine the inode value for the event.
-    CFDictionaryRef cf_dict = base::apple::CFCast<CFDictionaryRef>(
+    const auto data = chromium_legacy::ReadFSEventsPath(
         CFArrayGetValueAtIndex(cf_event_paths, i));
-    CFStringRef cf_path = base::apple::GetValueFromDictionary<CFStringRef>(
-        cf_dict, kFSEventStreamEventExtendedDataPathKey);
-    const base::FilePath event_path = base::apple::CFStringToFilePath(cf_path);
-
-    // Only report events with a non-empty path.
-    if (event_path.empty()) {
-      continue;
+    const base::FilePath event_path =
+        data.path ? base::apple::CFStringToFilePath(data.path)
+                  : base::FilePath();
+    if (!event_path.empty()) {
+      events[event_id] = ChangeEvent(event_flags, event_path, data.inode);
     }
-
-    CFNumberRef cf_inode = base::apple::GetValueFromDictionary<CFNumberRef>(
-        cf_dict, kFSEventStreamEventExtendedFileIDKey);
-    if (cf_inode) {
-      SInt64 sint_inode;
-      if (CFNumberGetValue(cf_inode, kCFNumberSInt64Type, &sint_inode)) {
-        events[event_id] = ChangeEvent(event_flags, event_path,
-                                       static_cast<uint64_t>(sint_inode));
-        continue;
-      }
-    }
-    events[event_id] = ChangeEvent(event_flags, event_path, std::nullopt);
   }
 
   if (context->test_callback) {
@@ -342,7 +328,11 @@ WatchWithChangeInfoResult FilePathWatcherFSEvents::UpdateEventStream(
       kEventLatencySeconds,
       kFSEventStreamCreateFlagWatchRoot | kFSEventStreamCreateFlagFileEvents |
           kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagUseCFTypes |
-          kFSEventStreamCreateFlagUseExtendedData);
+          chromium_legacy::FSEventsExtendedDataFlag());
+
+  if (!fsevent_stream_) {
+    return WatchWithChangeInfoResult::kFSEventsEventStreamStartError;
+  }
 
   // Schedule the stream on the `queue_`
   // (https://developer.apple.com/documentation/coreservices/1444164-fseventstreamsetdispatchqueue).

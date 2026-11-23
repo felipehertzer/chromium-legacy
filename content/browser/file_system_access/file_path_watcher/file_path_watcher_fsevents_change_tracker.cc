@@ -174,13 +174,15 @@ void FilePathWatcherFSEventsChangeTracker::DispatchEvents(
     // Use the `kFSEventStreamEventFlagItemRenamed` flag to identify a 'move'
     // event.
     if (event_flags & kFSEventStreamEventFlagItemRenamed) {
-      // Find the matching moved_to event via inode.
+      // Match moves only when the OS supplies an inode. Without IDs, report
+      // each path as created/deleted instead of pairing unrelated renames.
       auto move_to_event_it = std::find_if(
           std::next(it, 1), events.end(),
           [event_inode](
               const std::pair<FSEventStreamEventId, ChangeEvent>& entry) {
             ChangeEvent change_event = entry.second;
-            return change_event.event_inode == event_inode &&
+            return event_inode.has_value() &&
+                   change_event.event_inode == event_inode &&
                    (change_event.event_flags &
                     kFSEventStreamEventFlagItemRenamed);
           });
@@ -249,7 +251,7 @@ void FilePathWatcherFSEventsChangeTracker::DispatchEvents(
       // place.
       struct stat file_stat;
       bool exists = (stat(event_path.value().c_str(), &file_stat) == 0) &&
-                    (file_stat.st_ino == event_inode.value_or(0));
+                    (!event_inode || file_stat.st_ino == *event_inode);
 
       // If we've already reported a create event resulting from a move
       // into-scope for the target path, skip reporting a duplicate create

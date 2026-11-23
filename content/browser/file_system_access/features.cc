@@ -6,8 +6,6 @@
 
 #include "base/feature_list.h"
 #include "build/build_config.h"
-#include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/common/features_generated.h"
 
 namespace content::features {
 
