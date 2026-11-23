@@ -11,6 +11,7 @@ namespace autofill {
 class AutofillPopupController;
 }
 
+API_AVAILABLE(macos(10.12.2))
 @interface CreditCardAutofillTouchBarController : NSObject <NSTouchBarDelegate>
 
 - (instancetype)initWithController:

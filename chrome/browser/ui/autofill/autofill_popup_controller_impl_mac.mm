@@ -45,13 +45,15 @@ void AutofillPopupControllerImplMac::Show(
     AutoselectFirstSuggestion autoselect_first_suggestion,
     AutofillSuggestionsIgnoreFocusLoss ignore_focus_loss,
     std::u16string search_bar_initial_value) {
-  if (!suggestions.empty() && HasCreditCardSuggestions()) {
-    touch_bar_controller_ = [WebTextfieldTouchBarController
-        controllerForWindow:[container_view().GetNativeNSView() window]];
-    [touch_bar_controller_ showCreditCardAutofillWithController:this];
-  } else if (touch_bar_controller_) {
-    [touch_bar_controller_ hideCreditCardAutofillTouchBar];
-    touch_bar_controller_ = nil;
+  if (@available(macOS 10.12.2, *)) {
+    if (!suggestions.empty() && HasCreditCardSuggestions()) {
+      touch_bar_controller_ = [WebTextfieldTouchBarController
+          controllerForWindow:[container_view().GetNativeNSView() window]];
+      [(WebTextfieldTouchBarController*)touch_bar_controller_ showCreditCardAutofillWithController:this];
+    } else if (touch_bar_controller_) {
+      [(WebTextfieldTouchBarController*)touch_bar_controller_ hideCreditCardAutofillTouchBar];
+      touch_bar_controller_ = nil;
+    }
   }
 
   AutofillPopupControllerImpl::Show(ui_session_id, std::move(suggestions),
@@ -65,8 +67,10 @@ void AutofillPopupControllerImplMac::Show(
 
 void AutofillPopupControllerImplMac::UpdateDataListValues(
     base::span<const SelectOption> options) {
-  if (touch_bar_controller_) {
-    [touch_bar_controller_ invalidateTouchBar];
+  if (@available(macOS 10.12.2, *)) {
+    if (touch_bar_controller_) {
+      [(WebTextfieldTouchBarController*)touch_bar_controller_ invalidateTouchBar];
+    }
   }
 
   AutofillPopupControllerImpl::UpdateDataListValues(options);
@@ -76,9 +80,11 @@ void AutofillPopupControllerImplMac::UpdateDataListValues(
 }
 
 void AutofillPopupControllerImplMac::HideViewAndDie() {
-  if (touch_bar_controller_) {
-    [touch_bar_controller_ hideCreditCardAutofillTouchBar];
-    touch_bar_controller_ = nil;
+  if (@available(macOS 10.12.2, *)) {
+    if (touch_bar_controller_) {
+      [(WebTextfieldTouchBarController*)touch_bar_controller_ hideCreditCardAutofillTouchBar];
+      touch_bar_controller_ = nil;
+    }
   }
 
   AutofillPopupControllerImpl::HideViewAndDie();

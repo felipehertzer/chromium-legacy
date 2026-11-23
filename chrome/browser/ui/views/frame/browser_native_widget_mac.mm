@@ -65,6 +65,7 @@
 #include "components/web_distiller/content/browser/distillable_page_utils.h"
 #include "components/web_distiller/core/url_utils.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
+#include "legacy/apple/accessibility.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/actions/actions.h"
 #include "ui/base/accelerators/global_accelerator_listener/global_accelerator_listener.h"
@@ -182,14 +183,15 @@ API_AVAILABLE(macos(26.0))
 @interface BrowserWindowTouchBarViewsDelegate
     : NSObject <WindowTouchBarDelegate>
 
-- (BrowserWindowTouchBarController*)touchBarController;
+- (BrowserWindowTouchBarController*)touchBarController
+    API_AVAILABLE(macos(10.12.2));
 
 @end
 
 @implementation BrowserWindowTouchBarViewsDelegate {
   raw_ptr<BrowserWindowInterface> _browser;
   NSWindow* __weak _window;
-  BrowserWindowTouchBarController* __strong _touchBarController;
+  NSObject* __strong _touchBarController;
 }
 
 - (instancetype)initWithBrowser:(BrowserWindowInterface*)browser
@@ -203,16 +205,16 @@ API_AVAILABLE(macos(26.0))
 }
 
 - (BrowserWindowTouchBarController*)touchBarController {
-  return _touchBarController;
+  return (BrowserWindowTouchBarController*)_touchBarController;
 }
 
-- (NSTouchBar*)makeTouchBar {
+- (NSTouchBar*)makeTouchBar API_AVAILABLE(macos(10.12.2)) {
   if (!_touchBarController) {
     _touchBarController =
         [[BrowserWindowTouchBarController alloc] initWithBrowser:_browser
                                                           window:_window];
   }
-  return [_touchBarController makeTouchBar];
+  return [(BrowserWindowTouchBarController*)_touchBarController makeTouchBar];
 }
 
 @end
@@ -743,13 +745,17 @@ void BrowserNativeWidgetMac::PopulateCreateWindowParams(
     // `GetIsWebAppType()` might also be true here, so it's important that this
     // check is first.
     params->window_class = remote_cocoa::mojom::WindowClass::kFrameless;
-    params->style_mask = NSWindowStyleMaskFullSizeContentView |
-                         NSWindowStyleMaskTitled | NSWindowStyleMaskResizable;
+    params->style_mask = NSWindowStyleMaskTitled | NSWindowStyleMaskResizable;
+    if (@available(macOS 10.10, *)) {
+      params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+    }
     params->window_title_hidden = true;
   } else if (browser_view_->GetIsNormalType() ||
              browser_view_->GetIsWebAppType()) {
     params->window_class = remote_cocoa::mojom::WindowClass::kBrowser;
-    params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+    if (@available(macOS 10.10, *)) {
+      params->style_mask |= NSWindowStyleMaskFullSizeContentView;
+    }
 
     // Ensure tabstrip/profile button are visible.
     params->titlebar_appears_transparent = true;
@@ -971,11 +977,9 @@ bool BrowserNativeWidgetMac::ShouldUseInitialVisibleOnAllWorkspaces() const {
 
 void BrowserNativeWidgetMac::AnnounceTextInInProcessWindow(
     const std::u16string& text) {
-  NSAccessibilityPriorityLevel priority = NSAccessibilityPriorityHigh;
-  NSDictionary* notification_info = @{
-    NSAccessibilityAnnouncementKey : base::SysUTF16ToNSString(text),
-    NSAccessibilityPriorityKey : @(priority)
-  };
+  NSDictionary* notification_info =
+      chromium_legacy::AccessibilityAnnouncementInfo(
+          base::SysUTF16ToNSString(text), true);
 
   NSWindow* ns_window = GetNSWindowHost()->GetInProcessNSWindow();
   if (ns_window) {
@@ -1240,11 +1244,17 @@ void BrowserNativeWidgetMac::UpdateBackgroundColor() {
   const CGFloat g = SkColorGetG(theme_color) / 255.0;
   const CGFloat b = SkColorGetB(theme_color) / 255.0;
 
-  tint_view_.layer.backgroundColor =
-      [NSColor colorWithSRGBRed:r green:g blue:b alpha:tint_opacity].CGColor;
+  base::apple::ScopedCFTypeRef<CGColorSpaceRef> color_space(
+      CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
+  const CGFloat tint_components[] = {r, g, b, tint_opacity};
+  base::apple::ScopedCFTypeRef<CGColorRef> tint_color(
+      CGColorCreate(color_space.get(), tint_components));
+  tint_view_.layer.backgroundColor = tint_color.get();
 
   if (opaque_background_view_) {
-    opaque_background_view_.layer.backgroundColor =
-        [NSColor colorWithSRGBRed:r green:g blue:b alpha:1.0].CGColor;
+    const CGFloat opaque_components[] = {r, g, b, 1.0};
+    base::apple::ScopedCFTypeRef<CGColorRef> opaque_color(
+        CGColorCreate(color_space.get(), opaque_components));
+    opaque_background_view_.layer.backgroundColor = opaque_color.get();
   }
 }

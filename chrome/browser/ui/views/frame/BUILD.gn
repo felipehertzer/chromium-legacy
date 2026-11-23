@@ -2023,6 +2023,7 @@ if (is_mac) {
       "//components/web_distiller/content/browser",
       "//components/web_distiller/core",
       "//components/web_modal",
+      "//legacy:platform_support",
       "//skia",
       "//ui/accessibility",
       "//ui/actions",

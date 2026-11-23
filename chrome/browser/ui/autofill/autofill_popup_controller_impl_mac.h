@@ -7,7 +7,7 @@
 
 #include "chrome/browser/ui/autofill/autofill_popup_controller_impl.h"
 
-@class WebTextfieldTouchBarController;
+@class NSObject;
 
 namespace autofill {
 
@@ -48,7 +48,7 @@ class AutofillPopupControllerImplMac : public AutofillPopupControllerImpl {
   friend class AutofillPopupControllerImplMacTestApi;
 
   // The controller providing the autofill touch bar.
-  WebTextfieldTouchBarController* __weak touch_bar_controller_;
+  NSObject* __weak touch_bar_controller_;
 };
 
 }  // namespace autofill
