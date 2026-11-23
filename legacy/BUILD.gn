@@ -19,6 +19,7 @@ source_set("platform_support") {
     "apple/font_cascade.h",
     "apple/http_header.h",
     "apple/localized_string.h",
+    "apple/location.h",
     "apple/product_version.h",
     "apple/quarantine.h",
     "apple/remove_all.h",
@@ -63,6 +64,18 @@ if (is_mac) {
       "//ui/accessibility/platform",
     ]
     frameworks = [ "AppKit.framework" ]
+  }
+
+  executable("geolocation_probe") {
+    testonly = true
+    sources = [ "tests/geolocation_probe.mm" ]
+    deps = [
+      ":platform_support",
+      "//base",
+      "//net",
+      "//services/device/public/cpp/geolocation",
+    ]
+    frameworks = [ "CoreLocation.framework" ]
   }
 
   executable("sdk_probe") {

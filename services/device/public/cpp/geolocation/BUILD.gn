@@ -28,6 +28,7 @@ component("geolocation") {
     sources += [ "system_geolocation_source.h" ]
   }
   if (is_apple) {
+    deps += [ "//legacy:platform_support" ]
     sources += [
       "location_manager_delegate.h",
       "location_manager_delegate.mm",

@@ -127,6 +127,10 @@ class COMPONENT_EXPORT(GEOLOCATION) SystemGeolocationSourceApple
   const scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
   // Caches the initial Wi-Fi status at the beginning of watching position.
   bool was_wifi_enabled_ = false;
+  bool watching_position_ = false;
+  // Old Core Location requests authorization by starting updates. Keep those
+  // alive until the answer arrives, without stopping a real position watch.
+  bool permission_request_only_ = false;
   // Indicates whether any position updates have been received.
   bool position_received_ = false;
   // Stores the result of the CoreLocation session. This will hold the first

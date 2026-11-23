@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "components/device_event_log/device_event_log.h"
+#include "legacy/apple/location.h"
 #include "services/device/public/cpp/device_features.h"
 #include "services/device/public/cpp/geolocation/system_geolocation_source_apple.h"
 
@@ -24,22 +25,14 @@
 
 - (void)locationManager:(CLLocationManager*)manager
     didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
+  if (!_manager)
+    return;
   if (status == kCLAuthorizationStatusNotDetermined) {
     _permissionInitialized = NO;
     return;
   }
   _permissionInitialized = YES;
-  if (status == kCLAuthorizationStatusAuthorizedAlways) {
-    _hasPermission = YES;
-  } else {
-    _hasPermission = NO;
-  }
-
-#if BUILDFLAG(IS_IOS)
-  if (status == kCLAuthorizationStatusAuthorizedWhenInUse) {
-    _hasPermission = YES;
-  }
-#endif
+  _hasPermission = chromium_legacy::IsLocationAuthorized(status);
 
   _manager->PermissionUpdated();
 }
@@ -52,19 +45,28 @@
   return _permissionInitialized;
 }
 
+#if BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+// Lion and Mountain Lion deliver the original single-location callback.
+- (void)locationManager:(CLLocationManager*)manager
+    didUpdateToLocation:(CLLocation*)location
+           fromLocation:(CLLocation*)previous_location {
+  if (location)
+    [self locationManager:manager didUpdateLocations:@[ location ]];
+}
+#endif
+
 - (void)locationManager:(CLLocationManager*)manager
      didUpdateLocations:(NSArray*)locations {
   CLLocation* location = [locations lastObject];
+  if (!_manager || !location)
+    return;
   device::mojom::Geoposition position;
   position.latitude = location.coordinate.latitude;
   position.longitude = location.coordinate.longitude;
   position.timestamp = base::Time::FromSecondsSinceUnixEpoch(
       location.timestamp.timeIntervalSince1970);
-  if (base::FeatureList::IsEnabled(features::kEllipsoidalAltitude)) {
-    position.altitude = location.ellipsoidalAltitude;
-  } else {
-    position.altitude = location.altitude;
-  }
+  position.altitude = chromium_legacy::LocationAltitude(
+      location, base::FeatureList::IsEnabled(features::kEllipsoidalAltitude));
   position.accuracy = location.horizontalAccuracy;
   position.altitude_accuracy = location.verticalAccuracy;
   position.speed = location.speed;
@@ -81,6 +83,8 @@
 
 - (void)locationManager:(CLLocationManager*)manager
        didFailWithError:(NSError*)error {
+  if (!_manager)
+    return;
   base::UmaHistogramSparse("Geolocation.CoreLocationProvider.ErrorCode",
                            static_cast<int>(error.code));
   GEOLOCATION_LOG(ERROR)

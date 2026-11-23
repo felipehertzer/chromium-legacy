@@ -183,6 +183,12 @@ or replaces a Chromium 159 dependency.
 - File System Access clonefile optimization requires 10.12; older systems use
   Chromium's existing exclusive create-and-copy path with its original locks,
   permissions and error handling. The clone helper retains its symlink checks.
+- Core Location retains its original single-location delegate callback on Lion.
+  Permission requests before 10.15 keep a permission-only update request alive
+  until authorization arrives, then stop it without stopping an actual watch.
+  Native denied/restricted/undetermined states remain distinct, empty position
+  updates are ignored and callbacks cannot use a destroyed provider. Older
+  systems retain traditional altitude when the ellipsoidal getter is absent.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -237,6 +243,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Attributed-text lifetime/Unicode/font/range conversion | 9 checks passed | 9 checks passed |
 | Native shape helpers/format enumeration/synthetic image/old face fallback | 11 normal and 9 forced checks | 11 normal and 9 forced checks |
 | SIMD scalar math/edge cases/native comparison, normal and forced old APIs | 1,743 checks each | 1,743 checks each |
+| Real geolocation provider/authorization/callbacks/lifetime with injected manager | 17 normal and 17 forced checks | 17 normal and 17 forced checks |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -251,7 +258,7 @@ compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
 authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
-math, modal window helpers, timers, atomics, and
+math, modal window helpers, geolocation callbacks, timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -286,6 +293,11 @@ still need browser runtime tests. Window label checks verify AppKit accepts the
 legacy override and retain the formal accessor on newer systems; they do not
 query the result through an external accessibility client. The SDK's newer
 out-of-line vector trigonometric APIs are outside the scalar compatibility shim.
+Geolocation checks inject an owned NSObject manager double using the existing
+production test seam, validate synthetic updates and both authorization paths,
+and never start native location requests, display permission prompts or query
+Wi-Fi. Actual OS permission prompts and position delivery still need runtime
+validation on the supported systems.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -326,6 +338,9 @@ python3 legacy/test_fido_context.py
 python3 legacy/test_fido_context.py --force-legacy
 # Requires a retained accessibility_probe.rsp:
 python3 legacy/test_attributed_string.py
+# Build geolocation_probe with -d keeprsp before these isolated checks:
+python3 legacy/test_geolocation.py
+python3 legacy/test_geolocation.py --force-legacy
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

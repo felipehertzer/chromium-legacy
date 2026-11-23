@@ -12,6 +12,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
+#include "legacy/apple/location.h"
 #include "services/device/public/cpp/geolocation/location_manager_delegate.h"
 
 #if BUILDFLAG(IS_MAC)
@@ -34,8 +35,14 @@ bool SystemGeolocationSourceApple::IsWifiEnabled() {
     return *mock_wifi_status_;
   }
 #if BUILDFLAG(IS_MAC)
-  CWWiFiClient* wifi_client = [CWWiFiClient sharedWiFiClient];
-  CWInterface* interface = wifi_client.interface;
+  CWInterface* interface = nil;
+  if (@available(macOS 10.10, *)) {
+    interface = [CWWiFiClient sharedWiFiClient].interface;
+  } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    interface = [CWInterface interface];
+#endif
+  }
   return (interface && interface.powerOn);
 #else
   return true;
@@ -68,6 +75,10 @@ void SystemGeolocationSourceApple::RegisterPermissionUpdateCallback(
 }
 
 void SystemGeolocationSourceApple::PermissionUpdated() {
+  if (permission_request_only_ && [delegate_ permissionInitialized]) {
+    [location_manager_ stopUpdatingLocation];
+    permission_request_only_ = false;
+  }
   permission_update_callback_.Run(GetSystemPermission());
 }
 
@@ -118,6 +129,8 @@ void SystemGeolocationSourceApple::OnRequestLocationThrottleTimerFiring() {
 void SystemGeolocationSourceApple::StartWatchingPositionInternal(
     bool high_accuracy) {
   CHECK(main_task_runner_->BelongsToCurrentThread());
+  watching_position_ = true;
+  permission_request_only_ = false;
   watch_start_time_ = base::TimeTicks::Now();
   if (high_accuracy) {
     location_manager_.desiredAccuracy = kCLLocationAccuracyBest;
@@ -154,6 +167,8 @@ void SystemGeolocationSourceApple::StopWatchingPositionInternal() {
   request_throttle_timer_.Stop();
 #endif
   CHECK(main_task_runner_->BelongsToCurrentThread());
+  watching_position_ = false;
+  permission_request_only_ = false;
   [location_manager_ stopUpdatingLocation];
   // If `StopWatchingPosition` is called for any reason, stop the network status
   // event timer (which also cancel the pending fallback).
@@ -209,7 +224,21 @@ void SystemGeolocationSourceApple::OpenSystemPermissionSetting() {
 }
 
 void SystemGeolocationSourceApple::RequestPermission() {
+#if BUILDFLAG(IS_MAC)
+  if (chromium_legacy::ExplicitLocationAuthorizationAvailable()) {
+    if (@available(macOS 10.15, *))
+      [location_manager_ requestWhenInUseAuthorization];
+    return;
+  }
+  if (!watching_position_ && !permission_request_only_) {
+    // The first update request triggers the original native authorization UI.
+    // Stop this request when its answer arrives, unless a real watch starts.
+    permission_request_only_ = true;
+    [location_manager_ startUpdatingLocation];
+  }
+#else
   [location_manager_ requestWhenInUseAuthorization];
+#endif
 }
 
 void SystemGeolocationSourceApple::AddPositionUpdateObserver(
