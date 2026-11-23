@@ -3,7 +3,10 @@
 # found in the LICENSE file.
 
 import("//chrome/common/features.gni")
-import("//build/config/mac/mac_sdk.gni")
+
+if (is_mac) {
+  import("//build/config/mac/mac_sdk.gni")
+}
 
 assert(enable_service_discovery)
 
