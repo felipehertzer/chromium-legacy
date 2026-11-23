@@ -200,6 +200,13 @@ or replaces a Chromium 159 dependency.
   use LaunchServices registration, which may select another installed channel.
   Wi-Fi discovery uses the old named-interface lookup before 10.10 and Xbox
   device discovery uses IOKit's original null default port.
+- Native CUPS IPP abstractions require 10.9, matching their latest CUPS API.
+  Earlier systems reuse the current Chromium PPD backend/parser already used on
+  Linux, with original destination APIs and no dependency downgrade. macOS 10.8
+  retains its newer destination enumerator; Lion uses cupsGetDests2. The old HTTP
+  connector receives the requested encryption policy; it cannot enforce the
+  newer connect API's deadline. Unsupported destination-info objects are never
+  created or freed through an absent API.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -257,6 +264,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Real geolocation provider/authorization/callbacks/lifetime with injected manager | 17 normal and 17 forced checks | 17 normal and 17 forced checks |
 | Actual shortcut file parsing/writing/Unicode/malformed inputs | 16 checks passed | 16 checks passed |
 | System media decisions/callbacks; native controls remain active with the global fallback-test flag | 18 checks each mode | 18 checks each mode |
+| Real printing factory/current PPD parser/duplex/paper/resolution/metadata, normal and forced PPD backend | 16 checks each | 16 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -271,7 +279,8 @@ compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
 authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
-math, modal window helpers, geolocation callbacks, shortcut files, system media policy, timers, atomics, and
+math, modal window helpers, geolocation callbacks, shortcut files, system media policy, printing factory/PPD capabilities, timers,
+atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -316,7 +325,11 @@ checks use the existing wrapper test seam and do not access cameras/microphones,
 read real authorization decisions or display permission prompts. They verify the
 native decision mapping and callback contracts, including with the global
 fallback-test define; the pre-Mojave branch still needs Lion runtime validation.
-Wi-Fi discovery and Xbox device operations have compiler checks only.
+Wi-Fi discovery and Xbox device operations have compiler checks only. Printing
+checks use trusted synthetic PPD data and lazy backend construction; no printer
+or server is queried, no jobs are sent and no default printer is changed. Actual
+printer discovery/transport, printing UI and printing sandbox behavior still need
+browser runtime validation.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -363,6 +376,9 @@ python3 legacy/test_geolocation.py --force-legacy
 python3 legacy/test_shortcut_file.py
 python3 legacy/test_media_permissions.py
 python3 legacy/test_media_permissions.py --force-legacy
+# Build printing_probe with -d keeprsp before these isolated checks:
+python3 legacy/test_printing.py
+python3 legacy/test_printing.py --force-legacy
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

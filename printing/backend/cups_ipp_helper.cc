@@ -36,6 +36,11 @@
 #include "printing/backend/ipp_handlers.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
+#include "printing/backend/cups_compat.h"
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute push(__attribute__((availability(macos, introduced = 10.9))), apply_to = function)
+#endif
+
 namespace printing {
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -889,3 +894,6 @@ void FilterMediaColSizes(ScopedIppPtr& attributes) {
 }
 
 }  //  namespace printing
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute pop
+#endif

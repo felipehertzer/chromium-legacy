@@ -30,6 +30,11 @@
 #include "printing/backend/cups_weak_functions.h"
 #endif
 
+#include "printing/backend/cups_compat.h"
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute push(__attribute__((availability(macos, introduced = 10.9))), apply_to = function)
+#endif
+
 namespace printing {
 namespace {
 
@@ -714,3 +719,6 @@ bool GetCupsJobs(http_t* http,
 }
 
 }  // namespace printing
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute pop
+#endif

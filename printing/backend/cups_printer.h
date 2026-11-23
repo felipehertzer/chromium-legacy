@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "printing/backend/cups_compat.h"
 #include "printing/backend/cups_deleters.h"
 
 namespace printing {
@@ -58,7 +59,8 @@ class COMPONENT_EXPORT(PRINT_BACKEND) CupsOptionProvider {
 // Retrieves information from CUPS printer objects as requested.  This class
 // is only valid as long as the CupsConnection which created it exists as they
 // share an http connection which the CupsConnection closes on destruction.
-class COMPONENT_EXPORT(PRINT_BACKEND) CupsPrinter : public CupsOptionProvider {
+class COMPONENT_EXPORT(PRINT_BACKEND) PRINTING_CUPS_IPP_AVAILABLE CupsPrinter
+    : public CupsOptionProvider {
  public:
   ~CupsPrinter() override = default;
 

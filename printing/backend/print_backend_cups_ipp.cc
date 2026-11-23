@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include "printing/backend/print_backend_cups_ipp.h"
+#include "base/notreached.h"
+#include "url/gurl.h"
 
 #include <cups/cups.h>
 
@@ -22,6 +24,10 @@
 
 #if BUILDFLAG(IS_LINUX)
 #include "printing/backend/cups_weak_functions.h"
+#endif
+
+#if BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+#include "printing/backend/print_backend_cups.h"
 #endif
 
 namespace printing {
@@ -125,7 +131,17 @@ bool PrintBackendCupsIpp::IsValidPrinter(const std::string& printer_name) {
 // static
 scoped_refptr<PrintBackend> PrintBackend::CreateInstanceImpl(
     const std::string& locale) {
-  return base::MakeRefCounted<PrintBackendCupsIpp>(CupsConnection::Create());
+  if (NativeCupsIppAvailable()) {
+    if (__builtin_available(macOS 10.9, *))
+      return base::MakeRefCounted<PrintBackendCupsIpp>(
+          CupsConnection::Create());
+  }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+  return base::MakeRefCounted<PrintBackendCUPS>(GURL(), cupsEncryption(),
+                                                /*blocking=*/false, locale);
+#else
+  NOTREACHED();
+#endif
 }
 #endif  // BUILDFLAG(IS_MAC)
 

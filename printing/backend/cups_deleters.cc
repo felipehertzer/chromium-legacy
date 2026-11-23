@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include "printing/backend/cups_deleters.h"
+#include "base/check.h"
+#include "build/build_config.h"
 
 namespace printing {
 
@@ -15,7 +17,15 @@ void DestinationDeleter::operator()(cups_dest_t* dest) const {
 }
 
 void DestInfoDeleter::operator()(cups_dinfo_t* info) const {
+#if BUILDFLAG(IS_MAC)
+  if (__builtin_available(macOS 10.8, *)) {
+    cupsFreeDestInfo(info);
+    return;
+  }
+  CHECK(!info);  // Native destination-info objects cannot be created on Lion.
+#else
   cupsFreeDestInfo(info);
+#endif
 }
 
 void OptionDeleter::operator()(cups_option_t* option) const {

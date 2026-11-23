@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "printing/backend/cups_compat.h"
 #include "printing/backend/cups_deleters.h"
 #include "printing/backend/cups_jobs.h"
 #include "printing/backend/cups_printer.h"
@@ -18,7 +19,7 @@
 namespace printing {
 
 // Represents the status of a printer queue.
-struct COMPONENT_EXPORT(PRINT_BACKEND) QueueStatus {
+struct COMPONENT_EXPORT(PRINT_BACKEND) PRINTING_CUPS_IPP_AVAILABLE QueueStatus {
   QueueStatus();
   QueueStatus(const QueueStatus& other);
   ~QueueStatus();
@@ -28,7 +29,8 @@ struct COMPONENT_EXPORT(PRINT_BACKEND) QueueStatus {
 };
 
 // Represents a connection to a CUPS server.
-class COMPONENT_EXPORT(PRINT_BACKEND) CupsConnection {
+class COMPONENT_EXPORT(PRINT_BACKEND) PRINTING_CUPS_IPP_AVAILABLE
+    CupsConnection {
  public:
   virtual ~CupsConnection() = default;
 

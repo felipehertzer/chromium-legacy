@@ -3,6 +3,14 @@
 # found in the LICENSE file.
 
 import("//printing/buildflags/buildflags.gni")
+legacy_mac_cups_ppd = false
+if (is_mac) {
+  import("//build/config/mac/mac_sdk.gni")
+  _deployment_parts = string_split(mac_deployment_target, ".")
+  legacy_mac_cups_ppd =
+      _deployment_parts[0] == "10" &&
+      (_deployment_parts[1] == "7" || _deployment_parts[1] == "8")
+}
 if (use_cups && is_chromeos) {
   import("//printing/backend/tools/code_generator.gni")
 
@@ -75,6 +83,7 @@ component("backend") {
     public_configs += [ "//printing:cups" ]
 
     sources += [
+      "cups_compat.h",
       "cups_deleters.cc",
       "cups_deleters.h",
       "cups_helper.cc",
@@ -124,7 +133,7 @@ component("backend") {
       ]
     }
 
-    if (is_linux) {
+    if (is_linux || legacy_mac_cups_ppd) {
       sources += [
         "print_backend_cups.cc",
         "print_backend_cups.h",

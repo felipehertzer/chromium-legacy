@@ -16,18 +16,25 @@
 
 #include "base/component_export.h"
 #include "base/version.h"
+#include "printing/backend/cups_compat.h"
 #include "printing/printer_query_result.h"
 
 // This file contains a collection of functions used to query IPP printers or
 // print servers and the related code to parse these responses.  All Get*
 // operations block on the network request and cannot be run on the UI thread.
 
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute push(                                \
+    __attribute__((availability(macos, introduced = 10.9))), \
+    apply_to = function)
+#endif
+
 namespace printing {
 
 struct PrinterStatus;
 
 // Represents a print job sent to the queue.
-struct COMPONENT_EXPORT(PRINT_BACKEND) CupsJob {
+struct COMPONENT_EXPORT(PRINT_BACKEND) PRINTING_CUPS_IPP_AVAILABLE CupsJob {
   // Corresponds to job-state from RFC2911.
   enum JobState {
     UNKNOWN,
@@ -180,5 +187,8 @@ bool GetCupsJobs(http_t* http,
                  std::vector<CupsJob>* jobs);
 
 }  // namespace printing
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute pop
+#endif
 
 #endif  // PRINTING_BACKEND_CUPS_JOBS_H_

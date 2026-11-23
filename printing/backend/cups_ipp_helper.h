@@ -12,11 +12,18 @@
 #include <memory>
 
 #include "base/component_export.h"
+#include "printing/backend/cups_compat.h"
 #include "printing/backend/print_backend.h"
+
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute push(                                \
+    __attribute__((availability(macos, introduced = 10.9))), \
+    apply_to = function)
+#endif
 
 namespace printing {
 
-class CupsPrinter;
+class PRINTING_CUPS_IPP_AVAILABLE CupsPrinter;
 
 struct COMPONENT_EXPORT(PRINT_BACKEND) IppDeleter {
   void operator()(ipp_t* ipp) const;
@@ -76,5 +83,8 @@ COMPONENT_EXPORT(PRINT_BACKEND)
 void FilterMediaColSizes(ScopedIppPtr& attributes);
 
 }  // namespace printing
+#if BUILDFLAG(IS_MAC)
+#pragma clang attribute pop
+#endif
 
 #endif  // PRINTING_BACKEND_CUPS_IPP_HELPER_H_

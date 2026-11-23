@@ -34,7 +34,7 @@ constexpr int kProcessingJobsLimit = 10;
 // retrieve the last 3 in case that many finished between queries.
 constexpr int kCompletedJobsLimit = 3;
 
-class DestinationEnumerator {
+class PRINTING_CUPS_IPP_AVAILABLE DestinationEnumerator {
  public:
   DestinationEnumerator() {}
   DestinationEnumerator(const DestinationEnumerator&) = delete;
@@ -67,7 +67,7 @@ QueueStatus::QueueStatus(const QueueStatus& other) = default;
 
 QueueStatus::~QueueStatus() = default;
 
-class CupsConnectionImpl : public CupsConnection {
+class PRINTING_CUPS_IPP_AVAILABLE CupsConnectionImpl : public CupsConnection {
  public:
   CupsConnectionImpl() = default;
 

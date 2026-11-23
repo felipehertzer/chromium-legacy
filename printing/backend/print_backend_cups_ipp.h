@@ -8,13 +8,14 @@
 #include <memory>
 #include <string>
 
+#include "printing/backend/cups_compat.h"
 #include "printing/backend/cups_connection.h"
 #include "printing/backend/print_backend.h"
 #include "printing/mojom/print.mojom.h"
 
 namespace printing {
 
-class PrintBackendCupsIpp : public PrintBackend {
+class PRINTING_CUPS_IPP_AVAILABLE PrintBackendCupsIpp : public PrintBackend {
  public:
   explicit PrintBackendCupsIpp(std::unique_ptr<CupsConnection> connection);
 

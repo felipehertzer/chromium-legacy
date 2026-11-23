@@ -24,7 +24,9 @@
 #include "base/synchronization/lock.h"
 #include "printing/backend/cups_connection.h"
 #include "printing/backend/cups_helper.h"
+#if BUILDFLAG(IS_LINUX)
 #include "printing/backend/cups_weak_functions.h"
+#endif
 #include "printing/backend/print_backend_consts.h"
 #include "printing/backend/print_backend_cups_ipp.h"
 #include "printing/backend/print_backend_utils.h"
@@ -43,6 +45,9 @@ struct CupsDestsData {
   RAW_PTR_EXCLUSION cups_dest_t* dests;
 };
 
+#if BUILDFLAG(IS_MAC)
+API_AVAILABLE(macos(10.8))
+#endif
 int CaptureCupsDestCallback(void* data, unsigned flags, cups_dest_t* dest) {
   CupsDestsData* dests_data = reinterpret_cast<CupsDestsData*>(data);
   if (flags & CUPS_DEST_FLAGS_REMOVED) {
@@ -128,21 +133,30 @@ mojom::ResultCode PrintBackendCUPS::EnumeratePrinters(
   // filtering should any duplicates occur.
   CupsDestsData dests_data = {0, nullptr};
   ipp_status_t last_error = IPP_STATUS_OK;
-  if (print_server_url_.is_empty()) {
-    VLOG(1) << "CUPS: using cupsEnumDests to enumerate printers";
-    if (!cupsEnumDests(CUPS_DEST_FLAGS_NONE, kCupsTimeoutMs,
-                       /*cancel=*/nullptr,
-                       /*type=*/CUPS_PRINTER_LOCAL, kDestinationsFilterMask,
-                       CaptureCupsDestCallback, &dests_data)) {
-      // Free any allocations and reset data, and then fall through to common
-      // error handling below.
+  bool enumerate_locally = print_server_url_.is_empty();
+#if BUILDFLAG(IS_MAC)
+  bool native_enumeration = false;
+  if (__builtin_available(macOS 10.8, *))
+    native_enumeration = true;
+  enumerate_locally = enumerate_locally && native_enumeration;
+#endif
+  if (enumerate_locally) {
+    int success = 0;
+#if BUILDFLAG(IS_MAC)
+    if (__builtin_available(macOS 10.8, *))
+#endif
+    {
+      success = cupsEnumDests(CUPS_DEST_FLAGS_NONE, kCupsTimeoutMs, nullptr,
+                              CUPS_PRINTER_LOCAL, kDestinationsFilterMask,
+                              CaptureCupsDestCallback, &dests_data);
+    }
+    if (!success) {
       last_error = cupsLastError();
       cupsFreeDests(dests_data.num_dests, dests_data.dests);
       dests_data.num_dests = 0;
       dests_data.dests = nullptr;
     }
   } else {
-    VLOG(1) << "CUPS: using cupsGetDests2 to enumerate printers";
     dests_data.num_dests = GetDests(&dests_data.dests);
     if (!dests_data.num_dests)
       last_error = cupsLastError();
@@ -271,6 +285,7 @@ bool PrintBackendCUPS::IsValidPrinter(const std::string& printer_name) {
   return !!GetNamedDest(printer_name);
 }
 
+#if BUILDFLAG(IS_LINUX)
 // static
 scoped_refptr<PrintBackend> PrintBackend::CreateInstanceImpl(
     const std::string& locale) {
@@ -280,6 +295,8 @@ scoped_refptr<PrintBackend> PrintBackend::CreateInstanceImpl(
   return base::MakeRefCounted<PrintBackendCUPS>(
       GURL(), HTTP_ENCRYPT_NEVER, /*cups_blocking=*/false, locale);
 }
+
+#endif
 
 int PrintBackendCUPS::GetDests(cups_dest_t** dests) {
   // Default to the local print server (CUPS scheduler)

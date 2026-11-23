@@ -30,7 +30,7 @@
 
 namespace printing {
 
-class CupsPrinterImpl : public CupsPrinter {
+class PRINTING_CUPS_IPP_AVAILABLE CupsPrinterImpl : public CupsPrinter {
  public:
   CupsPrinterImpl(http_t* http, ScopedDestination dest)
       : cups_http_(http),

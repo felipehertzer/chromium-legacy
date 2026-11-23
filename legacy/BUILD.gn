@@ -78,6 +78,15 @@ if (is_mac) {
     frameworks = [ "CoreLocation.framework" ]
   }
 
+  executable("printing_probe") {
+    testonly = true
+    sources = [ "tests/printing_probe.cc" ]
+    deps = [
+      "//base",
+      "//printing/backend",
+    ]
+  }
+
   executable("sdk_probe") {
     testonly = true
     sources = [ "tests/sdk_probe.mm" ]

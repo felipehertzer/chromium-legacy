@@ -8,7 +8,8 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || \
+    (BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090)
 #include <cups/ppd.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -42,7 +43,8 @@
 #include "printing/backend/cups_weak_functions.h"
 #endif
 
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || \
+    (BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090)
 using base::EqualsCaseInsensitiveASCII;
 #endif  // BUILDFLAG(IS_LINUX)
 
@@ -55,7 +57,8 @@ namespace {
 // able to start and respond on all systems within this duration.
 constexpr base::TimeDelta kCupsTimeout = base::Seconds(5);
 
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || \
+    (BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090)
 // CUPS default max copies value (parsed from kCupsMaxCopies PPD attribute).
 constexpr int32_t kDefaultMaxCopies = 9999;
 constexpr char kCupsMaxCopies[] = "cupsMaxCopies";
@@ -761,7 +764,8 @@ const int kDefaultIPPServerPort = 631;
 
 }  // namespace
 
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || \
+    (BUILDFLAG(IS_MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090)
 // Helper wrapper around http_t structure, with connection and cleanup
 // functionality.
 HttpConnectionCUPS::HttpConnectionCUPS(const GURL& print_server_url,
@@ -992,6 +996,24 @@ ScopedHttpPtr HttpConnect2(const char* host,
     httpBlocking(http.get(), blocking ? 1 : 0);
   }
 
+  return http;
+#elif BUILDFLAG(IS_MAC)
+  ScopedHttpPtr http;
+  if (__builtin_available(macOS 10.9, *)) {
+    http.reset(httpConnect2(host, port, nullptr, AF_UNSPEC, encryption,
+                            blocking ? 1 : 0, kCupsTimeout.InMilliseconds(),
+                            nullptr));
+  } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+    // Retain the requested encryption policy using the original CUPS API.
+    // Its connect operation cannot enforce httpConnect2's deadline.
+    http.reset(httpConnectEncrypt(host, port, encryption));
+    if (http)
+      httpBlocking(http.get(), blocking ? 1 : 0);
+#endif
+  }
+  if (!http)
+    LOG(ERROR) << "CP_CUPS: Failed connecting to print server: " << host;
   return http;
 #else
   ScopedHttpPtr http(httpConnect2(
