@@ -1816,6 +1816,7 @@ source_set("core") {
     ]
 
     deps += [
+      "//legacy:platform_support",
       ":app_controller_mac",
       ":chrome_browser_application_mac",
       ":chrome_browser_main_mac",

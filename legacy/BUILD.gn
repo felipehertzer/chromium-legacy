@@ -7,6 +7,7 @@ import("//build/rust/rust_executable.gni")
 source_set("platform_support") {
   sources = [
     "apple/accessibility.h",
+    "apple/appearance.h",
     "apple/atomic_wait.h",
     "apple/audit_token.h",
     "apple/clock.h",

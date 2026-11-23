@@ -20,6 +20,7 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
+#include "legacy/apple/appearance.h"
 #include "ui/gfx/scoped_ns_graphics_context_save_gstate_mac.h"
 
 using content::RenderProcessHost;
@@ -306,14 +307,23 @@ void ThemeHelperMac::LoadSystemColorsForCurrentAppearance(
         break;
       }
       case blink::MacSystemColorID::kControlAccentColor:
-        values[i] = NSColorToSkColor(NSColor.controlAccentColor);
+        if (@available(macOS 10.14, *)) {
+          values[i] = NSColorToSkColor(NSColor.controlAccentColor);
+        } else {
+          values[i] = NSColorToSkColor(
+              [NSColor colorForControlTint:NSColor.currentControlTint]);
+        }
         break;
       case blink::MacSystemColorID::kKeyboardFocusIndicator:
         values[i] = NSColorToSkColor(NSColor.keyboardFocusIndicatorColor);
         break;
       case blink::MacSystemColorID::kSecondarySelectedControl:
-        values[i] = NSColorToSkColor(
-            NSColor.unemphasizedSelectedContentBackgroundColor);
+        if (@available(macOS 10.14, *)) {
+          values[i] = NSColorToSkColor(
+              NSColor.unemphasizedSelectedContentBackgroundColor);
+        } else {
+          values[i] = NSColorToSkColor(NSColor.secondarySelectedControlColor);
+        }
         break;
       case blink::MacSystemColorID::kSelectedTextBackground:
         values[i] = NSColorToSkColor(NSColor.selectedTextBackgroundColor);
@@ -330,17 +340,17 @@ void ThemeHelperMac::LoadSystemColors() {
   base::span<SkColor> values = writable_color_map_.GetMemoryAsSpan<SkColor>(
       blink::kMacSystemColorIDCount * blink::kMacSystemColorSchemeCount);
 
-  [[NSAppearance appearanceNamed:NSAppearanceNameAqua]
-      performAsCurrentDrawingAppearance:^{
+  chromium_legacy::WithAppearance(
+      false, ^{
         LoadSystemColorsForCurrentAppearance(
             values.first<blink::kMacSystemColorIDCount>());
-      }];
-  [[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]
-      performAsCurrentDrawingAppearance:^{
+      });
+  chromium_legacy::WithAppearance(
+      true, ^{
         LoadSystemColorsForCurrentAppearance(
             values.subspan<blink::kMacSystemColorIDCount,
                            blink::kMacSystemColorIDCount>());
-      }];
+      });
 }
 
 void ThemeHelperMac::OnRenderProcessHostCreated(

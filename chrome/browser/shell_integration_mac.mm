@@ -5,6 +5,7 @@
 #include "chrome/browser/shell_integration.h"
 
 #include <AppKit/AppKit.h>
+#include <CoreServices/CoreServices.h>
 #include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include "base/apple/bridging.h"
@@ -41,16 +42,20 @@ NSString* GetBundleIdForDefaultAppForScheme(NSString* scheme) {
 // Returns the bundle ID of the default client application for `type`, or nil on
 // failure.
 NSString* GetBundleIdForDefaultAppForUTType(NSString* type) {
-  UTType* uttype = [UTType typeWithIdentifier:type];
-  if (!uttype) {
-    return nil;
+  if (@available(macOS 12.0, *)) {
+    UTType* uttype = [UTType typeWithIdentifier:type];
+    if (!uttype) {
+      return nil;
+    }
+    NSURL* default_app_url =
+        [NSWorkspace.sharedWorkspace URLForApplicationToOpenContentType:uttype];
+    if (!default_app_url) {
+      return nil;
+    }
+    return [NSBundle bundleWithURL:default_app_url].bundleIdentifier;
   }
-  NSURL* default_app_url =
-      [NSWorkspace.sharedWorkspace URLForApplicationToOpenContentType:uttype];
-  if (!default_app_url) {
-    return nil;
-  }
-  return [NSBundle bundleWithURL:default_app_url].bundleIdentifier;
+  return CFBridgingRelease(LSCopyDefaultRoleHandlerForContentType(
+      (__bridge CFStringRef)type, kLSRolesAll));
 }
 
 }  // namespace
@@ -63,32 +68,47 @@ bool SetAsDefaultBrowser() {
     return false;
   }
 
-  [NSWorkspace.sharedWorkspace
-      setDefaultApplicationAtURL:app_bundle
-            toOpenURLsWithScheme:@"http"
-               completionHandler:^(NSError* err) {
-                 // If the user declined the system permission dialog (e.g.,
-                 // "Keep Safari" was chosen), attempting to set app_bundle as
-                 // the https handler will result in the user being prompted a
-                 // second time (https://crbug.com/496408111).
-                 if (err) {
-                   return;
-                 }
+  if (@available(macOS 12.0, *)) {
+    [NSWorkspace.sharedWorkspace
+        setDefaultApplicationAtURL:app_bundle
+              toOpenURLsWithScheme:@"http"
+                 completionHandler:^(NSError* err) {
+                   // If the user declined the system permission dialog (e.g.,
+                   // "Keep Safari" was chosen), attempting to set app_bundle as
+                   // the https handler will result in the user being prompted a
+                   // second time (https://crbug.com/496408111).
+                   if (err) {
+                     return;
+                   }
 
-                 [NSWorkspace.sharedWorkspace
-                     setDefaultApplicationAtURL:app_bundle
-                           toOpenURLsWithScheme:@"https"
-                              completionHandler:nil];
-               }];
+                   [NSWorkspace.sharedWorkspace
+                       setDefaultApplicationAtURL:app_bundle
+                             toOpenURLsWithScheme:@"https"
+                                completionHandler:nil];
+                 }];
 
-  // On macOS 26.4+, setting the HTML content type triggers a separate Finder
-  // confirmation dialog in addition to the System Settings dialog for URL
-  // schemes, resulting in duplicate prompts. Skip the content type registration
-  // on affected versions to avoid this. See https://crbug.com/496408111.
-  if (base::mac::MacOSVersion() < 26'04'00) {
-    [NSWorkspace.sharedWorkspace setDefaultApplicationAtURL:app_bundle
-                                          toOpenContentType:UTTypeHTML
-                                          completionHandler:nil];
+    // On macOS 26.4+, setting the HTML content type triggers a separate Finder
+    // confirmation dialog in addition to the System Settings dialog for URL
+    // schemes, resulting in duplicate prompts. Skip the content type
+    // registration on affected versions to avoid this. See
+    // https://crbug.com/496408111.
+    if (base::mac::MacOSVersion() < 26'04'00) {
+      [NSWorkspace.sharedWorkspace setDefaultApplicationAtURL:app_bundle
+                                            toOpenContentType:UTTypeHTML
+                                            completionHandler:nil];
+    }
+  } else {
+    NSString* identifier = base::apple::OuterBundle().bundleIdentifier;
+    if (!identifier.length) {
+      return false;
+    }
+    CFStringRef bundle_id = (__bridge CFStringRef)identifier;
+    if (LSSetDefaultHandlerForURLScheme(CFSTR("http"), bundle_id) != noErr ||
+        LSSetDefaultHandlerForURLScheme(CFSTR("https"), bundle_id) != noErr ||
+        LSSetDefaultRoleHandlerForContentType(kUTTypeHTML, kLSRolesAll,
+                                              bundle_id) != noErr) {
+      return false;
+    }
   }
   // TODO(https://crbug.com/40248220): Passing empty completion handlers,
   // above, is kinda broken, but given that this API is synchronous, nothing
@@ -130,11 +150,21 @@ bool SetAsDefaultClientForScheme(const std::string& scheme) {
     return false;
   }
 
-  [NSWorkspace.sharedWorkspace
-      setDefaultApplicationAtURL:app_bundle
-            toOpenURLsWithScheme:base::SysUTF8ToNSString(scheme)
-               completionHandler:^(NSError*){
-               }];
+  if (@available(macOS 12.0, *)) {
+    [NSWorkspace.sharedWorkspace
+        setDefaultApplicationAtURL:app_bundle
+              toOpenURLsWithScheme:base::SysUTF8ToNSString(scheme)
+                 completionHandler:^(NSError*){
+                 }];
+  } else {
+    NSString* identifier = base::apple::MainBundle().bundleIdentifier;
+    if (!identifier.length ||
+        LSSetDefaultHandlerForURLScheme(
+            (__bridge CFStringRef)base::SysUTF8ToNSString(scheme),
+            (__bridge CFStringRef)identifier) != noErr) {
+      return false;
+    }
+  }
 
   // TODO(https://crbug.com/40248220): Passing empty completion handlers,
   // above, is kinda broken, but given that this API is synchronous, nothing
@@ -146,19 +176,35 @@ bool SetAsDefaultHandlerForUTType(const std::string& type) {
   if (type.empty()) {
     return false;
   }
-  UTType* uttype = [UTType typeWithIdentifier:base::SysUTF8ToNSString(type)];
-  if (!uttype) {
-    return false;
-  }
   NSURL* app_bundle = base::apple::OuterBundleURL();
   if (!app_bundle) {
     return false;
   }
-  [NSWorkspace.sharedWorkspace setDefaultApplicationAtURL:app_bundle
-                                        toOpenContentType:uttype
-                                        completionHandler:^(NSError*){
-                                        }];
-  return true;
+  NSString* type_identifier = base::SysUTF8ToNSString(type);
+  if (@available(macOS 12.0, *)) {
+    UTType* uttype = [UTType typeWithIdentifier:type_identifier];
+    if (!uttype) {
+      return false;
+    }
+    [NSWorkspace.sharedWorkspace setDefaultApplicationAtURL:app_bundle
+                                          toOpenContentType:uttype
+                                          completionHandler:^(NSError*){
+                                          }];
+    return true;
+  }
+  CFStringRef uti = (__bridge CFStringRef)type_identifier;
+  NSString* identifier = base::apple::OuterBundle().bundleIdentifier;
+  bool valid_type;
+  if (@available(macOS 10.10, *)) {
+    valid_type = UTTypeIsDeclared(uti) || UTTypeIsDynamic(uti);
+  } else {
+    base::apple::ScopedCFTypeRef<CFDictionaryRef> declaration(
+        UTTypeCopyDeclaration(uti));
+    valid_type = !!declaration;
+  }
+  return identifier.length && valid_type &&
+         LSSetDefaultRoleHandlerForContentType(
+             uti, kLSRolesAll, (__bridge CFStringRef)identifier) == noErr;
 }
 
 std::u16string GetApplicationNameForScheme(const GURL& url) {
@@ -184,8 +230,14 @@ std::vector<base::FilePath> GetAllApplicationPathsForURL(const GURL& url) {
     return {};
   }
 
-  NSArray* app_urls =
-      [NSWorkspace.sharedWorkspace URLsForApplicationsToOpenURL:ns_url];
+  NSArray* app_urls;
+  if (@available(macOS 12.0, *)) {
+    app_urls =
+        [NSWorkspace.sharedWorkspace URLsForApplicationsToOpenURL:ns_url];
+  } else {
+    app_urls = CFBridgingRelease(
+        LSCopyApplicationURLsForURL((__bridge CFURLRef)ns_url, kLSRolesAll));
+  }
   if (app_urls.count == 0) {
     return {};
   }

@@ -28,10 +28,12 @@
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/drop_data.h"
+#include "legacy/apple/file_type.h"
 #include "net/base/apple/url_conversions.h"
 #include "net/base/filename_util.h"
 #include "net/base/mime_util.h"
 #include "ui/base/clipboard/clipboard_constants.h"
+#include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/custom_data_helper.h"
 #include "ui/base/cocoa/cocoa_base_utils.h"
 #include "url/origin.h"
@@ -63,7 +65,7 @@
   GURL _downloadURL;
 
   // The file type associated with the file drag, if any.
-  UTType* __strong _fileType;
+  NSString* __strong _fileType;
 }
 
 - (instancetype)initWithHost:(remote_cocoa::mojom::WebContentsNSViewHost*)host
@@ -110,11 +112,12 @@
 
   // URL (and title).
   if (!_dropData.url_infos.empty()) {
-    [writableTypes addObject:NSPasteboardTypeURL];
+    [writableTypes addObject:ui::ClipboardFormatType::UrlType().ToNSString()];
     [writableTypes addObject:ui::kUTTypeUrlName];
     // Advertise kUTTypeWebKitWebUrlsWithTitles so Chromium/WebKit receivers can
     // recover the complete URL/title list via ReadWebURLsWithTitlesPboardType.
-    // NSPasteboardTypeURL exposes only the first URL on the primary item.
+    // ui::ClipboardFormatType::UrlType().ToNSString() exposes only the first
+    // URL on the primary item.
     [writableTypes addObject:ui::kUTTypeWebKitWebUrlsWithTitles];
   }
 
@@ -147,7 +150,8 @@
     }
 
     if (!mimeType.empty()) {
-      _fileType = [UTType typeWithMIMEType:base::SysUTF8ToNSString(mimeType)];
+      _fileType = chromium_legacy::FileTypeForMimeType(
+          base::SysUTF8ToNSString(mimeType));
 
       // The website might have provided a bogus MIME type in
       // `download_metadata`; only proceed if it is valid
@@ -155,7 +159,7 @@
       if (_fileType) {
         // Promise both the file's contents...
         if (!_dropData.file_contents.empty()) {
-          [writableTypes addObject:_fileType.identifier];
+          [writableTypes addObject:_fileType];
         }
 
         // ... and materialization of the file if requested.
@@ -191,7 +195,7 @@
   // and for JS-constructed File objects. The MIME type is tested to avoid
   // sending non-image data through the image-specific HTML pasteboard type.)
   bool hasImageData = !_dropData.file_contents.empty() && _fileType &&
-                      [_fileType conformsToType:UTTypeImage];
+                      chromium_legacy::FileTypeIsImage(_fileType);
   if (hasHTMLData) {
     if (hasImageData) {
       [writableTypes addObject:ui::kUTTypeChromiumImageAndHtml];
@@ -227,7 +231,7 @@
   }
 
   // URL.
-  if ([type isEqualToString:NSPasteboardTypeURL]) {
+  if ([type isEqualToString:ui::ClipboardFormatType::UrlType().ToNSString()]) {
     DCHECK(!_dropData.url_infos.empty());
     NSURL* url = net::NSURLWithGURL(_dropData.url_infos.front().url);
     // If NSURL creation failed, check for a badly-escaped JavaScript URL.
@@ -275,7 +279,7 @@
   }
 
   // File contents.
-  if ([type isEqualToString:_fileType.identifier]) {
+  if ([type isEqualToString:_fileType]) {
     return [NSData dataWithBytes:_dropData.file_contents.data()
                           length:_dropData.file_contents.size()];
   }
@@ -283,7 +287,7 @@
   // File instantiation promise.
   if ([type isEqualToString:base::apple::CFToNSPtrCast(
                                 kPasteboardTypeFilePromiseContent)]) {
-    return _fileType.identifier;
+    return _fileType;
   }
   if ([type isEqualToString:base::apple::CFToNSPtrCast(
                                 kPasteboardTypeFileURLPromise)]) {
@@ -292,8 +296,7 @@
     // that function does is pull the location from "com.apple.pastelocation".
     // Therefore, do that directly rather than indirecting to a different API
     // set that does no useful bridging.
-    NSPasteboard* pasteboard =
-        [NSPasteboard pasteboardWithName:NSPasteboardNameDrag];
+    NSPasteboard* pasteboard = [NSPasteboard pasteboardWithName:NSDragPboard];
     NSString* dropDestination =
         [pasteboard stringForType:@"com.apple.pastelocation"];
     if (!dropDestination || !_host) {

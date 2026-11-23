@@ -7,6 +7,7 @@
 #import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+#include "base/apple/bridging.h"
 #include "base/apple/foundation_util.h"
 #include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
@@ -14,6 +15,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
+#include "legacy/apple/file_type.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_util_mac.h"
 
@@ -25,12 +27,10 @@ IconLoader::IconGroup IconLoader::GroupForFilepath(
   // The last and worst option is to fall back to `public.content` which will
   // give a generic file icon.
 
-  UTType* type;
-  NSURL* file_url = base::apple::FilePathToNSURL(file_path);
-  if (file_url && [file_url getResourceValue:&type
-                                      forKey:NSURLContentTypeKey
-                                       error:nil]) {
-    return base::SysNSStringToUTF8(type.identifier);
+  NSString* identifier =
+      chromium_legacy::FileTypeForURL(base::apple::FilePathToNSURL(file_path));
+  if (identifier) {
+    return base::SysNSStringToUTF8(identifier);
   }
 
   std::string extension_string = file_path.FinalExtension();
@@ -38,14 +38,14 @@ IconLoader::IconGroup IconLoader::GroupForFilepath(
     // Remove the leading dot.
     extension_string.erase(extension_string.begin());
 
-    type = [UTType
-        typeWithFilenameExtension:base::SysUTF8ToNSString(extension_string)];
-    if (type) {
-      return base::SysNSStringToUTF8(type.identifier);
+    identifier = chromium_legacy::FileTypeForExtension(
+        base::SysUTF8ToNSString(extension_string));
+    if (identifier) {
+      return base::SysNSStringToUTF8(identifier);
     }
   }
 
-  return base::SysNSStringToUTF8(UTTypeContent.identifier);
+  return base::SysNSStringToUTF8(base::apple::CFToNSPtrCast(kUTTypeContent));
 }
 
 // static
@@ -55,8 +55,14 @@ scoped_refptr<base::TaskRunner> IconLoader::GetReadIconTaskRunner() {
 }
 
 void IconLoader::ReadIcon() {
-  UTType* type = [UTType typeWithIdentifier:base::SysUTF8ToNSString(group_)];
-  NSImage* icon = [NSWorkspace.sharedWorkspace iconForContentType:type];
+  NSString* identifier = base::SysUTF8ToNSString(group_);
+  NSImage* icon;
+  if (@available(macOS 11.0, *)) {
+    icon = [NSWorkspace.sharedWorkspace
+        iconForContentType:[UTType typeWithIdentifier:identifier]];
+  } else {
+    icon = [NSWorkspace.sharedWorkspace iconForFileType:identifier];
+  }
 
   gfx::Image image;
   if (icon_size_ == ALL) {

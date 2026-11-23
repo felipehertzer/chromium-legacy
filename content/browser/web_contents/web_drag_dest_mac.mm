@@ -32,6 +32,7 @@
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "content/public/browser/web_drag_dest_delegate.h"
 #include "content/public/common/drop_data.h"
+#include "legacy/apple/file_type.h"
 #include "net/base/filename_util.h"
 #include "net/base/mime_util.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
@@ -865,8 +866,7 @@ DropData PopulateDropDataFromPasteboard(NSPasteboard* pboard) {
   // scavenge any generic images that might be present.
   if (file_data.length == 0 && drop_data.filenames.empty()) {
     for (NSString* type in types) {
-      UTType* utType = [UTType typeWithIdentifier:type];
-      if (utType && [utType conformsToType:UTTypeImage]) {
+      if (chromium_legacy::FileTypeIsImage(type)) {
         NSData* data = [pboard dataForType:type];
         if (data) {
           file_data = data;
@@ -883,10 +883,11 @@ DropData PopulateDropDataFromPasteboard(NSPasteboard* pboard) {
         base::ToVector(base::apple::NSDataToSpan(file_data));
 
     if (content_type_id) {
-      UTType* utType = [UTType typeWithIdentifier:content_type_id];
-      if (utType && utType.preferredFilenameExtension) {
+      NSString* extension =
+          chromium_legacy::PreferredExtensionForFileType(content_type_id);
+      if (extension) {
         drop_data.file_contents_filename_extension =
-            base::SysNSStringToUTF8(utType.preferredFilenameExtension);
+            base::SysNSStringToUTF8(extension);
       }
     }
 
