@@ -85,7 +85,8 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
   // may be passed in |authentication_context|, in order to authorize
   // credentials returned by the `Find*` instance methods for signing without
   // triggering a Touch ID prompt.
-  void SetAuthenticationContext(LAContext* authentication_context);
+  void SetAuthenticationContext(LAContext* authentication_context)
+      API_AVAILABLE(macos(10.12.2));
 #endif  // __OBJC__
 
   // CreateCredential inserts a new credential into the keychain. It returns

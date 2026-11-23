@@ -41,6 +41,11 @@ GetAssertionOperation::GetAssertionOperation(
 GetAssertionOperation::~GetAssertionOperation() = default;
 
 void GetAssertionOperation::Run() {
+  if (!touch_id_context_) {
+    std::move(callback_).Run(GetAssertionStatus::kAuthenticatorResponseInvalid,
+                             {});
+    return;
+  }
   const bool empty_allow_list = request_.allow_list.empty();
   std::optional<std::list<Credential>> credentials =
       empty_allow_list
@@ -93,8 +98,13 @@ void GetAssertionOperation::PromptTouchIdDone(bool success) {
 
   // Re-fetch credentials with the now evaluated LAContext, so that making
   // signatures does not trigger yet another Touch ID prompt.
-  credential_store_->SetAuthenticationContext(
-      touch_id_context_->authentication_context());
+  if (@available(macOS 10.12.2, *)) {
+    credential_store_->SetAuthenticationContext(
+        touch_id_context_->authentication_context());
+  } else {
+    std::move(callback_).Run(GetAssertionStatus::kUserConsentDenied, {});
+    return;
+  }
 
   std::optional<std::list<Credential>> credentials =
       request_.allow_list.empty()

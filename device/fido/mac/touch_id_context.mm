@@ -31,8 +31,19 @@ namespace device::fido::mac {
 
 namespace {
 
+bool NativeTouchIdSupported() {
+#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  return false;
+#else
+  if (@available(macOS 10.12.2, *))
+    return true;
+  return false;
+#endif
+}
+
 // Returns whether creating a key pair in the secure enclave succeeds. Keys are
 // not persisted to the keychain.
+API_AVAILABLE(macos(10.12.2))
 bool CanCreateSecureEnclaveKeyPairBlocking() {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
@@ -53,6 +64,7 @@ bool CanCreateSecureEnclaveKeyPairBlocking() {
   return !!private_key;
 }
 
+API_AVAILABLE(macos(10.12.2))
 base::apple::ScopedCFTypeRef<SecAccessControlRef> CreateDefaultAccessControl() {
   return base::apple::ScopedCFTypeRef<SecAccessControlRef>(
       SecAccessControlCreateWithFlags(
@@ -65,7 +77,13 @@ base::apple::ScopedCFTypeRef<SecAccessControlRef> CreateDefaultAccessControl() {
 
 // static
 std::unique_ptr<TouchIdContext> TouchIdContext::CreateImpl() {
-  return base::WrapUnique(new TouchIdContext());
+  if (!NativeTouchIdSupported())
+    return nullptr;
+  if (@available(macOS 10.12.2, *)) {
+    auto context = base::WrapUnique(new TouchIdContext());
+    return context->context_ ? std::move(context) : nullptr;
+  }
+  return nullptr;
 }
 
 // static
@@ -80,32 +98,38 @@ std::unique_ptr<TouchIdContext> TouchIdContext::Create() {
 
 // static
 bool TouchIdContext::TouchIdAvailableImpl(AuthenticatorConfig config) {
-  // Ensure that the main executable is signed with the keychain-access-group
-  // entitlement that is configured by the embedder; that user authentication
-  // with biometry, watch, or device passcode possible; and that the device has
-  // a secure enclave.
-  if (!crypto::apple::ExecutableHasKeychainAccessGroupEntitlement(
-          config.keychain_access_group)) {
-    FIDO_LOG(ERROR)
-        << "Touch ID authenticator unavailable because keychain-access-group "
-           "entitlement is missing or incorrect. Expected value: "
-        << config.keychain_access_group;
+  if (!NativeTouchIdSupported())
     return false;
-  }
+  if (@available(macOS 10.12.2, *)) {
+    // Ensure that the main executable is signed with the keychain-access-group
+    // entitlement that is configured by the embedder; that user authentication
+    // with biometry, watch, or device passcode possible; and that the device
+    // has a secure enclave.
+    if (!crypto::apple::ExecutableHasKeychainAccessGroupEntitlement(
+            config.keychain_access_group)) {
+      FIDO_LOG(ERROR)
+          << "Touch ID authenticator unavailable because keychain-access-group "
+             "entitlement is missing or incorrect. Expected value: "
+          << config.keychain_access_group;
+      return false;
+    }
 
-  LAContext* context = [[LAContext alloc] init];
-  NSError* nserr;
-  if (![context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
-                            error:&nserr]) {
-    FIDO_LOG(DEBUG) << "canEvaluatePolicy failed: " << nserr;
-    return false;
-  }
+    LAContext* context = [[LAContext alloc] init];
+    NSError* nserr = nil;
+    if (![context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication
+                              error:&nserr]) {
+      FIDO_LOG(DEBUG) << "canEvaluatePolicy failed: " << nserr;
+      return false;
+    }
 
-  // CryptoKit offers a SecureEnclave.isAvailable property, but no ObjectiveC
-  // bindings exist. Instead, test whether we can create a key pair in the
-  // secure enclave. This takes hundreds of milliseconds, so only do it once.
-  static const bool kHasSecureEnclave = CanCreateSecureEnclaveKeyPairBlocking();
-  return kHasSecureEnclave;
+    // CryptoKit offers a SecureEnclave.isAvailable property, but no ObjectiveC
+    // bindings exist. Instead, test whether we can create a key pair in the
+    // secure enclave. This takes hundreds of milliseconds, so only do it once.
+    static const bool kHasSecureEnclave =
+        CanCreateSecureEnclaveKeyPairBlocking();
+    return kHasSecureEnclave;
+  }
+  return false;
 }
 
 // Testing seam to allow faking Touch ID in tests.
@@ -124,13 +148,19 @@ void TouchIdContext::TouchIdAvailable(
       std::move(callback));
 }
 
-TouchIdContext::TouchIdContext() : context_([[LAContext alloc] init]) {}
+TouchIdContext::TouchIdContext() {
+  if (@available(macOS 10.12.2, *)) {
+    context_ = [[LAContext alloc] init];
+  }
+}
 
 TouchIdContext::~TouchIdContext() {
   // Invalidating the LAContext will dismiss any pending UI dialog (e.g. if the
   // transaction was cancelled while we are waiting for a fingerprint). Simply
   // releasing the LAContext does not have the same effect.
-  [context_ invalidate];
+  if (@available(macOS 10.12.2, *)) {
+    [context_ invalidate];
+  }
 }
 
 void TouchIdContext::PromptTouchId(const std::u16string& reason,
@@ -139,38 +169,48 @@ void TouchIdContext::PromptTouchId(const std::u16string& reason,
   scoped_refptr<base::SequencedTaskRunner> runner =
       base::SequencedTaskRunner::GetCurrentDefault();
   auto weak_self = weak_ptr_factory_.GetWeakPtr();
-  // Generate a SecAccessControl that can be used for obtaining signatures.
-  // For current credentials we can actually obtain signatures without the
-  // SecAccessControl, but for older credentials we used kSecAttrAccessControl
-  // attribute to ensure the keychain would only produce signatures in exchange
-  // for biometrics or device password.
-  base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control =
-      CreateDefaultAccessControl();
-  [context_ evaluateAccessControl:access_control.get()
-                        operation:LAAccessControlOperationUseKeySign
-                  localizedReason:base::SysUTF16ToNSString(reason)
-                            reply:^(BOOL success, NSError* error) {
-                              // The reply block is invoked in a separate
-                              // thread. We want to invoke the callback in the
-                              // original thread, so we post it onto the
-                              // originating runner. The weak_self and runner
-                              // variables inside the block are const-copies of
-                              // the ones in the enclosing scope (c.f.
-                              // http://clang.llvm.org/docs/Block-ABI-Apple.html#imported-variables).
-                              if (!success) {
-                                // |error| is autoreleased in this block. It
-                                // is not currently passed onto the other
-                                // thread running the callback; but if it
-                                // were, it would have to be retained first.
-                                DCHECK(error != nil);
-                                DVLOG(1) << "Touch ID prompt failed: "
-                                         << base::apple::NSToCFPtrCast(error);
-                              }
-                              runner->PostTask(
-                                  FROM_HERE,
-                                  base::BindOnce(&TouchIdContext::RunCallback,
-                                                 weak_self, success));
-                            }];
+  if (@available(macOS 10.12.2, *)) {
+    // Generate a SecAccessControl that can be used for obtaining signatures.
+    // For current credentials we can actually obtain signatures without the
+    // SecAccessControl, but for older credentials we used kSecAttrAccessControl
+    // attribute to ensure the keychain would only produce signatures in
+    // exchange for biometrics or device password.
+    base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control =
+        CreateDefaultAccessControl();
+    if (!access_control) {
+      runner->PostTask(FROM_HERE, base::BindOnce(&TouchIdContext::RunCallback,
+                                                 weak_self, false));
+      return;
+    }
+    [context_ evaluateAccessControl:access_control.get()
+                          operation:LAAccessControlOperationUseKeySign
+                    localizedReason:base::SysUTF16ToNSString(reason)
+                              reply:^(BOOL success, NSError* error) {
+                                // The reply block is invoked in a separate
+                                // thread. We want to invoke the callback in the
+                                // original thread, so we post it onto the
+                                // originating runner. The weak_self and runner
+                                // variables inside the block are const-copies
+                                // of the ones in the enclosing scope (c.f.
+                                // http://clang.llvm.org/docs/Block-ABI-Apple.html#imported-variables).
+                                if (!success) {
+                                  // |error| is autoreleased in this block. It
+                                  // is not currently passed onto the other
+                                  // thread running the callback; but if it
+                                  // were, it would have to be retained first.
+                                  DCHECK(error != nil);
+                                  DVLOG(1) << "Touch ID prompt failed: "
+                                           << base::apple::NSToCFPtrCast(error);
+                                }
+                                runner->PostTask(
+                                    FROM_HERE,
+                                    base::BindOnce(&TouchIdContext::RunCallback,
+                                                   weak_self, success));
+                              }];
+  } else {
+    runner->PostTask(FROM_HERE, base::BindOnce(&TouchIdContext::RunCallback,
+                                               weak_self, false));
+  }
 }
 
 void TouchIdContext::RunCallback(bool success) {

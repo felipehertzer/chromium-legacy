@@ -155,6 +155,15 @@ or replaces a Chromium 159 dependency.
   original Auto Layout equalities and labels on older systems; Finder tags
   require 10.9. Headless windows do not swizzle an absent occlusion selector.
   Optional AVFAudio/UniformTypeIdentifiers frameworks remain weak-linked.
+- The native Touch ID provider requires 10.12.2 and still checks its signing
+  entitlement and Secure Enclave. Unsupported context creation returns null;
+  unavailable signing/export operations fail, and absent access-control objects
+  cannot create less-restricted keys. User-verification callbacks retain their
+  original sequence and report failure when native authentication is unavailable.
+- HID/serial use IOKit's original null default port. Wi-Fi interface discovery
+  uses CWInterface before CWWiFiClient/10.10; the scan/permission path is unchanged.
+  Attributed-text conversion keeps its borrowed autorelease-pool lifetime through
+  ARC instead of requiring CFAutorelease/10.9, and retains old font selectors.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -205,6 +214,8 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
 | Quarantine attributes/flags/metadata, normal and forced old APIs | 11 checks each | 13 checks each |
 | Menu drawing/flipped context/file-extension types, normal and forced old APIs | 21 checks each | 21 checks each |
+| Native authentication context factory/eligibility/callbacks | 6 normal and 5 forced unavailable checks | 6 normal and 5 forced unavailable checks |
+| Attributed-text lifetime/Unicode/font/range conversion | 9 checks passed | 9 checks passed |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -218,7 +229,7 @@ Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
-timers, atomics, and
+authentication contexts, attributed-text conversion, timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -243,7 +254,11 @@ Quarantine checks touch only owned temporary files, validate the preserved flag,
 agent, timestamp and (on Catalina) source/referrer URLs, and do not launch an app
 or validate the Gatekeeper user interface. Menu platform checks render real
 pixels and validate file-type identifiers; complete menu/file-panel layout and
-headless-window behavior still need browser runtime tests.
+headless-window behavior still need browser runtime tests. Authentication checks
+create/destroy an LAContext and reject a fictitious, unentitled group; they do not
+request biometrics, sign data or query credential stores. The credential-store
+and signing changes have compiler checks only. Wi-Fi scans and HID/serial device
+operations have not been executed by these checks.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -278,6 +293,10 @@ python3 legacy/test_display.py
 python3 legacy/test_core_animation.py
 python3 legacy/test_sandbox_logging.py
 python3 legacy/test_video_toolbox_platform.py
+python3 legacy/test_fido_context.py
+python3 legacy/test_fido_context.py --force-legacy
+# Requires a retained accessibility_probe.rsp:
+python3 legacy/test_attributed_string.py
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

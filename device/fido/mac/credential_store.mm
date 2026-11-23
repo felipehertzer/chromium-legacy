@@ -40,6 +40,7 @@ namespace {
 // the keychain item class, keychain access group and RP ID (unless `rp_id` is
 // `nullopt`) filled out. More fields can be set on the return value to refine
 // the query.
+API_AVAILABLE(macos(10.12.2))
 NSMutableDictionary* DefaultKeychainQuery(const AuthenticatorConfig& config,
                                           std::optional<std::string> rp_id) {
   NSMutableDictionary* query = [NSMutableDictionary dictionary];
@@ -83,80 +84,84 @@ QueryKeychainItemsForProfile(const std::string& keychain_access_group,
                              const std::string& metadata_secret,
                              base::Time created_not_before,
                              base::Time created_not_after) {
-  // Query the keychain for all items tagged with the given access group, which
-  // should in theory yield all WebAuthentication credentials (for all
-  // profiles). Sadly, the kSecAttrAccessGroup filter doesn't quite work, and
-  // so we also get results from the legacy keychain that are tagged with no
-  // keychain access group.
-  std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> result;
+  if (@available(macOS 10.12.2, *)) {
+    // Query the keychain for all items tagged with the given access group,
+    // which should in theory yield all WebAuthentication credentials (for all
+    // profiles). Sadly, the kSecAttrAccessGroup filter doesn't quite work, and
+    // so we also get results from the legacy keychain that are tagged with no
+    // keychain access group.
+    std::vector<base::apple::ScopedCFTypeRef<CFDictionaryRef>> result;
 
-  NSDictionary* query = @{
-    CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
-    CFToNSPtrCast(kSecAttrAccessGroup) :
-        base::SysUTF8ToNSString(keychain_access_group),
-    CFToNSPtrCast(kSecMatchLimit) : CFToNSPtrCast(kSecMatchLimitAll),
-    // Return the key reference and its attributes.
-    CFToNSPtrCast(kSecReturnRef) : @YES,
-    CFToNSPtrCast(kSecReturnAttributes) : @YES,
-  };
+    NSDictionary* query = @{
+      CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
+      CFToNSPtrCast(kSecAttrAccessGroup) :
+          base::SysUTF8ToNSString(keychain_access_group),
+      CFToNSPtrCast(kSecMatchLimit) : CFToNSPtrCast(kSecMatchLimitAll),
+      // Return the key reference and its attributes.
+      CFToNSPtrCast(kSecReturnRef) : @YES,
+      CFToNSPtrCast(kSecReturnAttributes) : @YES,
+    };
 
-  base::apple::ScopedCFTypeRef<CFArrayRef> keychain_items;
-  {
-    OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
-        NSToCFPtrCast(query),
-        reinterpret_cast<CFTypeRef*>(keychain_items.InitializeInto()));
-    if (status == errSecItemNotFound) {
-      DVLOG(1) << "no credentials found";
-      return std::nullopt;
+    base::apple::ScopedCFTypeRef<CFArrayRef> keychain_items;
+    {
+      OSStatus status =
+          crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
+              NSToCFPtrCast(query),
+              reinterpret_cast<CFTypeRef*>(keychain_items.InitializeInto()));
+      if (status == errSecItemNotFound) {
+        DVLOG(1) << "no credentials found";
+        return std::nullopt;
+      }
+      if (status != errSecSuccess) {
+        OSSTATUS_DLOG(ERROR, status) << "SecItemCopyMatching failed";
+        return std::nullopt;
+      }
     }
-    if (status != errSecSuccess) {
-      OSSTATUS_DLOG(ERROR, status) << "SecItemCopyMatching failed";
-      return std::nullopt;
+
+    for (CFIndex i = 0; i < CFArrayGetCount(keychain_items.get()); ++i) {
+      CFDictionaryRef attributes = base::apple::CFCast<CFDictionaryRef>(
+          CFArrayGetValueAtIndex(keychain_items.get(), i));
+      if (!attributes) {
+        DLOG(ERROR) << "unexpected result type";
+        return std::nullopt;
+      }
+
+      // Skip items that don't belong to the correct keychain access group
+      // because the kSecAttrAccessGroup filter is broken.
+      CFStringRef attr_access_group =
+          base::apple::GetValueFromDictionary<CFStringRef>(attributes,
+                                                           kSecAttrAccessGroup);
+      if (!attr_access_group || base::SysCFStringRefToUTF8(attr_access_group) !=
+                                    keychain_access_group) {
+        DVLOG(1) << "missing/invalid access group";
+        continue;
+      }
+
+      // If the RP ID, stored encrypted in the item's label, cannot be decrypted
+      // with the given metadata secret, then the credential belongs to a
+      // different profile and must be ignored.
+      CFStringRef sec_attr_label =
+          base::apple::GetValueFromDictionary<CFStringRef>(attributes,
+                                                           kSecAttrLabel);
+      if (!sec_attr_label) {
+        DLOG(ERROR) << "missing label";
+        continue;
+      }
+      std::optional<std::string> opt_rp_id = DecodeRpId(
+          metadata_secret, base::SysCFStringRefToUTF8(sec_attr_label));
+      if (!opt_rp_id) {
+        DVLOG(1) << "key doesn't belong to this profile";
+        continue;
+      }
+
+      result.emplace_back(attributes, base::scoped_policy::RETAIN);
     }
+
+    FilterKeychainItemsByCreationDate(&result, created_not_before,
+                                      created_not_after);
+    return result;
   }
-
-  for (CFIndex i = 0; i < CFArrayGetCount(keychain_items.get()); ++i) {
-    CFDictionaryRef attributes = base::apple::CFCast<CFDictionaryRef>(
-        CFArrayGetValueAtIndex(keychain_items.get(), i));
-    if (!attributes) {
-      DLOG(ERROR) << "unexpected result type";
-      return std::nullopt;
-    }
-
-    // Skip items that don't belong to the correct keychain access group
-    // because the kSecAttrAccessGroup filter is broken.
-    CFStringRef attr_access_group =
-        base::apple::GetValueFromDictionary<CFStringRef>(attributes,
-                                                         kSecAttrAccessGroup);
-    if (!attr_access_group || base::SysCFStringRefToUTF8(attr_access_group) !=
-                                  keychain_access_group) {
-      DVLOG(1) << "missing/invalid access group";
-      continue;
-    }
-
-    // If the RP ID, stored encrypted in the item's label, cannot be decrypted
-    // with the given metadata secret, then the credential belongs to a
-    // different profile and must be ignored.
-    CFStringRef sec_attr_label =
-        base::apple::GetValueFromDictionary<CFStringRef>(attributes,
-                                                         kSecAttrLabel);
-    if (!sec_attr_label) {
-      DLOG(ERROR) << "missing label";
-      continue;
-    }
-    std::optional<std::string> opt_rp_id =
-        DecodeRpId(metadata_secret, base::SysCFStringRefToUTF8(sec_attr_label));
-    if (!opt_rp_id) {
-      DVLOG(1) << "key doesn't belong to this profile";
-      continue;
-    }
-
-    result.emplace_back(attributes, base::scoped_policy::RETAIN);
-  }
-
-  FilterKeychainItemsByCreationDate(&result, created_not_before,
-                                    created_not_after);
-  return result;
+  return std::nullopt;
 }
 
 std::vector<uint8_t> GenerateRandomCredentialId() {
@@ -197,7 +202,7 @@ bool Credential::RequiresUvForSignature() const {
 }
 
 struct TouchIdCredentialStore::ObjCStorage {
-  LAContext* __strong authentication_context;
+  LAContext* __strong authentication_context API_AVAILABLE(macos(10.12.2));
 };
 
 TouchIdCredentialStore::TouchIdCredentialStore(AuthenticatorConfig config)
@@ -215,70 +220,77 @@ TouchIdCredentialStore::CreateCredential(
     const std::string& rp_id,
     const PublicKeyCredentialUserEntity& user,
     Discoverable discoverable) const {
-  NSMutableDictionary* private_key_params = [NSMutableDictionary dictionary];
-  private_key_params[CFToNSPtrCast(kSecAttrIsPermanent)] = @YES;
+  if (@available(macOS 10.12.2, *)) {
+    NSMutableDictionary* private_key_params = [NSMutableDictionary dictionary];
+    private_key_params[CFToNSPtrCast(kSecAttrIsPermanent)] = @YES;
 
-  // The credential can only be used for signing, and the device needs to be in
-  // an unlocked state.
-  auto flags = kSecAccessControlPrivateKeyUsage;
-  base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control(
-      SecAccessControlCreateWithFlags(
-          kCFAllocatorDefault, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-          flags, /*error=*/nullptr));
-  private_key_params[CFToNSPtrCast(kSecAttrAccessControl)] =
-      (__bridge id)access_control.get();
-  if (objc_storage_->authentication_context) {
-    private_key_params[CFToNSPtrCast(kSecUseAuthenticationContext)] =
-        objc_storage_->authentication_context;
+    // The credential can only be used for signing, and the device needs to be
+    // in an unlocked state.
+    auto flags = kSecAccessControlPrivateKeyUsage;
+    base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control(
+        SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            flags, /*error=*/nullptr));
+    if (!access_control) {
+      return std::nullopt;
+    }
+    private_key_params[CFToNSPtrCast(kSecAttrAccessControl)] =
+        (__bridge id)access_control.get();
+    if (objc_storage_->authentication_context) {
+      private_key_params[CFToNSPtrCast(kSecUseAuthenticationContext)] =
+          objc_storage_->authentication_context;
+    }
+
+    auto credential_metadata =
+        CredentialMetadata::FromPublicKeyCredentialUserEntity(
+            user, discoverable == kDiscoverable);
+    const std::vector<uint8_t> sealed_metadata = SealCredentialMetadata(
+        config_.metadata_secret, rp_id, credential_metadata);
+
+    const std::vector<uint8_t> credential_id = GenerateRandomCredentialId();
+
+    NSDictionary* params = @{
+      CFToNSPtrCast(kSecAttrAccessGroup) :
+          base::SysUTF8ToNSString(config_.keychain_access_group),
+      CFToNSPtrCast(kSecAttrKeyType) :
+          CFToNSPtrCast(kSecAttrKeyTypeECSECPrimeRandom),
+      CFToNSPtrCast(kSecAttrKeySizeInBits) : @256,
+      CFToNSPtrCast(kSecAttrSynchronizable) : @NO,
+      CFToNSPtrCast(kSecAttrTokenID) :
+          CFToNSPtrCast(kSecAttrTokenIDSecureEnclave),
+      CFToNSPtrCast(kSecAttrLabel) :
+          base::SysUTF8ToNSString(EncodeRpId(config_.metadata_secret, rp_id)),
+      CFToNSPtrCast(kSecAttrApplicationTag) :
+          [NSData dataWithBytes:sealed_metadata.data()
+                         length:sealed_metadata.size()],
+      CFToNSPtrCast(kSecAttrApplicationLabel) :
+          [NSData dataWithBytes:credential_id.data()
+                         length:credential_id.size()],
+      CFToNSPtrCast(kSecPrivateKeyAttrs) : private_key_params,
+    };
+
+    base::apple::ScopedCFTypeRef<CFErrorRef> cferr;
+    base::apple::ScopedCFTypeRef<SecKeyRef> private_key =
+        crypto::apple::KeychainV2::GetInstance().KeyCreateRandomKey(
+            NSToCFPtrCast(params), cferr.InitializeInto());
+    if (!private_key) {
+      FIDO_LOG(ERROR) << "SecKeyCreateRandomKey failed: " << cferr.get();
+      return std::nullopt;
+    }
+    base::apple::ScopedCFTypeRef<SecKeyRef> public_key(
+        crypto::apple::KeychainV2::GetInstance().KeyCopyPublicKey(
+            private_key.get()));
+    if (!public_key) {
+      FIDO_LOG(ERROR) << "SecKeyCopyPublicKey failed";
+      return std::nullopt;
+    }
+
+    return std::make_pair(
+        Credential(std::move(private_key), std::move(credential_id),
+                   std::move(credential_metadata), std::move(rp_id)),
+        std::move(public_key));
   }
-
-  auto credential_metadata =
-      CredentialMetadata::FromPublicKeyCredentialUserEntity(
-          user, discoverable == kDiscoverable);
-  const std::vector<uint8_t> sealed_metadata = SealCredentialMetadata(
-      config_.metadata_secret, rp_id, credential_metadata);
-
-  const std::vector<uint8_t> credential_id = GenerateRandomCredentialId();
-
-  NSDictionary* params = @{
-    CFToNSPtrCast(kSecAttrAccessGroup) :
-        base::SysUTF8ToNSString(config_.keychain_access_group),
-    CFToNSPtrCast(kSecAttrKeyType) :
-        CFToNSPtrCast(kSecAttrKeyTypeECSECPrimeRandom),
-    CFToNSPtrCast(kSecAttrKeySizeInBits) : @256,
-    CFToNSPtrCast(kSecAttrSynchronizable) : @NO,
-    CFToNSPtrCast(kSecAttrTokenID) :
-        CFToNSPtrCast(kSecAttrTokenIDSecureEnclave),
-    CFToNSPtrCast(kSecAttrLabel) :
-        base::SysUTF8ToNSString(EncodeRpId(config_.metadata_secret, rp_id)),
-    CFToNSPtrCast(kSecAttrApplicationTag) :
-        [NSData dataWithBytes:sealed_metadata.data()
-                       length:sealed_metadata.size()],
-    CFToNSPtrCast(kSecAttrApplicationLabel) :
-        [NSData dataWithBytes:credential_id.data() length:credential_id.size()],
-    CFToNSPtrCast(kSecPrivateKeyAttrs) : private_key_params,
-  };
-
-  base::apple::ScopedCFTypeRef<CFErrorRef> cferr;
-  base::apple::ScopedCFTypeRef<SecKeyRef> private_key =
-      crypto::apple::KeychainV2::GetInstance().KeyCreateRandomKey(
-          NSToCFPtrCast(params), cferr.InitializeInto());
-  if (!private_key) {
-    FIDO_LOG(ERROR) << "SecKeyCreateRandomKey failed: " << cferr.get();
-    return std::nullopt;
-  }
-  base::apple::ScopedCFTypeRef<SecKeyRef> public_key(
-      crypto::apple::KeychainV2::GetInstance().KeyCopyPublicKey(
-          private_key.get()));
-  if (!public_key) {
-    FIDO_LOG(ERROR) << "SecKeyCopyPublicKey failed";
-    return std::nullopt;
-  }
-
-  return std::make_pair(
-      Credential(std::move(private_key), std::move(credential_id),
-                 std::move(credential_metadata), std::move(rp_id)),
-      std::move(public_key));
+  return std::nullopt;
 }
 
 std::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
@@ -287,76 +299,82 @@ TouchIdCredentialStore::CreateCredentialLegacyCredentialForTesting(
     const std::string& rp_id,
     const PublicKeyCredentialUserEntity& user,
     Discoverable discoverable) const {
-  DCHECK(discoverable == Discoverable::kNonDiscoverable ||
-         version > CredentialMetadata::Version::kV0);
+  if (@available(macOS 10.12.2, *)) {
+    DCHECK(discoverable == Discoverable::kNonDiscoverable ||
+           version > CredentialMetadata::Version::kV0);
 
-  const bool is_discoverable = discoverable == Discoverable::kDiscoverable;
-  std::vector<uint8_t> credential_id = SealLegacyCredentialIdForTestingOnly(
-      version, config_.metadata_secret, rp_id, user.id, user.name.value_or(""),
-      user.display_name.value_or(""), is_discoverable);
-  std::optional<CredentialMetadata> metadata =
-      UnsealMetadataFromLegacyCredentialId(config_.metadata_secret, rp_id,
-                                           credential_id);
-  DCHECK(metadata);
+    const bool is_discoverable = discoverable == Discoverable::kDiscoverable;
+    std::vector<uint8_t> credential_id = SealLegacyCredentialIdForTestingOnly(
+        version, config_.metadata_secret, rp_id, user.id,
+        user.name.value_or(""), user.display_name.value_or(""),
+        is_discoverable);
+    std::optional<CredentialMetadata> metadata =
+        UnsealMetadataFromLegacyCredentialId(config_.metadata_secret, rp_id,
+                                             credential_id);
+    DCHECK(metadata);
 
-  NSMutableDictionary* private_key_params = [NSMutableDictionary dictionary];
-  private_key_params[CFToNSPtrCast(kSecAttrIsPermanent)] = @YES;
+    NSMutableDictionary* private_key_params = [NSMutableDictionary dictionary];
+    private_key_params[CFToNSPtrCast(kSecAttrIsPermanent)] = @YES;
 
-  // Credential can only be used when the device is unlocked. Private key is
-  // available for signing after user authorization with biometrics or
-  // password.
-  base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control(
-      SecAccessControlCreateWithFlags(
-          kCFAllocatorDefault, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-          kSecAccessControlPrivateKeyUsage | kSecAccessControlUserPresence,
-          /*error=*/nullptr));
-  private_key_params[CFToNSPtrCast(kSecAttrAccessControl)] =
-      (__bridge id)access_control.get();
-  if (objc_storage_->authentication_context) {
-    private_key_params[CFToNSPtrCast(kSecUseAuthenticationContext)] =
-        objc_storage_->authentication_context;
+    // Credential can only be used when the device is unlocked. Private key is
+    // available for signing after user authorization with biometrics or
+    // password.
+    base::apple::ScopedCFTypeRef<SecAccessControlRef> access_control(
+        SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAccessControlPrivateKeyUsage | kSecAccessControlUserPresence,
+            /*error=*/nullptr));
+    private_key_params[CFToNSPtrCast(kSecAttrAccessControl)] =
+        (__bridge id)access_control.get();
+    if (objc_storage_->authentication_context) {
+      private_key_params[CFToNSPtrCast(kSecUseAuthenticationContext)] =
+          objc_storage_->authentication_context;
+    }
+
+    // Legacy credentials used to set kSecAttrApplicationTag to a CFStringRef
+    // encoding the RP ID and user ID, but MacOS Sequoia returns an internal
+    // error when setting an application tag of type CFStringRef. Skip the field
+    // in that case, as application tags are ignored for legacy credentials
+    // anyway.
+    NSDictionary* params = @{
+      CFToNSPtrCast(kSecAttrAccessGroup) :
+          base::SysUTF8ToNSString(config_.keychain_access_group),
+      CFToNSPtrCast(kSecAttrKeyType) :
+          CFToNSPtrCast(kSecAttrKeyTypeECSECPrimeRandom),
+      CFToNSPtrCast(kSecAttrKeySizeInBits) : @256,
+      CFToNSPtrCast(kSecAttrSynchronizable) : @NO,
+      CFToNSPtrCast(kSecAttrTokenID) :
+          CFToNSPtrCast(kSecAttrTokenIDSecureEnclave),
+      CFToNSPtrCast(kSecAttrLabel) :
+          base::SysUTF8ToNSString(EncodeRpId(config_.metadata_secret, rp_id)),
+      CFToNSPtrCast(kSecAttrApplicationLabel) :
+          [NSData dataWithBytes:credential_id.data()
+                         length:credential_id.size()],
+      CFToNSPtrCast(kSecPrivateKeyAttrs) : private_key_params,
+    };
+
+    base::apple::ScopedCFTypeRef<CFErrorRef> cferr;
+    base::apple::ScopedCFTypeRef<SecKeyRef> private_key =
+        crypto::apple::KeychainV2::GetInstance().KeyCreateRandomKey(
+            NSToCFPtrCast(params), cferr.InitializeInto());
+    if (!private_key) {
+      FIDO_LOG(ERROR) << "SecKeyCreateRandomKey failed: " << cferr.get();
+      return std::nullopt;
+    }
+    base::apple::ScopedCFTypeRef<SecKeyRef> public_key(
+        crypto::apple::KeychainV2::GetInstance().KeyCopyPublicKey(
+            private_key.get()));
+    if (!public_key) {
+      FIDO_LOG(ERROR) << "SecKeyCopyPublicKey failed";
+      return std::nullopt;
+    }
+
+    return std::make_pair(
+        Credential(std::move(private_key), std::move(credential_id),
+                   std::move(*metadata), std::move(rp_id)),
+        std::move(public_key));
   }
-
-  // Legacy credentials used to set kSecAttrApplicationTag to a CFStringRef
-  // encoding the RP ID and user ID, but MacOS Sequoia returns an internal error
-  // when setting an application tag of type CFStringRef. Skip the field in that
-  // case, as application tags are ignored for legacy credentials anyway.
-  NSDictionary* params = @{
-    CFToNSPtrCast(kSecAttrAccessGroup) :
-        base::SysUTF8ToNSString(config_.keychain_access_group),
-    CFToNSPtrCast(kSecAttrKeyType) :
-        CFToNSPtrCast(kSecAttrKeyTypeECSECPrimeRandom),
-    CFToNSPtrCast(kSecAttrKeySizeInBits) : @256,
-    CFToNSPtrCast(kSecAttrSynchronizable) : @NO,
-    CFToNSPtrCast(kSecAttrTokenID) :
-        CFToNSPtrCast(kSecAttrTokenIDSecureEnclave),
-    CFToNSPtrCast(kSecAttrLabel) :
-        base::SysUTF8ToNSString(EncodeRpId(config_.metadata_secret, rp_id)),
-    CFToNSPtrCast(kSecAttrApplicationLabel) :
-        [NSData dataWithBytes:credential_id.data() length:credential_id.size()],
-    CFToNSPtrCast(kSecPrivateKeyAttrs) : private_key_params,
-  };
-
-  base::apple::ScopedCFTypeRef<CFErrorRef> cferr;
-  base::apple::ScopedCFTypeRef<SecKeyRef> private_key =
-      crypto::apple::KeychainV2::GetInstance().KeyCreateRandomKey(
-          NSToCFPtrCast(params), cferr.InitializeInto());
-  if (!private_key) {
-    FIDO_LOG(ERROR) << "SecKeyCreateRandomKey failed: " << cferr.get();
-    return std::nullopt;
-  }
-  base::apple::ScopedCFTypeRef<SecKeyRef> public_key(
-      crypto::apple::KeychainV2::GetInstance().KeyCopyPublicKey(
-          private_key.get()));
-  if (!public_key) {
-    FIDO_LOG(ERROR) << "SecKeyCopyPublicKey failed";
-    return std::nullopt;
-  }
-
-  return std::make_pair(
-      Credential(std::move(private_key), std::move(credential_id),
-                 std::move(*metadata), std::move(rp_id)),
-      std::move(public_key));
+  return std::nullopt;
 }
 
 std::optional<std::list<Credential>>
@@ -490,197 +508,210 @@ std::optional<std::list<Credential>>
 TouchIdCredentialStore::FindCredentialsImpl(
     const std::optional<std::string>& rp_id,
     const std::set<std::vector<uint8_t>>& credential_ids) const {
-  // Query all credentials for the RP. Filtering for `rp_id` here ensures we
-  // don't retrieve credentials for other profiles, because their
-  // `kSecAttrLabel` attribute wouldn't match the encoded RP ID.
-  NSMutableDictionary* query = DefaultKeychainQuery(config_, rp_id);
-  if (objc_storage_->authentication_context) {
-    query[CFToNSPtrCast(kSecUseAuthenticationContext)] =
-        objc_storage_->authentication_context;
-  }
-  query[CFToNSPtrCast(kSecReturnRef)] = @YES;
-  query[CFToNSPtrCast(kSecReturnAttributes)] = @YES;
-  query[CFToNSPtrCast(kSecMatchLimit)] = CFToNSPtrCast(kSecMatchLimitAll);
+  if (@available(macOS 10.12.2, *)) {
+    // Query all credentials for the RP. Filtering for `rp_id` here ensures we
+    // don't retrieve credentials for other profiles, because their
+    // `kSecAttrLabel` attribute wouldn't match the encoded RP ID.
+    NSMutableDictionary* query = DefaultKeychainQuery(config_, rp_id);
+    if (objc_storage_->authentication_context) {
+      query[CFToNSPtrCast(kSecUseAuthenticationContext)] =
+          objc_storage_->authentication_context;
+    }
+    query[CFToNSPtrCast(kSecReturnRef)] = @YES;
+    query[CFToNSPtrCast(kSecReturnAttributes)] = @YES;
+    query[CFToNSPtrCast(kSecMatchLimit)] = CFToNSPtrCast(kSecMatchLimitAll);
 
-  base::apple::ScopedCFTypeRef<CFArrayRef> keychain_items;
-  OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
-      NSToCFPtrCast(query),
-      reinterpret_cast<CFTypeRef*>(keychain_items.InitializeInto()));
-  if (status == errSecItemNotFound) {
-    return std::list<Credential>();
-  }
-  if (status != errSecSuccess) {
-    FIDO_LOG(ERROR) << "SecItemCopyMatching failed: "
-                    << logging::DescriptionFromOSStatus(status);
-    return std::nullopt;
-  }
-
-  // Filter credentials for the RP down to |credential_ids|, unless it's
-  // empty in which case all credentials should be returned.
-  std::list<Credential> credentials;
-  for (CFIndex i = 0; i < CFArrayGetCount(keychain_items.get()); ++i) {
-    CFDictionaryRef attributes = base::apple::CFCast<CFDictionaryRef>(
-        CFArrayGetValueAtIndex(keychain_items.get(), i));
-    if (!attributes) {
-      FIDO_LOG(ERROR) << "credential with missing attributes";
+    base::apple::ScopedCFTypeRef<CFArrayRef> keychain_items;
+    OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemCopyMatching(
+        NSToCFPtrCast(query),
+        reinterpret_cast<CFTypeRef*>(keychain_items.InitializeInto()));
+    if (status == errSecItemNotFound) {
+      return std::list<Credential>();
+    }
+    if (status != errSecSuccess) {
+      FIDO_LOG(ERROR) << "SecItemCopyMatching failed: "
+                      << logging::DescriptionFromOSStatus(status);
       return std::nullopt;
     }
-    // Skip items that don't belong to the correct keychain access group
-    // because the kSecAttrAccessGroup filter is broken.
-    CFStringRef attr_access_group =
-        base::apple::GetValueFromDictionary<CFStringRef>(attributes,
-                                                         kSecAttrAccessGroup);
-    if (!attr_access_group) {
-      continue;
-    }
-    std::string rp_id_value;
-    if (!rp_id) {
-      CFStringRef sec_attr_label =
+
+    // Filter credentials for the RP down to |credential_ids|, unless it's
+    // empty in which case all credentials should be returned.
+    std::list<Credential> credentials;
+    for (CFIndex i = 0; i < CFArrayGetCount(keychain_items.get()); ++i) {
+      CFDictionaryRef attributes = base::apple::CFCast<CFDictionaryRef>(
+          CFArrayGetValueAtIndex(keychain_items.get(), i));
+      if (!attributes) {
+        FIDO_LOG(ERROR) << "credential with missing attributes";
+        return std::nullopt;
+      }
+      // Skip items that don't belong to the correct keychain access group
+      // because the kSecAttrAccessGroup filter is broken.
+      CFStringRef attr_access_group =
           base::apple::GetValueFromDictionary<CFStringRef>(attributes,
-                                                           kSecAttrLabel);
-      if (!sec_attr_label) {
-        FIDO_LOG(ERROR) << "credential with missing kSecAttrLabel_data";
+                                                           kSecAttrAccessGroup);
+      if (!attr_access_group) {
         continue;
       }
-      std::optional<std::string> opt_rp_id = DecodeRpId(
-          config_.metadata_secret, base::SysCFStringRefToUTF8(sec_attr_label));
-      if (!opt_rp_id) {
-        FIDO_LOG(ERROR) << "could not decode RP ID";
+      std::string rp_id_value;
+      if (!rp_id) {
+        CFStringRef sec_attr_label =
+            base::apple::GetValueFromDictionary<CFStringRef>(attributes,
+                                                             kSecAttrLabel);
+        if (!sec_attr_label) {
+          FIDO_LOG(ERROR) << "credential with missing kSecAttrLabel_data";
+          continue;
+        }
+        std::optional<std::string> opt_rp_id =
+            DecodeRpId(config_.metadata_secret,
+                       base::SysCFStringRefToUTF8(sec_attr_label));
+        if (!opt_rp_id) {
+          FIDO_LOG(ERROR) << "could not decode RP ID";
+          continue;
+        }
+        rp_id_value = *opt_rp_id;
+      } else {
+        rp_id_value = *rp_id;
+      }
+      CFDataRef application_label =
+          base::apple::GetValueFromDictionary<CFDataRef>(
+              attributes, kSecAttrApplicationLabel);
+      if (!application_label) {
+        FIDO_LOG(ERROR) << "credential with missing application label";
+        return std::nullopt;
+      }
+      auto credential_id_span = base::apple::CFDataToSpan(application_label);
+      const std::vector<uint8_t> credential_id(credential_id_span.begin(),
+                                               credential_id_span.end());
+      if (!credential_ids.empty() && !credential_ids.contains(credential_id)) {
         continue;
       }
-      rp_id_value = *opt_rp_id;
-    } else {
-      rp_id_value = *rp_id;
-    }
-    CFDataRef application_label =
-        base::apple::GetValueFromDictionary<CFDataRef>(
-            attributes, kSecAttrApplicationLabel);
-    if (!application_label) {
-      FIDO_LOG(ERROR) << "credential with missing application label";
-      return std::nullopt;
-    }
-    auto credential_id_span = base::apple::CFDataToSpan(application_label);
-    const std::vector<uint8_t> credential_id(credential_id_span.begin(),
-                                             credential_id_span.end());
-    if (!credential_ids.empty() && !credential_ids.contains(credential_id)) {
-      continue;
-    }
 
-    // Decode `CredentialMetadata` from the `kSecAttrApplicationTag` attribute
-    // for V3 credentials, or from the credential ID for version <= 2.
-    std::optional<CredentialMetadata> metadata;
-    CFDataRef application_tag_ref =
-        base::apple::GetValueFromDictionary<CFDataRef>(attributes,
-                                                       kSecAttrApplicationTag);
-    // On version < 3 credentials, kSecAttrApplicationTag is a CFStringRef,
-    // which means `application_tag_ref` would be nullptr.
-    if (application_tag_ref) {
-      auto application_tag = base::apple::CFDataToSpan(application_tag_ref);
-      metadata = UnsealMetadataFromApplicationTag(config_.metadata_secret,
-                                                  rp_id_value, application_tag);
-    } else {
-      metadata = UnsealMetadataFromLegacyCredentialId(
-          config_.metadata_secret, rp_id_value, credential_id);
-    }
-    if (!metadata) {
-      FIDO_LOG(ERROR) << "credential with invalid metadata";
-      return std::nullopt;
-    }
+      // Decode `CredentialMetadata` from the `kSecAttrApplicationTag` attribute
+      // for V3 credentials, or from the credential ID for version <= 2.
+      std::optional<CredentialMetadata> metadata;
+      CFDataRef application_tag_ref =
+          base::apple::GetValueFromDictionary<CFDataRef>(
+              attributes, kSecAttrApplicationTag);
+      // On version < 3 credentials, kSecAttrApplicationTag is a CFStringRef,
+      // which means `application_tag_ref` would be nullptr.
+      if (application_tag_ref) {
+        auto application_tag = base::apple::CFDataToSpan(application_tag_ref);
+        metadata = UnsealMetadataFromApplicationTag(
+            config_.metadata_secret, rp_id_value, application_tag);
+      } else {
+        metadata = UnsealMetadataFromLegacyCredentialId(
+            config_.metadata_secret, rp_id_value, credential_id);
+      }
+      if (!metadata) {
+        FIDO_LOG(ERROR) << "credential with invalid metadata";
+        return std::nullopt;
+      }
 
-    SecKeyRef key = base::apple::GetValueFromDictionary<SecKeyRef>(
-        attributes, kSecValueRef);
-    if (!key) {
-      FIDO_LOG(ERROR) << "credential with missing value ref";
-      return std::nullopt;
-    }
-    base::apple::ScopedCFTypeRef<SecKeyRef> private_key(
-        key, base::scoped_policy::RETAIN);
+      SecKeyRef key = base::apple::GetValueFromDictionary<SecKeyRef>(
+          attributes, kSecValueRef);
+      if (!key) {
+        FIDO_LOG(ERROR) << "credential with missing value ref";
+        return std::nullopt;
+      }
+      base::apple::ScopedCFTypeRef<SecKeyRef> private_key(
+          key, base::scoped_policy::RETAIN);
 
-    credentials.emplace_back(std::move(private_key), std::move(credential_id),
-                             std::move(*metadata), std::move(rp_id_value));
+      credentials.emplace_back(std::move(private_key), std::move(credential_id),
+                               std::move(*metadata), std::move(rp_id_value));
+    }
+    return std::move(credentials);
   }
-  return std::move(credentials);
+  return std::nullopt;
 }
 
 bool TouchIdCredentialStore::DeleteCredentialById(
     base::span<const uint8_t> credential_id) const {
-  // The reasonable way to delete a credential would be by SecKeyRef, like so:
-  //
-  //   NSDictionary* query = @{
-  //     CFToNSPtrCast(kSecValueRef) : (__bridge id)sec_key_ref,
-  //   };
-  //   OSStatus status =
-  //       KeychainV2::GetInstance().ItemDelete(NSToCFPtrCast(query));
-  //
-  // But on macOS that looks for `sec_key_ref` in the legacy keychain instead of
-  // the "iOS" keychain that secure enclave credentials live in, and so the call
-  // fails with `errSecItemNotFound`. macOS 10.15 added
-  // `kSecUseDataProtectionKeychain` to force a query to the right keychain, but
-  // we need to support older versions of macOS for now. Hence, we must delete
-  // keychain items by credential ID (stored in `kSecAttrApplicationLabel`).
-  // TODO(https://crbug.com/40275358): Update to this better approach that
-  // requires 10.15 now that Chromium requires 10.15.
-  NSDictionary* query = @{
-    CFToNSPtrCast(kSecAttrAccessGroup) :
-        base::SysUTF8ToNSString(config_.keychain_access_group),
-    CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
-    CFToNSPtrCast(kSecAttrApplicationLabel) :
-        [NSData dataWithBytes:credential_id.data() length:credential_id.size()],
-  };
+  if (@available(macOS 10.12.2, *)) {
+    // The reasonable way to delete a credential would be by SecKeyRef, like so:
+    //
+    //   NSDictionary* query = @{
+    //     CFToNSPtrCast(kSecValueRef) : (__bridge id)sec_key_ref,
+    //   };
+    //   OSStatus status =
+    //       KeychainV2::GetInstance().ItemDelete(NSToCFPtrCast(query));
+    //
+    // But on macOS that looks for `sec_key_ref` in the legacy keychain instead
+    // of the "iOS" keychain that secure enclave credentials live in, and so the
+    // call fails with `errSecItemNotFound`. macOS 10.15 added
+    // `kSecUseDataProtectionKeychain` to force a query to the right keychain,
+    // but we need to support older versions of macOS for now. Hence, we must
+    // delete keychain items by credential ID (stored in
+    // `kSecAttrApplicationLabel`).
+    // TODO(https://crbug.com/40275358): Update to this better approach that
+    // requires 10.15 now that Chromium requires 10.15.
+    NSDictionary* query = @{
+      CFToNSPtrCast(kSecAttrAccessGroup) :
+          base::SysUTF8ToNSString(config_.keychain_access_group),
+      CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
+      CFToNSPtrCast(kSecAttrApplicationLabel) :
+          [NSData dataWithBytes:credential_id.data()
+                         length:credential_id.size()],
+    };
 
-  OSStatus status =
-      crypto::apple::KeychainV2::GetInstance().ItemDelete(NSToCFPtrCast(query));
-  if (status != errSecSuccess) {
-    OSSTATUS_DLOG(ERROR, status) << "SecItemDelete failed";
-    return false;
+    OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemDelete(
+        NSToCFPtrCast(query));
+    if (status != errSecSuccess) {
+      OSSTATUS_DLOG(ERROR, status) << "SecItemDelete failed";
+      return false;
+    }
+    return true;
   }
-  return true;
+  return false;
 }
 
 bool TouchIdCredentialStore::UpdateCredential(
     base::span<uint8_t> credential_id_span,
     const std::string& username) {
-  std::vector<uint8_t> credential_id = base::ToVector(credential_id_span);
+  if (@available(macOS 10.12.2, *)) {
+    std::vector<uint8_t> credential_id = base::ToVector(credential_id_span);
 
-  std::optional<std::list<Credential>> credentials = FindCredentialsImpl(
-      /*rp_id=*/std::nullopt, {credential_id});
-  if (!credentials) {
-    FIDO_LOG(ERROR) << "no credentials found";
-    return false;
-  }
-
-  NSData* sealed_metadata_data = nil;
-  for (Credential& credential : *credentials) {
-    if (credential.credential_id == credential_id) {
-      credential.metadata.user_name = username;
-      std::vector<uint8_t> sealed_metadata = SealCredentialMetadata(
-          config_.metadata_secret, credential.rp_id, credential.metadata);
-      sealed_metadata_data = [NSData dataWithBytes:sealed_metadata.data()
-                                            length:sealed_metadata.size()];
-      break;
+    std::optional<std::list<Credential>> credentials = FindCredentialsImpl(
+        /*rp_id=*/std::nullopt, {credential_id});
+    if (!credentials) {
+      FIDO_LOG(ERROR) << "no credentials found";
+      return false;
     }
-  }
-  if (!sealed_metadata_data) {
-    FIDO_LOG(ERROR) << "no credential with matching credential_id";
-    return false;
-  }
 
-  NSDictionary* query = @{
-    CFToNSPtrCast(kSecAttrAccessGroup) :
-        base::SysUTF8ToNSString(config_.keychain_access_group),
-    CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
-    CFToNSPtrCast(kSecAttrApplicationLabel) :
-        [NSData dataWithBytes:credential_id.data() length:credential_id.size()],
-  };
-  NSDictionary* params =
-      @{CFToNSPtrCast(kSecAttrApplicationTag) : sealed_metadata_data};
-  OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemUpdate(
-      NSToCFPtrCast(query), NSToCFPtrCast(params));
-  if (status != errSecSuccess) {
-    OSSTATUS_DLOG(ERROR, status) << "SecItemUpdate failed";
-    return false;
+    NSData* sealed_metadata_data = nil;
+    for (Credential& credential : *credentials) {
+      if (credential.credential_id == credential_id) {
+        credential.metadata.user_name = username;
+        std::vector<uint8_t> sealed_metadata = SealCredentialMetadata(
+            config_.metadata_secret, credential.rp_id, credential.metadata);
+        sealed_metadata_data = [NSData dataWithBytes:sealed_metadata.data()
+                                              length:sealed_metadata.size()];
+        break;
+      }
+    }
+    if (!sealed_metadata_data) {
+      FIDO_LOG(ERROR) << "no credential with matching credential_id";
+      return false;
+    }
+
+    NSDictionary* query = @{
+      CFToNSPtrCast(kSecAttrAccessGroup) :
+          base::SysUTF8ToNSString(config_.keychain_access_group),
+      CFToNSPtrCast(kSecClass) : CFToNSPtrCast(kSecClassKey),
+      CFToNSPtrCast(kSecAttrApplicationLabel) :
+          [NSData dataWithBytes:credential_id.data()
+                         length:credential_id.size()],
+    };
+    NSDictionary* params =
+        @{CFToNSPtrCast(kSecAttrApplicationTag) : sealed_metadata_data};
+    OSStatus status = crypto::apple::KeychainV2::GetInstance().ItemUpdate(
+        NSToCFPtrCast(query), NSToCFPtrCast(params));
+    if (status != errSecSuccess) {
+      OSSTATUS_DLOG(ERROR, status) << "SecItemUpdate failed";
+      return false;
+    }
+    return true;
   }
-  return true;
+  return false;
 }
 
 }  // namespace device::fido::mac

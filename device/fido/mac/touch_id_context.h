@@ -59,7 +59,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdContext {
 
   // authentication_context returns the LAContext used for the local user
   // authentication prompt.
-  LAContext* authentication_context() const { return context_; }
+  LAContext* authentication_context() const API_AVAILABLE(macos(10.12.2)) {
+    return context_;
+  }
 
  protected:
   TouchIdContext();
@@ -76,7 +78,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdContext {
 
   void RunCallback(bool success);
 
-  LAContext* __strong context_;
+  LAContext* __strong context_ API_AVAILABLE(macos(10.12.2));
   Callback callback_;
   base::WeakPtrFactory<TouchIdContext> weak_ptr_factory_{this};
 

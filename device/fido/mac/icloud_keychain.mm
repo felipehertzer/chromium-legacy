@@ -72,10 +72,12 @@ void AppendBundleDisplayNamesFromDictionary(NSDictionary* dict,
   if (!dict) {
     return;
   }
-  AppendNonEmptyNSString(
-      base::apple::ObjCCast<NSString>(dict[@"CFBundleDisplayName"]), names);
-  AppendNonEmptyNSString(base::apple::ObjCCast<NSString>(dict[@"CFBundleName"]),
+  AppendNonEmptyNSString(base::apple::ObjCCast<NSString>(
+                             [dict objectForKey:@"CFBundleDisplayName"]),
                          names);
+  AppendNonEmptyNSString(
+      base::apple::ObjCCast<NSString>([dict objectForKey:@"CFBundleName"]),
+      names);
 }
 
 // Loads all localized display names for a macOS `.app` bundle on disk.
@@ -117,13 +119,22 @@ std::vector<std::string> CollectLocalizedAppNamesFromBundle(
   // `kApplePasswordsColorCustomIcon`.
   NSURL* loctable_url = base::apple::FilePathToNSURL(
       app_bundle_path.Append("Contents/Resources/InfoPlist.loctable"));
-  NSDictionary* loctable =
-      loctable_url
-          ? [NSDictionary dictionaryWithContentsOfURL:loctable_url error:nil]
-          : nil;
+  NSDictionary* loctable = nil;
+  if (loctable_url) {
+    NSData* data = [NSData dataWithContentsOfURL:loctable_url];
+    if (data) {
+      loctable =
+          base::apple::ObjCCast<NSDictionary>([NSPropertyListSerialization
+              propertyListWithData:data
+                           options:NSPropertyListImmutable
+                            format:nullptr
+                             error:nil]);
+    }
+  }
   for (id key in loctable) {
     AppendBundleDisplayNamesFromDictionary(
-        base::apple::ObjCCast<NSDictionary>(loctable[key]), names);
+        base::apple::ObjCCast<NSDictionary>([loctable objectForKey:key]),
+        names);
   }
 
   return names;

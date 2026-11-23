@@ -42,6 +42,11 @@ MakeCredentialOperation::MakeCredentialOperation(
 MakeCredentialOperation::~MakeCredentialOperation() = default;
 
 void MakeCredentialOperation::Run() {
+  if (!touch_id_context_) {
+    std::move(callback_).Run(
+        MakeCredentialStatus::kAuthenticatorResponseInvalid, std::nullopt);
+    return;
+  }
   if (!std::ranges::contains(
           request_.public_key_credential_params.public_key_credential_params(),
           static_cast<int>(CoseAlgorithmIdentifier::kEs256),
@@ -77,8 +82,14 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
   // Setting an authentication context authorizes credentials returned from the
   // credential store for signing without triggering yet another Touch ID
   // prompt.
-  credential_store_->SetAuthenticationContext(
-      touch_id_context_->authentication_context());
+  if (@available(macOS 10.12.2, *)) {
+    credential_store_->SetAuthenticationContext(
+        touch_id_context_->authentication_context());
+  } else {
+    std::move(callback_).Run(MakeCredentialStatus::kUserConsentDenied,
+                             std::nullopt);
+    return;
+  }
 
   CreateCredential(/*has_uv=*/true);
 }

@@ -58,8 +58,11 @@ TypeConverter<CFAttributedStringRef, ui::mojom::AttributedStringPtr>::Convert(
                 range:range.ToNSRange()];
   }
 
-  return static_cast<CFAttributedStringRef>(
-      CFAutorelease(base::apple::NSToCFOwnershipCast(decoded_string)));
+  // An autoreleasing store retains and schedules release in the current pool,
+  // preserving this converter's +0 return contract without CFAutorelease/10.9.
+  // https://clang.llvm.org/docs/AutomaticReferenceCounting.html#semantics
+  NSAttributedString* __autoreleasing autoreleased_string = decoded_string;
+  return (__bridge CFAttributedStringRef)autoreleased_string;
 }
 
 ui::mojom::AttributedStringPtr
@@ -82,7 +85,7 @@ TypeConverter<ui::mojom::AttributedStringPtr, CFAttributedStringRef>::Convert(
         [ns_attributed_string attributesAtIndex:i
                                  effectiveRange:&effective_range];
 
-    NSFont* font = ns_attributes[NSFontAttributeName];
+    NSFont* font = [ns_attributes objectForKey:NSFontAttributeName];
     std::u16string font_name;
     float font_point_size;
     // Only encode the attributes if the filtered set contains font information.

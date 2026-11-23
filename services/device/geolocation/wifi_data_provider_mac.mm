@@ -19,7 +19,11 @@ namespace {
 
 class CoreWlanApi : public WifiDataProviderCommon::WlanApiInterface {
  public:
-  CoreWlanApi() = default;
+  CoreWlanApi() {
+    if (@available(macOS 10.10, *)) {
+      wifi_client_ = [CWWiFiClient sharedWiFiClient];
+    }
+  }
 
   CoreWlanApi(const CoreWlanApi&) = delete;
   CoreWlanApi& operator=(const CoreWlanApi&) = delete;
@@ -30,7 +34,7 @@ class CoreWlanApi : public WifiDataProviderCommon::WlanApiInterface {
           callback) override;
 
  private:
-  CWWiFiClient* __strong wifi_client_ = [CWWiFiClient sharedWiFiClient];
+  CWWiFiClient* __strong wifi_client_ API_AVAILABLE(macos(10.10)) = nil;
 };
 
 void CoreWlanApi::GetAccessPointData(
@@ -38,7 +42,20 @@ void CoreWlanApi::GetAccessPointData(
         callback) {
   @autoreleasepool {
     auto data = std::make_unique<WifiData::AccessPointDataSet>();
-    NSArray<CWInterface*>* interfaces = wifi_client_.interfaces;
+    NSArray<CWInterface*>* interfaces = nil;
+    if (@available(macOS 10.10, *)) {
+      interfaces = wifi_client_.interfaces;
+    } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+      NSMutableArray<CWInterface*>* legacy_interfaces = [NSMutableArray array];
+      for (NSString* name in [CWInterface interfaceNames]) {
+        if (CWInterface* interface = [CWInterface interfaceWithName:name]) {
+          [legacy_interfaces addObject:interface];
+        }
+      }
+      interfaces = legacy_interfaces;
+#endif
+    }
     NSUInteger interface_error_count = 0;
     for (CWInterface* interface in interfaces) {
       NSError* err = nil;
