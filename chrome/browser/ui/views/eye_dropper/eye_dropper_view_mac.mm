@@ -55,5 +55,8 @@ std::unique_ptr<content::EyeDropper> ShowEyeDropper(
     return nullptr;
   }
 
-  return std::make_unique<EyeDropperViewMac>(listener);
+  if (@available(macOS 10.15, *)) {
+    return std::make_unique<EyeDropperViewMac>(listener);
+  }
+  return nullptr;
 }

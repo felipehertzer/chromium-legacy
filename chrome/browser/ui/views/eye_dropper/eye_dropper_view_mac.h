@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_EYE_DROPPER_EYE_DROPPER_VIEW_MAC_H_
 #define CHROME_BROWSER_UI_VIEWS_EYE_DROPPER_EYE_DROPPER_VIEW_MAC_H_
 
+#include <os/availability.h>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/eye_dropper.h"
@@ -12,7 +14,8 @@
 
 @class NSColorSampler;
 
-class EyeDropperViewMac : public content::EyeDropper {
+class API_AVAILABLE(macos(10.15)) EyeDropperViewMac
+    : public content::EyeDropper {
  public:
   EyeDropperViewMac(content::EyeDropperListener* listener);
   EyeDropperViewMac(const EyeDropperViewMac&) = delete;

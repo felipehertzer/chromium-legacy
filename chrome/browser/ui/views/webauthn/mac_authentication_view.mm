@@ -31,8 +31,8 @@ constexpr float kErrorAnimationLength = 1;
 constexpr float kSuccessAnimationLength = 1.6;
 
 struct MacAuthenticationView::ObjCStorage {
-  LAContext* __strong context;
-  LAAuthenticationView* __strong auth_view;
+  NSObject* __strong context;
+  NSView* __strong auth_view;
 };
 
 MacAuthenticationView::MacAuthenticationView(Callback callback,
@@ -40,18 +40,19 @@ MacAuthenticationView::MacAuthenticationView(Callback callback,
     : callback_(std::move(callback)),
       storage_(std::make_unique<ObjCStorage>()),
       touch_id_reason_(std::move(touch_id_reason)) {
-  storage_->context = [[LAContext alloc] init];
-  storage_->auth_view =
-      [[LAAuthenticationView alloc] initWithContext:storage_->context];
+  if (@available(macOS 12.0, *)) {
+    LAContext* context = [[LAContext alloc] init];
+    storage_->context = context;
+    storage_->auth_view =
+        [[LAAuthenticationView alloc] initWithContext:context];
 
-  // The size of the NSView is set as constraints on itself. But none of the
-  // standard sizes match the size used in Safari. Thus we erase them set our
-  // own.
-  [storage_->auth_view removeConstraints:storage_->auth_view.constraints];
-  [storage_->auth_view.widthAnchor constraintEqualToConstant:kWidth].active =
-      YES;
-  [storage_->auth_view.heightAnchor constraintEqualToConstant:kWidth].active =
-      YES;
+    // Match Safari's size rather than the authentication view's standard sizes.
+    [storage_->auth_view removeConstraints:storage_->auth_view.constraints];
+    [storage_->auth_view.widthAnchor constraintEqualToConstant:kWidth].active =
+        YES;
+    [storage_->auth_view.heightAnchor constraintEqualToConstant:kWidth].active =
+        YES;
+  }
   return;
 }
 
@@ -63,6 +64,9 @@ gfx::Size MacAuthenticationView::CalculatePreferredSize(
 }
 
 void MacAuthenticationView::AddedToWidget() {
+  if (!storage_->auth_view) {
+    return;
+  }
   // An `LAAuthenticationView` is an NSView, but Chromium uses the Views
   // framework for its UI, which just renders pixels onto a backing surface
   // (called a "widget"). Thus any NSViews have to be composited onto what
@@ -75,7 +79,7 @@ void MacAuthenticationView::AddedToWidget() {
   NSWindow* window = GetWidget()->GetNativeWindow().GetNativeNSWindow();
   [window.contentView addSubview:storage_->auth_view
                       positioned:NSWindowAbove
-                      relativeTo:window.contentView.subviews[0]];
+                      relativeTo:[window.contentView.subviews objectAtIndex:0]];
 }
 
 void MacAuthenticationView::RemovedFromWidget() {
@@ -113,26 +117,37 @@ void MacAuthenticationView::OnPaint(gfx::Canvas* canvas) {
     InvalidateLayout();
     storage_->auth_view.hidden = false;
     evaluation_requested_ = true;
-    if (!device::fido::mac::DeviceHasBiometricsAvailable()) {
-      return;
+    if (@available(macOS 12.0, *)) {
+      if (device::fido::mac::DeviceHasBiometricsAvailable()) {
+        __block auto internal_callback =
+            base::BindOnce(&MacAuthenticationView::OnAuthenticationComplete,
+                           weak_factory_.GetWeakPtr());
+        [(LAContext*)storage_->context
+             evaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+            localizedReason:base::SysUTF16ToNSString(touch_id_reason_)
+                      reply:^(BOOL success, NSError* error) {
+                        if (error) {
+                          FIDO_LOG(ERROR)
+                              << "Touch ID failed with error: "
+                              << error.localizedDescription.UTF8String;
+                        }
+                        content::BrowserThread::GetTaskRunnerForThread(
+                            content::BrowserThread::UI)
+                            ->PostTask(
+                                FROM_HERE,
+                                base::BindOnce(std::move(internal_callback),
+                                               success));
+                      }];
+        return;
+      }
     }
-    __block auto internal_callback =
-        base::BindOnce(&MacAuthenticationView::OnAuthenticationComplete,
-                       weak_factory_.GetWeakPtr());
-    [storage_->context
-         evaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
-        localizedReason:base::SysUTF16ToNSString(touch_id_reason_)
-                  reply:^(BOOL success, NSError* error) {
-                    if (error) {
-                      FIDO_LOG(ERROR) << "Touch ID failed with error: "
-                                      << error.localizedDescription.UTF8String;
-                    }
-                    content::BrowserThread::GetTaskRunnerForThread(
-                        content::BrowserThread::UI)
-                        ->PostTask(FROM_HERE,
-                                   base::BindOnce(std::move(internal_callback),
-                                                  success));
-                  }];
+    // Complete asynchronously after painting. An absent native view or
+    // biometric capability cannot yield a local-authentication token.
+    content::BrowserThread::GetTaskRunnerForThread(content::BrowserThread::UI)
+        ->PostTask(
+            FROM_HERE,
+            base::BindOnce(&MacAuthenticationView::OnAuthenticationComplete,
+                           weak_factory_.GetWeakPtr(), false));
   }
 }
 
@@ -157,8 +172,10 @@ void MacAuthenticationView::OnAuthenticationComplete(bool success) {
 
 void MacAuthenticationView::OnTouchIDAnimationComplete(bool success) {
   std::optional<webauthn::LocalAuthenticationToken> local_auth_token;
-  if (success) {
-    local_auth_token.emplace(storage_->context);
+  if (@available(macOS 12.0, *)) {
+    if (success && storage_->context) {
+      local_auth_token.emplace((LAContext*)storage_->context);
+    }
   }
   storage_->context = nil;
   std::move(callback_).Run(std::move(local_auth_token));
