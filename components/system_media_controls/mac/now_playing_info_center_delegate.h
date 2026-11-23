@@ -54,7 +54,7 @@ class NowPlayingInfoCenterDelegate {
       std::make_unique<base::OneShotTimer>();
 
   NowPlayingInfoCenterDelegateCocoa* __strong
-      now_playing_info_center_delegate_cocoa_;
+      now_playing_info_center_delegate_cocoa_ API_AVAILABLE(macos(10.12.2));
 };
 
 }  // namespace system_media_controls::internal

@@ -8,6 +8,8 @@
 @property(strong) id value;
 @end
 @implementation ChromiumLegacyWeakKeyEntry
+@synthesize key = _key;
+@synthesize value = _value;
 @end
 
 @implementation ChromiumLegacyWeakKeyMap {

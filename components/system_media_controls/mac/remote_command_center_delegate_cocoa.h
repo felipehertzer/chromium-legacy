@@ -12,6 +12,7 @@ namespace system_media_controls::internal {
 class RemoteCommandCenterDelegate;
 }  // namespace system_media_controls::internal
 
+API_AVAILABLE(macos(10.12.2))
 @interface RemoteCommandCenterDelegateCocoa : NSObject
 
 - (instancetype)initWithDelegate:

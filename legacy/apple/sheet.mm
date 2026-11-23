@@ -12,6 +12,7 @@
 @end
 
 @implementation ChromiumLegacySheetCompletion
+@synthesize completion = _completion;
 - (void)sheetDidEnd:(NSWindow*)sheet
          returnCode:(NSInteger)response
         contextInfo:(void*)context {

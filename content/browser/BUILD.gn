@@ -2787,6 +2787,7 @@ source_set("browser") {
       "//components/remote_cocoa/app_shim:features",
       "//components/remote_cocoa/browser",
       "//components/remote_cocoa/common:mojo",
+      "//legacy:platform_support",
       "//media",
       "//services/webnn/public/cpp",
       "//ui/accelerated_widget_mac",

@@ -18,6 +18,7 @@ source_set("platform_support") {
     "apple/http_header.h",
     "apple/localized_string.h",
     "apple/product_version.h",
+    "apple/quarantine.h",
     "apple/remove_all.h",
     "apple/scoped_dispatch.h",
     "apple/secure_archive.h",

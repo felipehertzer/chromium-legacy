@@ -19,6 +19,8 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "components/services/quarantine/common.h"
 #include "components/services/quarantine/common_mac.h"
+#include "legacy/apple/quarantine.h"
+#include "net/base/apple/url_conversions.h"
 #include "url/gurl.h"
 
 namespace quarantine {
@@ -124,23 +126,30 @@ void AddQuarantineMetadataToFile(const base::FilePath& file,
   // kLSQuarantineTimeStampKey are automatically set (see LSQuarantine.h), so
   // only values that the OS can't infer must be set here.
 
-  if (!properties[base::apple::CFToNSPtrCast(kLSQuarantineTypeKey)]) {
+  if (![properties
+          objectForKey:base::apple::CFToNSPtrCast(kLSQuarantineTypeKey)]) {
     CFStringRef type = source.SchemeIsHTTPOrHTTPS()
                            ? kLSQuarantineTypeWebDownload
                            : kLSQuarantineTypeOtherDownload;
-    properties[base::apple::CFToNSPtrCast(kLSQuarantineTypeKey)] =
-        base::apple::CFToNSPtrCast(type);
+    [properties setObject:base::apple::CFToNSPtrCast(type)
+                   forKey:base::apple::CFToNSPtrCast(kLSQuarantineTypeKey)];
   }
 
-  if (!properties[base::apple::CFToNSPtrCast(kLSQuarantineDataURLKey)]) {
-    properties[base::apple::CFToNSPtrCast(kLSQuarantineDataURLKey)] =
-        base::SysUTF8ToNSString(source.spec());
+  NSURL* source_ns_url = net::NSURLWithGURL(source);
+  if (source_ns_url &&
+      ![properties
+          objectForKey:base::apple::CFToNSPtrCast(kLSQuarantineDataURLKey)]) {
+    [properties setObject:source_ns_url
+                   forKey:base::apple::CFToNSPtrCast(kLSQuarantineDataURLKey)];
   }
 
-  if (!properties[base::apple::CFToNSPtrCast(kLSQuarantineOriginURLKey)] &&
-      referrer.is_valid()) {
-    properties[base::apple::CFToNSPtrCast(kLSQuarantineOriginURLKey)] =
-        base::SysUTF8ToNSString(referrer.spec());
+  NSURL* referrer_ns_url = net::NSURLWithGURL(referrer);
+  if (referrer_ns_url &&
+      ![properties
+          objectForKey:base::apple::CFToNSPtrCast(kLSQuarantineOriginURLKey)]) {
+    [properties
+        setObject:referrer_ns_url
+           forKey:base::apple::CFToNSPtrCast(kLSQuarantineOriginURLKey)];
   }
 
   NSURL* file_url = base::apple::FilePathToNSURL(file);
@@ -149,9 +158,7 @@ void AddQuarantineMetadataToFile(const base::FilePath& file,
   }
 
   NSError* error = nullptr;
-  [file_url setResourceValue:properties
-                      forKey:NSURLQuarantinePropertiesKey
-                       error:&error];
+  chromium_legacy::SetQuarantineProperties(file_url, properties, &error);
 }
 
 }  // namespace

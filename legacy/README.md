@@ -138,6 +138,17 @@ or replaces a Chromium 159 dependency.
   10.9. Existing origin, redirect, size, and allowed-header checks stay in place.
   Before 10.15, HTTP header lookup uses ASCII case-insensitive names and rejects
   ambiguous case variants and non-string values.
+- The content view uses old Foundation selectors, rectangle-based screen
+  coordinates, locale-aware casing and indirect trackpad touch delivery. Native
+  correction indicators retain their primary suggestion before 10.9; Touch Bar
+  candidate lists require 10.12.2. Full-page input behavior still needs testing.
+- MediaPlayer integration is weak-linked and requires 10.12.2. Earlier systems
+  do not construct native Now Playing/remote-command delegates or start their
+  update timer. Playback-date and artwork fields use their later API floors;
+  playback and in-page controls remain in the browser's media implementation.
+- Quarantine metadata uses LaunchServices FSRefs before 10.10 and URL resource
+  properties later. Source/referrer values retain their documented URL types;
+  existing quarantine marks, agent names and timestamps survive metadata updates.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -186,6 +197,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Native sheets, normal and forced old APIs | 10 checks each | 10 checks each |
 | ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
 | HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
+| Quarantine attributes/flags/metadata, normal and forced old APIs | 11 checks each | 13 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -198,7 +210,8 @@ An additional symbol audit compares the probes with the **actual Lion 10.7.5
 Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++ bindings,
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
-weak-key ownership, HTTP headers, timers, atomics, and forced C++ runtime probes have no missing required symbols
+weak-key ownership, HTTP headers, quarantine metadata, timers, atomics, and
+forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
 execution, Objective-C selectors, and sandbox behavior on Lion remain untested.
@@ -216,7 +229,11 @@ validate OS capability exports and production format dictionaries. They do not
 encode/decode frames or validate hardware video playback. The HTTP header checks
 use local response objects and malformed dictionaries; they do not authenticate
 to an SSO provider. Background component downloads and iCloud recovery keys have
-compiler verification only and still need full-browser integration tests.
+compiler verification only and still need full-browser integration tests. Native
+media controls and content-view behavior also have compiler verification only.
+Quarantine checks touch only owned temporary files, validate the preserved flag,
+agent, timestamp and (on Catalina) source/referrer URLs, and do not launch an app
+or validate the Gatekeeper user interface.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -238,6 +255,7 @@ legacy/test_bluetooth_platform.sh
 legacy/test_accessibility_platform.sh
 legacy/test_secure_archive.sh
 legacy/test_http_header.sh
+legacy/test_quarantine.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_sheet.sh
 legacy/test_weak_key_map.sh

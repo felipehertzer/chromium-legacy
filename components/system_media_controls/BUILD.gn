@@ -74,10 +74,8 @@ component("system_media_controls") {
       "//components/remote_cocoa/common:mojo",
     ]
 
-    frameworks = [
-      "Foundation.framework",
-      "MediaPlayer.framework",
-    ]
+    frameworks = [ "Foundation.framework" ]
+    weak_frameworks = [ "MediaPlayer.framework" ]
   } else {
     sources = [ "system_media_controls_stub.cc" ]
   }
@@ -104,7 +102,7 @@ source_set("unit_tests") {
       ":system_media_controls",
       "//testing/gtest",
     ]
-    frameworks = [ "MediaPlayer.framework" ]
+    weak_frameworks = [ "MediaPlayer.framework" ]
   }
 }
 

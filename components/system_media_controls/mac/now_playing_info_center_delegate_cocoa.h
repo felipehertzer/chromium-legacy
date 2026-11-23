@@ -11,6 +11,7 @@
 #include "base/component_export.h"
 
 COMPONENT_EXPORT(SYSTEM_MEDIA_CONTROLS)
+API_AVAILABLE(macos(10.12.2))
 @interface NowPlayingInfoCenterDelegateCocoa : NSObject
 
 - (instancetype)init;

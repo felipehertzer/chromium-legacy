@@ -37,6 +37,7 @@
 #import "content/public/browser/render_widget_host_view_mac_delegate.h"
 #include "content/public/browser/scoped_accessibility_mode.h"
 #include "content/public/common/content_features.h"
+#include "legacy/apple/localized_string.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom.h"
@@ -155,6 +156,16 @@ NSEvent* CreateContextMenuKeyDownEvent(NSEvent* source_event) {
                            keyCode:kVK_ContextualMenu];
 }
 
+// The rectangle conversions are present on Lion and also preserve the window
+// and screen coordinate systems on later macOS.
+NSPoint WindowPointFromScreen(NSWindow* window, NSPoint point) {
+  return
+      [window convertRectFromScreen:NSMakeRect(point.x, point.y, 0, 0)].origin;
+}
+NSPoint WindowPointToScreen(NSWindow* window, NSPoint point) {
+  return [window convertRectToScreen:NSMakeRect(point.x, point.y, 0, 0)].origin;
+}
+
 // Extract underline information from an attributed string. Inspired by
 // `extractUnderlines` in
 // https://github.com/WebKit/WebKit/blob/main/Source/WebKitLegacy/mac/WebView/WebHTMLView.mm
@@ -167,9 +178,11 @@ void ExtractUnderlines(NSAttributedString* string,
     NSDictionary* attrs = [string attributesAtIndex:i
                               longestEffectiveRange:&range
                                             inRange:NSMakeRange(i, length - i)];
-    if (NSNumber* style_attr = attrs[NSUnderlineStyleAttributeName]) {
+    if (NSNumber* style_attr =
+            [attrs objectForKey:NSUnderlineStyleAttributeName]) {
       SkColor color = SK_ColorBLACK;
-      if (NSColor* color_attr = attrs[NSUnderlineColorAttributeName]) {
+      if (NSColor* color_attr =
+              [attrs objectForKey:NSUnderlineColorAttributeName]) {
         color = skia::NSDeviceColorToSkColor(
             [color_attr colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace]);
       }
@@ -226,13 +239,16 @@ void ExtractUnderlines(NSAttributedString* string,
 - (void)sendWindowFrameInScreenToHost;
 - (bool)hostIsDisconnected;
 - (void)invalidateTouchBar;
+- (NSArray*)accessibilityChildren;
 - (void)synchronizeFirstResponderWithKeyTrackingWindow:(BOOL)isFirstResponder;
 
 // NSCandidateListTouchBarItemDelegate implementation
 - (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem*)anItem
-     endSelectingCandidateAtIndex:(NSInteger)index;
+     endSelectingCandidateAtIndex:(NSInteger)index
+    API_AVAILABLE(macos(10.12.2));
 - (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem*)anItem
-    changedCandidateListVisibility:(BOOL)isVisible;
+    changedCandidateListVisibility:(BOOL)isVisible
+    API_AVAILABLE(macos(10.12.2));
 @end
 
 namespace {
@@ -408,7 +424,8 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
   bool _keyboardLockActive;
   std::optional<base::flat_set<ui::DomCode>> _lockedKeys;
 
-  NSCandidateListTouchBarItem* __strong _candidateListTouchBarItem;
+  NSCandidateListTouchBarItem* __strong _candidateListTouchBarItem
+      API_AVAILABLE(macos(10.12.2));
   NSInteger _textSuggestionsSequenceNumber;
   BOOL _shouldRequestTextSubstitutions;
   BOOL _substitutionWasApplied;
@@ -438,7 +455,13 @@ static NSWindow* __weak _deferredResignKeyWindow;
   self = [super initWithFrame:NSZeroRect tracking:YES];
   if (self) {
     // Enable trackpad touches ("direct" touches are touchbar touches).
-    self.allowedTouchTypes |= NSTouchTypeMaskIndirect;
+    if (@available(macOS 10.12.2, *)) {
+      self.allowedTouchTypes |= NSTouchTypeMaskIndirect;
+    } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101202
+      self.acceptsTouchEvents = YES;
+#endif
+    }
     _editCommandHelper =
         std::make_unique<RenderWidgetHostViewMacEditCommandHelper>();
 
@@ -573,11 +596,15 @@ static NSWindow* __weak _deferredResignKeyWindow;
   textRectInViewCoordinates.origin.y =
       NSHeight([self frame]) - NSMaxY(textRectInViewCoordinates);
 
+  NSArray<NSString*>* alternatives = @[];
+  if (@available(macOS 10.9, *)) {
+    alternatives = result.alternativeStrings;
+  }
   NSUInteger changeNumber = _pendingCorrectionChangeNumber;
   [self.spellChecker
       showCorrectionIndicatorOfType:NSCorrectionIndicatorTypeDefault
                       primaryString:result.replacementString
-                 alternativeStrings:result.alternativeStrings
+                 alternativeStrings:alternatives
                     forStringInRect:textRectInViewCoordinates
                                view:self
                   completionHandler:^(NSString* acceptedString) {
@@ -631,9 +658,12 @@ static NSWindow* __weak _deferredResignKeyWindow;
         trailingRange.location - _availableTextOffset, trailingRange.length);
     NSString* trailingString =
         [attString.string substringWithRange:trailingRangeInAvailableText];
-    if ([self.spellChecker preventsAutocorrectionBeforeString:trailingString
-                                                     language:nil])
-      return;
+    if (@available(macOS 10.12, *)) {
+      if ([self.spellChecker preventsAutocorrectionBeforeString:trailingString
+                                                       language:nil]) {
+        return;
+      }
+    }
 
     // Gather some info in case -doubleClickAtIndex: throws an exception.
     // This change will eventually be reverted.
@@ -657,52 +687,54 @@ static NSWindow* __weak _deferredResignKeyWindow;
 }
 
 - (void)requestTextSuggestions {
-  auto* touchBarItem = _candidateListTouchBarItem;
-  if (!touchBarItem) {
-    return;
-  }
-  [touchBarItem
-      updateWithInsertionPointVisibility:_textSelectionRange.is_empty()];
-  if (_textInputType == ui::TEXT_INPUT_TYPE_PASSWORD ||
-      _textInputFlags & ui::TEXT_INPUT_FLAG_HAS_BEEN_PASSWORD ||
-      _textInputFlags & ui::TEXT_INPUT_FLAG_HAS_BEEN_CUSTOM_PASSWORD) {
-    return;
-  }
-  if (!touchBarItem.candidateListVisible) {
-    return;
-  }
-  if (!_textSelectionRange.IsValid() ||
-      _availableTextOffset > _textSelectionRange.GetMin()) {
-    return;
-  }
+  if (@available(macOS 10.12.2, *)) {
+    auto* touchBarItem = _candidateListTouchBarItem;
+    if (!touchBarItem) {
+      return;
+    }
+    [touchBarItem
+        updateWithInsertionPointVisibility:_textSelectionRange.is_empty()];
+    if (_textInputType == ui::TEXT_INPUT_TYPE_PASSWORD ||
+        _textInputFlags & ui::TEXT_INPUT_FLAG_HAS_BEEN_PASSWORD ||
+        _textInputFlags & ui::TEXT_INPUT_FLAG_HAS_BEEN_CUSTOM_PASSWORD) {
+      return;
+    }
+    if (!touchBarItem.candidateListVisible) {
+      return;
+    }
+    if (!_textSelectionRange.IsValid() ||
+        _availableTextOffset > _textSelectionRange.GetMin()) {
+      return;
+    }
 
-  NSRange selectionRange = _textSelectionRange.ToNSRange();
-  NSString* selectionText = base::SysUTF16ToNSString(_availableText);
-  selectionRange.location -= _availableTextOffset;
-  if (NSMaxRange(selectionRange) > selectionText.length) {
-    return;
-  }
+    NSRange selectionRange = _textSelectionRange.ToNSRange();
+    NSString* selectionText = base::SysUTF16ToNSString(_availableText);
+    selectionRange.location -= _availableTextOffset;
+    if (NSMaxRange(selectionRange) > selectionText.length) {
+      return;
+    }
 
-  // TODO: Fetch the spell document tag from the renderer (or equivalent).
-  _textSuggestionsSequenceNumber = [self.spellChecker
-      requestCandidatesForSelectedRange:selectionRange
-                               inString:selectionText
-                                  types:NSTextCheckingAllSystemTypes
-                                options:nil
-                 inSpellDocumentWithTag:0
-                      completionHandler:^(
-                          NSInteger sequenceNumber,
-                          NSArray<NSTextCheckingResult*>* candidates) {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                          if (sequenceNumber !=
-                              self->_textSuggestionsSequenceNumber) {
-                            return;
-                          }
-                          [touchBarItem setCandidates:candidates
-                                     forSelectedRange:selectionRange
-                                             inString:selectionText];
-                        });
-                      }];
+    // TODO: Fetch the spell document tag from the renderer (or equivalent).
+    _textSuggestionsSequenceNumber = [self.spellChecker
+        requestCandidatesForSelectedRange:selectionRange
+                                 inString:selectionText
+                                    types:NSTextCheckingAllSystemTypes
+                                  options:nil
+                   inSpellDocumentWithTag:0
+                        completionHandler:^(
+                            NSInteger sequenceNumber,
+                            NSArray<NSTextCheckingResult*>* candidates) {
+                          dispatch_async(dispatch_get_main_queue(), ^{
+                            if (sequenceNumber !=
+                                self->_textSuggestionsSequenceNumber) {
+                              return;
+                            }
+                            [touchBarItem setCandidates:candidates
+                                       forSelectedRange:selectionRange
+                                               inString:selectionText];
+                          });
+                        }];
+  }
 }
 
 - (NSTextCheckingType)allowedTextCheckingTypes {
@@ -758,7 +790,8 @@ static NSWindow* __weak _deferredResignKeyWindow;
   if (!text)
     return;
 
-  [self insertText:text.localizedUppercaseString
+  [self insertText:chromium_legacy::LocalizedCaseString(
+                       text, chromium_legacy::StringCase::kUpper)
       replacementRange:_textSelectionRange.ToNSRange()];
 }
 
@@ -767,7 +800,8 @@ static NSWindow* __weak _deferredResignKeyWindow;
   if (!text)
     return;
 
-  [self insertText:text.localizedLowercaseString
+  [self insertText:chromium_legacy::LocalizedCaseString(
+                       text, chromium_legacy::StringCase::kLower)
       replacementRange:_textSelectionRange.ToNSRange()];
 }
 
@@ -776,7 +810,8 @@ static NSWindow* __weak _deferredResignKeyWindow;
   if (!text)
     return;
 
-  [self insertText:text.localizedCapitalizedString
+  [self insertText:chromium_legacy::LocalizedCaseString(
+                       text, chromium_legacy::StringCase::kTitle)
       replacementRange:_textSelectionRange.ToNSRange()];
 }
 
@@ -809,10 +844,12 @@ static NSWindow* __weak _deferredResignKeyWindow;
 }
 
 - (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem*)anItem
-     endSelectingCandidateAtIndex:(NSInteger)index {
+     endSelectingCandidateAtIndex:(NSInteger)index
+    API_AVAILABLE(macos(10.12.2)) {
   if (index == NSNotFound)
     return;
-  NSTextCheckingResult* selectedResult = anItem.candidates[index];
+  NSTextCheckingResult* selectedResult =
+      [anItem.candidates objectAtIndex:index];
   NSRange replacementRange = selectedResult.range;
   replacementRange.location += _availableTextOffset;
   [self insertText:selectedResult.replacementString
@@ -820,7 +857,8 @@ static NSWindow* __weak _deferredResignKeyWindow;
 }
 
 - (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem*)anItem
-    changedCandidateListVisibility:(BOOL)isVisible {
+    changedCandidateListVisibility:(BOOL)isVisible
+    API_AVAILABLE(macos(10.12.2)) {
   [self requestTextSuggestions];
 }
 
@@ -1395,14 +1433,14 @@ static NSWindow* __weak _deferredResignKeyWindow;
     const NSPoint locationInScreen = NSEvent.mouseLocation;
     _preLockCursorScreenPosition = locationInScreen;
     const NSPoint locationInView =
-        [self convertPoint:[self.window convertPointFromScreen:locationInScreen]
+        [self convertPoint:WindowPointFromScreen(self.window, locationInScreen)
                   fromView:nil];
     if (!NSPointInRect(locationInView, self.bounds)) {
       const NSPoint centerInWindow = [self
           convertPoint:NSMakePoint(NSMidX(self.bounds), NSMidY(self.bounds))
                 toView:nil];
       CGWarpMouseCursorPosition(CGPointFromNSEventScreenPoint(
-          [self.window convertPointToScreen:centerInWindow]));
+          WindowPointToScreen(self.window, centerInWindow)));
 
       // `mouseEvent()` suppresses locked events until the move distance has
       // been absorbed.
@@ -2453,7 +2491,7 @@ static NSWindow* __weak _deferredResignKeyWindow;
 
   NSView* view = popupParentNSView ? popupParentNSView : self;
 
-  NSPoint pointInWindow = [view.window convertPointFromScreen:point];
+  NSPoint pointInWindow = WindowPointFromScreen(view.window, point);
   NSPoint localPoint = [view convertPoint:pointInWindow fromView:nil];
   localPoint.y = NSHeight([view bounds]) - localPoint.y;
 
@@ -2484,7 +2522,10 @@ static NSWindow* __weak _deferredResignKeyWindow;
 - (id)accessibilityParent {
   if (_accessibilityParent)
     return NSAccessibilityUnignoredAncestor(_accessibilityParent);
-  return [super accessibilityParent];
+  if (@available(macOS 10.10, *)) {
+    return [super accessibilityParent];
+  }
+  return [super accessibilityAttributeValue:NSAccessibilityParentAttribute];
 }
 
 - (NSAccessibilityRole)accessibilityRole {
@@ -2578,7 +2619,7 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
   // |thePoint| is in screen coordinates, but needs to be converted to WebKit
   // coordinates (upper left origin). Scroll offsets will be taken care of in
   // the renderer.
-  thePoint = [self.window convertPointFromScreen:thePoint];
+  thePoint = WindowPointFromScreen(self.window, thePoint);
   thePoint = [self convertPoint:thePoint fromView:nil];
   gfx::PointF rootPoint =
       GetSanitizedFlippedPoint(thePoint, NSHeight([self frame]));
@@ -3150,7 +3191,7 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
   // |updateCursor:| might be called outside the view bounds. Check the mouse
   // location before setting the cursor. Also, do not set cursor if it's not a
   // key window.
-  NSPoint location = [self.window convertPointFromScreen:NSEvent.mouseLocation];
+  NSPoint location = WindowPointFromScreen(self.window, NSEvent.mouseLocation);
   location = [self convertPoint:location fromView:nil];
   if (![self mouse:location inRect:[self bounds]]) {
     return NO;
@@ -3179,15 +3220,17 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
 }
 
 - (void)invalidateTouchBar {
-  // Work around a crash (https://crbug.com/822427).
-  [_candidateListTouchBarItem setCandidates:@[]
-                           forSelectedRange:NSMakeRange(NSNotFound, 0)
-                                   inString:nil];
-  _candidateListTouchBarItem = nil;
-  self.touchBar = nil;
+  if (@available(macOS 10.12.2, *)) {
+    // Work around a crash (https://crbug.com/822427).
+    [_candidateListTouchBarItem setCandidates:@[]
+                             forSelectedRange:NSMakeRange(NSNotFound, 0)
+                                     inString:nil];
+    _candidateListTouchBarItem = nil;
+    self.touchBar = nil;
+  }
 }
 
-- (NSTouchBar*)makeTouchBar {
+- (NSTouchBar*)makeTouchBar API_AVAILABLE(macos(10.12.2)) {
   if (_textInputType != ui::TEXT_INPUT_TYPE_NONE) {
     _candidateListTouchBarItem = [[NSCandidateListTouchBarItem alloc]
         initWithIdentifier:NSTouchBarItemIdentifierCandidateList];

@@ -10,6 +10,7 @@
 @property(copy) NSDictionary* fixtureHeaders;
 @end
 @implementation LegacyHTTPHeaderFixture
+@synthesize fixtureHeaders = _fixtureHeaders;
 - (NSDictionary*)allHeaderFields {
   return self.fixtureHeaders;
 }

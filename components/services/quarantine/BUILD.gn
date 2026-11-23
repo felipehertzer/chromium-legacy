@@ -30,6 +30,7 @@ static_library("quarantine") {
   }
 
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
     sources += [ "quarantine_mac.mm" ]
     frameworks = [
       "Carbon.framework",
@@ -65,6 +66,7 @@ source_set("common") {
   }
 
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
     sources += [
       "common_mac.h",
       "common_mac.mm",

@@ -14,6 +14,7 @@ for arch in "${ARCHITECTURES[@]}"; do
   fi
   TARGET_ARGS+=(-isysroot "$SDK_PATH")
   COMMON_ARGS=(-std=c++17 -Wall -Wextra -Werror -Wunguarded-availability
+    -Wobjc-missing-property-synthesis
     -fobjc-arc -fno-exceptions -fno-objc-arc-exceptions -I "$ROOT_DIR"
     -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE
     -D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS

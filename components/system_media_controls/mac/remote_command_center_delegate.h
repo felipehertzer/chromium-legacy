@@ -82,7 +82,7 @@ class RemoteCommandCenterDelegate {
   mojo::Remote<mojom::SystemMediaControlsObserver> observer_remote_;
 
   RemoteCommandCenterDelegateCocoa* __strong
-      remote_command_center_delegate_cocoa_;
+      remote_command_center_delegate_cocoa_ API_AVAILABLE(macos(10.12.2));
   base::flat_set<Command> enabled_commands_;
 };
 

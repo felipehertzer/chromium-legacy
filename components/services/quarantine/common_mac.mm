@@ -14,6 +14,7 @@
 #include "base/logging.h"
 #include "base/mac/mac_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "legacy/apple/quarantine.h"
 
 namespace quarantine {
 
@@ -25,9 +26,8 @@ NSDictionary* GetQuarantineProperties(const base::FilePath& file) {
 
   NSError* __autoreleasing error = nil;
   id __autoreleasing quarantine_properties = nil;
-  BOOL success = [file_url getResourceValue:&quarantine_properties
-                                     forKey:NSURLQuarantinePropertiesKey
-                                      error:&error];
+  BOOL success = chromium_legacy::GetQuarantineProperties(
+      file_url, &quarantine_properties, &error);
   if (!success) {
     std::string error_message(error ? error.description.UTF8String : "");
     LOG(WARNING) << "Unable to get quarantine attributes for file "

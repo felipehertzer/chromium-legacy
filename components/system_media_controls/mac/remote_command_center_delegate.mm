@@ -11,8 +11,10 @@
 namespace system_media_controls::internal {
 
 RemoteCommandCenterDelegate::RemoteCommandCenterDelegate() {
-  remote_command_center_delegate_cocoa_ =
-      [[RemoteCommandCenterDelegateCocoa alloc] initWithDelegate:this];
+  if (@available(macOS 10.12.2, *)) {
+    remote_command_center_delegate_cocoa_ =
+        [[RemoteCommandCenterDelegateCocoa alloc] initWithDelegate:this];
+  }
 }
 
 RemoteCommandCenterDelegate::~RemoteCommandCenterDelegate() {
@@ -25,40 +27,50 @@ RemoteCommandCenterDelegate::~RemoteCommandCenterDelegate() {
 }
 
 void RemoteCommandCenterDelegate::SetIsNextEnabled(bool value) {
-  if (!ShouldSetCommandEnabled(Command::kNextTrack, value))
-    return;
+  if (@available(macOS 10.12.2, *)) {
+    if (!ShouldSetCommandEnabled(Command::kNextTrack, value))
+      return;
 
-  [remote_command_center_delegate_cocoa_ setCanGoNextTrack:value];
+    [remote_command_center_delegate_cocoa_ setCanGoNextTrack:value];
+  }
 }
 
 void RemoteCommandCenterDelegate::SetIsPreviousEnabled(bool value) {
-  if (!ShouldSetCommandEnabled(Command::kPreviousTrack, value))
-    return;
+  if (@available(macOS 10.12.2, *)) {
+    if (!ShouldSetCommandEnabled(Command::kPreviousTrack, value))
+      return;
 
-  [remote_command_center_delegate_cocoa_ setCanGoPreviousTrack:value];
+    [remote_command_center_delegate_cocoa_ setCanGoPreviousTrack:value];
+  }
 }
 
 void RemoteCommandCenterDelegate::SetIsPlayPauseEnabled(bool value) {
-  if (!ShouldSetCommandEnabled(Command::kPlayPause, value))
-    return;
+  if (@available(macOS 10.12.2, *)) {
+    if (!ShouldSetCommandEnabled(Command::kPlayPause, value))
+      return;
 
-  [remote_command_center_delegate_cocoa_ setCanPlay:value];
-  [remote_command_center_delegate_cocoa_ setCanPause:value];
-  [remote_command_center_delegate_cocoa_ setCanPlayPause:value];
+    [remote_command_center_delegate_cocoa_ setCanPlay:value];
+    [remote_command_center_delegate_cocoa_ setCanPause:value];
+    [remote_command_center_delegate_cocoa_ setCanPlayPause:value];
+  }
 }
 
 void RemoteCommandCenterDelegate::SetIsStopEnabled(bool value) {
-  if (!ShouldSetCommandEnabled(Command::kStop, value))
-    return;
+  if (@available(macOS 10.12.2, *)) {
+    if (!ShouldSetCommandEnabled(Command::kStop, value))
+      return;
 
-  [remote_command_center_delegate_cocoa_ setCanStop:value];
+    [remote_command_center_delegate_cocoa_ setCanStop:value];
+  }
 }
 
 void RemoteCommandCenterDelegate::SetIsSeekToEnabled(bool value) {
-  if (!ShouldSetCommandEnabled(Command::kSeekTo, value))
-    return;
+  if (@available(macOS 10.12.2, *)) {
+    if (!ShouldSetCommandEnabled(Command::kSeekTo, value))
+      return;
 
-  [remote_command_center_delegate_cocoa_ setCanSeekTo:value];
+    [remote_command_center_delegate_cocoa_ setCanSeekTo:value];
+  }
 }
 
 void RemoteCommandCenterDelegate::OnNext() {
