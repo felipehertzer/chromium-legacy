@@ -20,12 +20,14 @@
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "content/public/browser/tts_controller.h"
+#include "legacy/apple/speech.h"
 
 namespace {
 
 constexpr int kNoLength = -1;
 constexpr char kNoError[] = "";
 
+API_AVAILABLE(macos(10.14))
 AVSpeechUtterance* MakeUtterance(int utterance_id,
                                  const std::string& utterance_string) {
   AVSpeechUtterance* utterance = [AVSpeechUtterance
@@ -35,6 +37,7 @@ AVSpeechUtterance* MakeUtterance(int utterance_id,
   return utterance;
 }
 
+API_AVAILABLE(macos(10.14))
 int GetUtteranceId(AVSpeechUtterance* utterance) {
   NSNumber* identifier = base::apple::ObjCCast<NSNumber>(
       objc_getAssociatedObject(utterance, @selector(identifier)));
@@ -96,9 +99,10 @@ TtsPlatformImplMacBackgroundWorker::GetSystemDefaultVoice() {
   if (!voice) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  NSString* default_voice_identifier = NSSpeechSynthesizer.defaultVoice;
+    NSString* default_voice_identifier = NSSpeechSynthesizer.defaultVoice;
 #pragma clang diagnostic pop
-  voice = [AVSpeechSynthesisVoice voiceWithIdentifier:default_voice_identifier];
+    voice =
+        [AVSpeechSynthesisVoice voiceWithIdentifier:default_voice_identifier];
   }
 
   // Fallback to the default voice for the system's language and location if we
@@ -113,9 +117,14 @@ TtsPlatformImplMacBackgroundWorker::GetSystemDefaultVoice() {
 
 std::string
 TtsPlatformImplMacBackgroundWorker::GetSystemDefaultVoiceIdentifier() {
-  AVSpeechSynthesisVoice* default_voice = GetSystemDefaultVoice();
-  return default_voice ? base::SysNSStringToUTF8(default_voice.identifier)
-                       : std::string();
+  if (@available(macOS 10.14, *)) {
+    if (!chromium_legacy::ForceLegacySpeechForTests()) {
+      AVSpeechSynthesisVoice* default_voice = GetSystemDefaultVoice();
+      return default_voice ? base::SysNSStringToUTF8(default_voice.identifier)
+                           : std::string();
+    }
+  }
+  return base::SysNSStringToUTF8(NSSpeechSynthesizer.defaultVoice);
 }
 
 TtsPlatformImplMacBackgroundWorker::Voices::Voices() = default;
@@ -126,6 +135,39 @@ TtsPlatformImplMacBackgroundWorker::Voices::~Voices() = default;
 
 TtsPlatformImplMacBackgroundWorker::Voices
 TtsPlatformImplMacBackgroundWorker::LoadVoices() {
+  if (@available(macOS 10.14, *)) {
+    if (!chromium_legacy::ForceLegacySpeechForTests()) {
+      return LoadAVSpeechVoices();
+    }
+  }
+  Voices result;
+  result.default_voice_identifier =
+      base::SysNSStringToUTF8(NSSpeechSynthesizer.defaultVoice);
+  for (NSString* identifier : chromium_legacy::LegacySpeechVoiceIdentifiers()) {
+    NSDictionary* attributes =
+        [NSSpeechSynthesizer attributesForVoice:identifier];
+    NSString* name = [attributes objectForKey:NSVoiceName];
+    NSString* locale = [attributes objectForKey:NSVoiceLocaleIdentifier];
+    if (!name.length) {
+      continue;
+    }
+    content::VoiceData data;
+    data.native = true;
+    data.native_voice_identifier = base::SysNSStringToUTF8(identifier);
+    data.name = base::SysNSStringToUTF8(name);
+    data.lang = base::SysNSStringToUTF8(
+        [locale stringByReplacingOccurrencesOfString:@"_" withString:@"-"]);
+    data.events = {content::TTS_EVENT_START, content::TTS_EVENT_END,
+                   content::TTS_EVENT_WORD,  content::TTS_EVENT_ERROR,
+                   content::TTS_EVENT_PAUSE, content::TTS_EVENT_RESUME};
+    result.voices.push_back(std::move(data));
+  }
+
+  return result;
+}
+
+TtsPlatformImplMacBackgroundWorker::Voices
+TtsPlatformImplMacBackgroundWorker::LoadAVSpeechVoices() {
   Voices result;
 
   AVSpeechSynthesisVoice* default_voice = GetSystemDefaultVoice();
@@ -258,6 +300,55 @@ void TtsPlatformImplMac::ProcessSpeech(
   paused_ = false;
   utterance_id_ = utterance_id;
 
+  last_char_index_ = 0;
+  if (@available(macOS 10.14, *)) {
+    if (!chromium_legacy::ForceLegacySpeechForTests()) {
+      ProcessAVSpeech(utterance_id, voice, params, std::move(on_speak_finished),
+                      parsed_utterance);
+      return;
+    }
+  }
+  [legacy_speech_synthesizer_ stopSpeaking];
+  legacy_speech_synthesizer_ = [[ChromiumLegacySpeechSynthesizer alloc]
+      initWithText:base::SysUTF8ToNSString(parsed_utterance)
+             voice:base::SysUTF8ToNSString(voice.native_voice_identifier)
+              rate:params.rate
+             pitch:params.pitch
+            volume:params.volume
+           handler:^(chromium_legacy::SpeechEvent event, NSRange range,
+                     NSString* message) {
+             content::TtsEventType type;
+             switch (event) {
+               case chromium_legacy::SpeechEvent::kStart:
+                 type = content::TTS_EVENT_START;
+                 break;
+               case chromium_legacy::SpeechEvent::kEnd:
+                 type = content::TTS_EVENT_END;
+                 break;
+               case chromium_legacy::SpeechEvent::kWord:
+                 type = content::TTS_EVENT_WORD;
+                 break;
+               case chromium_legacy::SpeechEvent::kError:
+                 type = content::TTS_EVENT_ERROR;
+                 break;
+             }
+             OnSpeechEvent(utterance_id, type, range.location,
+                           event == chromium_legacy::SpeechEvent::kWord
+                               ? static_cast<int>(range.length)
+                               : kNoLength,
+                           base::SysNSStringToUTF8(message));
+           }];
+  std::move(on_speak_finished).Run([legacy_speech_synthesizer_ startAtURL:nil]);
+}
+
+void TtsPlatformImplMac::ProcessAVSpeech(
+    int utterance_id,
+    const content::VoiceData& voice,
+    const content::UtteranceContinuousParameters& params,
+    base::OnceCallback<void(bool)> on_speak_finished,
+    const std::string& parsed_utterance) {
+  AVSpeechSynthesizer* speech_synthesizer =
+      (AVSpeechSynthesizer*)speech_synthesizer_;
   AVSpeechUtterance* speech_utterance =
       MakeUtterance(utterance_id, parsed_utterance);
   if (!speech_utterance) {
@@ -330,13 +421,18 @@ void TtsPlatformImplMac::ProcessSpeech(
     speech_utterance.volume = params.volume;
   }
 
-  [speech_synthesizer_ speakUtterance:speech_utterance];
+  [speech_synthesizer speakUtterance:speech_utterance];
   std::move(on_speak_finished).Run(true);
 }
 
 bool TtsPlatformImplMac::StopSpeaking() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  [speech_synthesizer_ stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+  if (@available(macOS 10.14, *)) {
+    [(AVSpeechSynthesizer*)speech_synthesizer_
+        stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+  }
+  [legacy_speech_synthesizer_ stopSpeaking];
+  legacy_speech_synthesizer_ = nil;
   paused_ = false;
   return true;
 }
@@ -344,7 +440,12 @@ bool TtsPlatformImplMac::StopSpeaking() {
 void TtsPlatformImplMac::Pause() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!paused_) {
-    [speech_synthesizer_ pauseSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+    if (@available(macOS 10.14, *)) {
+      [(AVSpeechSynthesizer*)speech_synthesizer_
+          pauseSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+    }
+    [legacy_speech_synthesizer_
+        pauseSpeakingAtBoundary:NSSpeechImmediateBoundary];
     paused_ = true;
     content::TtsController::GetInstance()->OnTtsEvent(
         utterance_id_, content::TTS_EVENT_PAUSE, last_char_index_, kNoLength,
@@ -355,7 +456,10 @@ void TtsPlatformImplMac::Pause() {
 void TtsPlatformImplMac::Resume() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (paused_) {
-    [speech_synthesizer_ continueSpeaking];
+    if (@available(macOS 10.14, *)) {
+      [(AVSpeechSynthesizer*)speech_synthesizer_ continueSpeaking];
+    }
+    [legacy_speech_synthesizer_ continueSpeaking];
     paused_ = false;
     content::TtsController::GetInstance()->OnTtsEvent(
         utterance_id_, content::TTS_EVENT_RESUME, last_char_index_, kNoLength,
@@ -365,7 +469,12 @@ void TtsPlatformImplMac::Resume() {
 
 bool TtsPlatformImplMac::IsSpeaking() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return speech_synthesizer_.speaking;
+  if (@available(macOS 10.14, *)) {
+    if (speech_synthesizer_) {
+      return [(AVSpeechSynthesizer*)speech_synthesizer_ isSpeaking];
+    }
+  }
+  return legacy_speech_synthesizer_.speaking;
 }
 
 void TtsPlatformImplMac::GetVoices(std::vector<content::VoiceData>* outVoices) {
@@ -464,10 +573,17 @@ void TtsPlatformImplMac::OnSpeechEvent(int utterance_id,
   last_char_index_ = char_index;
 }
 
-TtsPlatformImplMac::TtsPlatformImplMac()
-    : speech_synthesizer_([[AVSpeechSynthesizer alloc] init]),
-      delegate_([[ChromeTtsDelegate alloc] initWithPlatformImplMac:this]) {
-  speech_synthesizer_.delegate = delegate_;
+TtsPlatformImplMac::TtsPlatformImplMac() {
+  if (@available(macOS 10.14, *)) {
+    if (!chromium_legacy::ForceLegacySpeechForTests()) {
+      AVSpeechSynthesizer* synthesizer = [[AVSpeechSynthesizer alloc] init];
+      ChromeTtsDelegate* delegate =
+          [[ChromeTtsDelegate alloc] initWithPlatformImplMac:this];
+      synthesizer.delegate = delegate;
+      speech_synthesizer_ = synthesizer;
+      delegate_ = delegate;
+    }
+  }
   application_active_observer_ = [NSNotificationCenter.defaultCenter
       addObserverForName:NSApplicationWillBecomeActiveNotification
                   object:nil

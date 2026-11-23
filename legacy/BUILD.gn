@@ -35,6 +35,8 @@ if (is_mac) {
     sources = [
       "apple/sheet.h",
       "apple/sheet.mm",
+      "apple/speech.h",
+      "apple/speech.mm",
       "apple/weak_key_map.h",
       "apple/weak_key_map.mm",
     ]

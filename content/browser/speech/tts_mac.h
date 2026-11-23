@@ -19,6 +19,7 @@
 #include "content/browser/speech/tts_platform_impl.h"
 
 class TtsPlatformImplMac;
+@class ChromiumLegacySpeechSynthesizer;
 
 class CONTENT_EXPORT TtsPlatformImplMacBackgroundWorker {
  public:
@@ -41,15 +42,19 @@ class CONTENT_EXPORT TtsPlatformImplMacBackgroundWorker {
     std::string default_voice_identifier;
   };
 
-  AVSpeechSynthesisVoice* GetSystemDefaultVoice();
+  AVSpeechSynthesisVoice* GetSystemDefaultVoice() API_AVAILABLE(macos(10.14));
   std::string GetSystemDefaultVoiceIdentifier();
 
   // Enumerates the installed voices. AVSpeechSynthesisVoice.speechVoices can
   // take hundreds of milliseconds the first time it is called in a process, so
   // this must not run on the UI thread.
   Voices LoadVoices();
+
+ private:
+  Voices LoadAVSpeechVoices() API_AVAILABLE(macos(10.14));
 };
 
+API_AVAILABLE(macos(10.14))
 @interface ChromeTtsDelegate : NSObject <AVSpeechSynthesizerDelegate>
 
 - (instancetype)initWithPlatformImplMac:(TtsPlatformImplMac*)ttsImplMac;
@@ -112,6 +117,13 @@ class TtsPlatformImplMac : public content::TtsPlatformImpl {
                      base::OnceCallback<void(bool)> on_speak_finished,
                      const std::string& parsed_utterance);
 
+  void ProcessAVSpeech(int utterance_id,
+                       const content::VoiceData& voice,
+                       const content::UtteranceContinuousParameters& params,
+                       base::OnceCallback<void(bool)> on_speak_finished,
+                       const std::string& parsed_utterance)
+      API_AVAILABLE(macos(10.14));
+
   // Starts (re)loading the voice list on the background worker. Requests made
   // while a load is in flight are coalesced into one more load after it.
   void LoadVoices();
@@ -125,8 +137,10 @@ class TtsPlatformImplMac : public content::TtsPlatformImpl {
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  AVSpeechSynthesizer* __strong speech_synthesizer_;
-  ChromeTtsDelegate* __strong delegate_;
+  // Keep optional AVSpeech objects opaque until their runtime gate is checked.
+  NSObject* __strong speech_synthesizer_;
+  NSObject* __strong delegate_;
+  ChromiumLegacySpeechSynthesizer* __strong legacy_speech_synthesizer_;
   id __strong application_active_observer_ = nil;
   int utterance_id_ = kInvalidUtteranceId;
   std::string utterance_;

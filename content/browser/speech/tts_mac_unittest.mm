@@ -24,15 +24,22 @@ TEST(TtsMacTest, CachedVoiceData) {
 
   std::vector<VoiceData> voices;
   tts->GetVoices(&voices);
-  EXPECT_EQ(voices.size(), AVSpeechSynthesisVoice.speechVoices.count);
-
-  AVSpeechSynthesisVoice* default_voice =
-      TtsPlatformImplMacBackgroundWorker().GetSystemDefaultVoice();
-  if (default_voice && !voices.empty()) {
-    EXPECT_EQ(voices[0].native_voice_identifier,
-              base::SysNSStringToUTF8(default_voice.identifier));
-    EXPECT_TRUE(voices[0].name.starts_with(
-        base::SysNSStringToUTF8(default_voice.name)));
+  if (@available(macOS 10.14, *)) {
+    EXPECT_EQ(voices.size(), AVSpeechSynthesisVoice.speechVoices.count);
+    AVSpeechSynthesisVoice* default_voice =
+        TtsPlatformImplMacBackgroundWorker().GetSystemDefaultVoice();
+    if (default_voice && !voices.empty()) {
+      EXPECT_EQ(voices[0].native_voice_identifier,
+                base::SysNSStringToUTF8(default_voice.identifier));
+      EXPECT_TRUE(voices[0].name.starts_with(
+          base::SysNSStringToUTF8(default_voice.name)));
+    }
+  } else {
+    EXPECT_EQ(voices.size(), NSSpeechSynthesizer.availableVoices.count);
+    if (!voices.empty() && NSSpeechSynthesizer.defaultVoice) {
+      EXPECT_EQ(voices[0].native_voice_identifier,
+                base::SysNSStringToUTF8(NSSpeechSynthesizer.defaultVoice));
+    }
   }
 
   // A refresh reloads in the background and keeps serving the cached list in
