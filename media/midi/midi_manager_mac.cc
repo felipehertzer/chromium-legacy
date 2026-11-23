@@ -19,6 +19,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "build/build_config.h"
+#include "media/midi/core_midi_util.h"
 #include "media/midi/midi_service.h"
 #include "media/midi/task_service.h"
 #include "media/midi/ump_message_util.h"
@@ -181,12 +182,20 @@ void MidiManagerMac::InitializeCoreMIDI() {
   // Create input and output port. These MIDIPortRef references are not needed
   // to be disposed explicitly. CoreMIDI automatically disposes them on the
   // client disposal.
-  result = MIDIInputPortCreateWithProtocol(
-      client, CFSTR("MIDI Input"), kMIDIProtocol_1_0, &midi_input_,
-      ^(const MIDIEventList* event_list, void* src_conn_refcon) {
-        this->ReceiveMidiEventList(reinterpret_cast<uintptr_t>(src_conn_refcon),
-                                   event_list);
-      });
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (__builtin_available(macOS 11.0, *)) {
+    result = MIDIInputPortCreateWithProtocol(
+        client, CFSTR("MIDI Input"), kMIDIProtocol_1_0, &midi_input_,
+        ^(const MIDIEventList* event_list, void* src_conn_refcon) {
+          this->ReceiveMidiEventList(
+              reinterpret_cast<uintptr_t>(src_conn_refcon), event_list);
+        });
+  } else
+#endif
+  {
+    result = MIDIInputPortCreate(client, CFSTR("MIDI Input"),
+                                 ReceiveMidiPacketList, this, &midi_input_);
+  }
   if (result != noErr || midi_input_ == 0u)
     return CompleteCoreMIDIInitialization(Result::INITIALIZATION_ERROR);
 
@@ -303,6 +312,21 @@ void MidiManagerMac::ReceiveMidiNotify(const MIDINotification* message) {
   }
 }
 
+// static
+void MidiManagerMac::ReceiveMidiPacketList(const MIDIPacketList* packet_list,
+                                           void* refcon,
+                                           void* src_conn_refcon) {
+  auto* manager = static_cast<MidiManagerMac*>(refcon);
+  const auto port_index =
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(src_conn_refcon));
+  internal::DispatchMidiPacketList(
+      *packet_list, [manager, port_index](base::span<const uint8_t> data,
+                                          MIDITimeStamp timestamp) {
+        manager->ReceiveMidiData(port_index, data,
+                                 MIDITimeStampToTimeTicks(timestamp));
+      });
+}
+
 void MidiManagerMac::ReceiveMidiEventList(uint32_t port_index,
                                           const MIDIEventList* event_list) {
   const MIDIEventPacket* packet = &event_list->packet[0];
@@ -336,57 +360,80 @@ void MidiManagerMac::SendMidiData(MidiManagerClient* client,
   MIDITimeStamp coremidi_timestamp = TimeTicksToMIDITimeStamp(timestamp);
   MIDIEndpointRef destination = destinations_[port_index];
 
-  std::vector<uint32_t> ump_words;
-  TranslateMidiToUmpWords(data, 0, ump_words);
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (__builtin_available(macOS 11.0, *)) {
+    std::vector<uint32_t> ump_words;
+    TranslateMidiToUmpWords(data, 0, ump_words);
 
-  if (ump_words.empty()) {
-    return;
-  }
+    if (ump_words.empty()) {
+      return;
+    }
 
-  size_t words_sent = 0;
-  while (words_sent < ump_words.size()) {
-    // SAFETY: CoreMIDI APIs (MIDIEventListInit, MIDIEventListAdd) require
-    // a raw MIDIEventList pointer. There is no safe C++ alternative
-    // provided by the SDK. `midi_buffer_` is allocated to
-    // kCoreMIDIMaxEventListSize, which is large enough to hold the list.
-    MIDIEventList* event_list =
-        UNSAFE_BUFFERS(reinterpret_cast<MIDIEventList*>(midi_buffer_.data()));
-    MIDIEventPacket* cur_packet =
-        MIDIEventListInit(event_list, kMIDIProtocol_1_0);
+    size_t words_sent = 0;
+    while (words_sent < ump_words.size()) {
+      // SAFETY: CoreMIDI APIs (MIDIEventListInit, MIDIEventListAdd) require
+      // a raw MIDIEventList pointer. There is no safe C++ alternative
+      // provided by the SDK. `midi_buffer_` is allocated to
+      // kCoreMIDIMaxEventListSize, which is large enough to hold the list.
+      MIDIEventList* event_list =
+          UNSAFE_BUFFERS(reinterpret_cast<MIDIEventList*>(midi_buffer_.data()));
+      MIDIEventPacket* cur_packet =
+          MIDIEventListInit(event_list, kMIDIProtocol_1_0);
 
-    // Calculate the maximum number of UMP words that can fit into an empty
-    // MIDIEventList. We use offsetof to account for alignment padding.
-    const size_t header_overhead_bytes =
-        offsetof(MIDIEventList, packet) + offsetof(MIDIEventPacket, words);
-    const size_t max_words_per_list =
-        (kCoreMIDIMaxEventListSize - header_overhead_bytes) / sizeof(uint32_t);
+      // Calculate the maximum number of UMP words that can fit into an empty
+      // MIDIEventList. We use offsetof to account for alignment padding.
+      const size_t header_overhead_bytes =
+          offsetof(MIDIEventList, packet) + offsetof(MIDIEventPacket, words);
+      const size_t max_words_per_list =
+          (kCoreMIDIMaxEventListSize - header_overhead_bytes) /
+          sizeof(uint32_t);
 
-    // Calculate words to send, ensuring we don't split UMP packets.
-    size_t words_to_send = 0;
-    while (words_sent + words_to_send < ump_words.size()) {
-      uint32_t first_word = ump_words[words_sent + words_to_send];
-      size_t packet_len = GetUmpLengthInWords(first_word);
-      CHECK_GT(packet_len, 0u);
+      // Calculate words to send, ensuring we don't split UMP packets.
+      size_t words_to_send = 0;
+      while (words_sent + words_to_send < ump_words.size()) {
+        uint32_t first_word = ump_words[words_sent + words_to_send];
+        size_t packet_len = GetUmpLengthInWords(first_word);
+        CHECK_GT(packet_len, 0u);
 
-      if (words_to_send + packet_len > max_words_per_list) {
-        break;  // Would exceed limit, send this list.
+        if (words_to_send + packet_len > max_words_per_list) {
+          break;  // Would exceed limit, send this list.
+        }
+        words_to_send += packet_len;
       }
-      words_to_send += packet_len;
+
+      if (words_to_send == 0) {
+        break;
+      }
+
+      MIDIEventPacket* next_packet = MIDIEventListAdd(
+          event_list, kCoreMIDIMaxEventListSize, cur_packet, coremidi_timestamp,
+          words_to_send, &ump_words[words_sent]);
+
+      // Since we calculated the size to fit, this should NEVER fail.
+      CHECK(next_packet);
+
+      MIDISendEventList(midi_output_, destination, event_list);
+      words_sent += words_to_send;
     }
 
-    if (words_to_send == 0) {
-      break;
+  } else
+#endif
+  {
+    const auto messages = ParseMidiMessages(data);
+    if (messages.empty()) {
+      return;
     }
-
-    MIDIEventPacket* next_packet = MIDIEventListAdd(
-        event_list, kCoreMIDIMaxEventListSize, cur_packet, coremidi_timestamp,
-        words_to_send, &ump_words[words_sent]);
-
-    // Since we calculated the size to fit, this should NEVER fail.
-    CHECK(next_packet);
-
-    MIDISendEventList(midi_output_, destination, event_list);
-    words_sent += words_to_send;
+    for (const auto& message : messages) {
+      if (!internal::SendMidi1Message(
+              message.GetData(), message.is_sysex, coremidi_timestamp,
+              base::span(midi_buffer_),
+              [this, destination](const MIDIPacketList* list) {
+                MIDISend(midi_output_, destination, list);
+              })) {
+        DLOG(ERROR) << "Failed to pack CoreMIDI message";
+        return;
+      }
+    }
   }
 
   AccumulateMidiBytesSent(client, data.size());

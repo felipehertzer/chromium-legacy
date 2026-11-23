@@ -53,6 +53,10 @@ class MIDI_EXPORT MidiManagerMac final : public MidiManager {
   // CoreMIDI callback for MIDI data.
   // Each callback can contain multiple packets, each of which can contain
   // multiple MIDI messages.
+  static void ReceiveMidiPacketList(const MIDIPacketList* packet_list,
+                                    void* refcon,
+                                    void* src_conn_refcon);
+  API_AVAILABLE(macos(11.0))
   void ReceiveMidiEventList(uint32_t port_index,
                             const MIDIEventList* event_list);
 

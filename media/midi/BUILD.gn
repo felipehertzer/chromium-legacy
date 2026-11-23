@@ -131,6 +131,7 @@ component("midi") {
       sources += [ "midi_manager_tvos.cc" ]
     } else {
       sources += [
+        "core_midi_util.h",
         "midi_manager_mac.cc",
         "midi_manager_mac.h",
       ]

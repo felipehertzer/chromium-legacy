@@ -87,6 +87,15 @@ if (is_mac) {
     ]
   }
 
+  executable("midi_packet_probe") {
+    testonly = true
+    sources = [ "tests/midi_packet_probe.cc" ]
+    deps = [
+      "//base",
+      "//media/midi",
+    ]
+  }
+
   executable("memory_pressure_probe") {
     testonly = true
     sources = [ "tests/memory_pressure_probe.cc" ]
