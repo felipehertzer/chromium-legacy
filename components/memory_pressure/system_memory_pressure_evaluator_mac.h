@@ -18,6 +18,14 @@
 
 namespace memory_pressure::mac {
 
+inline bool NativePressureNotificationsAvailable() {
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (__builtin_available(macOS 10.9, *))
+    return true;
+#endif
+  return false;
+}
+
 class TestSystemMemoryPressureEvaluator;
 
 // Declares the interface for the Mac SystemMemoryPressureEvaluator, which

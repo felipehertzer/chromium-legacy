@@ -87,6 +87,15 @@ if (is_mac) {
     ]
   }
 
+  executable("memory_pressure_probe") {
+    testonly = true
+    sources = [ "tests/memory_pressure_probe.cc" ]
+    deps = [
+      "//base",
+      "//components/memory_pressure",
+    ]
+  }
+
   executable("sdk_probe") {
     testonly = true
     sources = [ "tests/sdk_probe.mm" ]

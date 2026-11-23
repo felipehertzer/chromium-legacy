@@ -44,13 +44,14 @@ SystemMemoryPressureEvaluator::MemoryPressureLevelForMacMemoryPressureLevel(
 SystemMemoryPressureEvaluator::SystemMemoryPressureEvaluator(
     std::unique_ptr<MemoryPressureVoter> voter)
     : memory_pressure::SystemMemoryPressureEvaluator(std::move(voter)),
-      memory_level_event_source_(dispatch_source_create(
-          DISPATCH_SOURCE_TYPE_MEMORYPRESSURE,
-          0,
-          DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL |
-              DISPATCH_MEMORYPRESSURE_NORMAL,
-          dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0))),
       weak_ptr_factory_(this) {
+  if (__builtin_available(macOS 10.9, *)) {
+    memory_level_event_source_.reset(dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+        DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL |
+            DISPATCH_MEMORYPRESSURE_NORMAL,
+        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)));
+  }
   // WeakPtr needed because there is no guarantee that |this| is still be alive
   // when the task posted to the TaskRunner or event handler runs.
   base::WeakPtr<SystemMemoryPressureEvaluator> weak_this =
@@ -87,10 +88,13 @@ SystemMemoryPressureEvaluator::~SystemMemoryPressureEvaluator() {
 int SystemMemoryPressureEvaluator::GetMacMemoryPressureLevel() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Get the raw memory pressure level from macOS.
-  int mac_memory_pressure_level;
+  int mac_memory_pressure_level = DISPATCH_MEMORYPRESSURE_NORMAL;
   size_t length = sizeof(int);
-  sysctlbyname("kern.memorystatus_vm_pressure_level",
-               &mac_memory_pressure_level, &length, nullptr, 0);
+  if (sysctlbyname("kern.memorystatus_vm_pressure_level",
+                   &mac_memory_pressure_level, &length, nullptr, 0) != 0 ||
+      length != sizeof(mac_memory_pressure_level)) {
+    return DISPATCH_MEMORYPRESSURE_NORMAL;
+  }
 
   return mac_memory_pressure_level;
 }

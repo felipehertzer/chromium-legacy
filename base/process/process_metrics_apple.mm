@@ -16,6 +16,7 @@
 
 #include "base/apple/mach_logging.h"
 #include "base/apple/scoped_mach_port.h"
+#include "base/apple/vm_statistics.h"
 #include "base/byte_size.h"
 #include "base/containers/heap_array.h"
 #include "base/logging.h"
@@ -257,14 +258,15 @@ bool GetSystemMemoryInfo(SystemMemoryInfo* meminfo) {
   meminfo->total = SysInfo::AmountOfTotalPhysicalMemory();
 
   base::apple::ScopedMachSendRight host(mach_host_self());
-  vm_statistics64_data_t vm_info;
+  vm_statistics64_data_t vm_info = {};
   mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
   if (host_statistics64(host.get(), HOST_VM_INFO64,
                         reinterpret_cast<host_info64_t>(&vm_info),
                         &count) != KERN_SUCCESS) {
     return false;
   }
-  DCHECK_GE(count, HOST_VM_INFO64_REV1_COUNT);
+  if (!base::apple::NormalizeVMStatisticsReply(vm_info, count))
+    return false;
 
 #if !(BUILDFLAG(IS_IOS) && defined(ARCH_CPU_X86_FAMILY))
   // PAGE_SIZE (aka vm_page_size) isn't constexpr, so this check needs to be

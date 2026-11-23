@@ -207,6 +207,13 @@ or replaces a Chromium 159 dependency.
   connector receives the requested encryption policy; it cannot enforce the
   newer connect API's deadline. Unsupported destination-info objects are never
   created or freed through an absent API.
+- Mach memory-statistics replies accept rev0 and clear fields outside the
+  kernel-reported prefix, preventing reads of unreported compressor/file-backed
+  counters on older kernels. Memory pressure before 10.9 uses the current
+  Chromium free-memory polling evaluator and its existing 150/50 MiB defaults;
+  systems with the native notification API retain their original OS source.
+  Missing/short native pressure sysctl replies no longer leave an uninitialized
+  level. Sampling stops and clears cached data when its last observer leaves.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -265,6 +272,7 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Actual shortcut file parsing/writing/Unicode/malformed inputs | 16 checks passed | 16 checks passed |
 | System media decisions/callbacks; native controls remain active with the global fallback-test flag | 18 checks each mode | 18 checks each mode |
 | Real printing factory/current PPD parser/duplex/paper/resolution/metadata, normal and forced PPD backend | 16 checks each | 16 checks each |
+| Real legacy Mach view/response bounds/current memory policy/votes/factory/sampling lifetime | 20 normal and 20 forced checks | 20 normal and 20 forced checks |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -279,7 +287,7 @@ compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
 authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
-math, modal window helpers, geolocation callbacks, shortcut files, system media policy, printing factory/PPD capabilities, timers,
+math, modal window helpers, geolocation callbacks, shortcut files, system media policy, printing factory/PPD capabilities, memory-statistics/pressure handling, timers,
 atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
@@ -329,7 +337,12 @@ Wi-Fi discovery and Xbox device operations have compiler checks only. Printing
 checks use trusted synthetic PPD data and lazy backend construction; no printer
 or server is queried, no jobs are sent and no default printer is changed. Actual
 printer discovery/transport, printing UI and printing sandbox behavior still need
-browser runtime validation.
+browser runtime validation. Memory checks query the real kernel with the
+original VM-statistics ABI view, validate response normalization and the current
+free-memory policy with synthetic samples, and check factory selection and timer
+cancellation. They do not induce system memory pressure or modify kernel settings.
+After the Base change, the 35 C++/23 Base/13 Rust/5 original interoperability
+checks and SDK probe were freshly relinked and passed on the host and Catalina.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -379,6 +392,9 @@ python3 legacy/test_media_permissions.py --force-legacy
 # Build printing_probe with -d keeprsp before these isolated checks:
 python3 legacy/test_printing.py
 python3 legacy/test_printing.py --force-legacy
+# Build memory_pressure_probe with -d keeprsp before these checks:
+python3 legacy/test_memory_pressure.py
+python3 legacy/test_memory_pressure.py --force-legacy
 python3 legacy/apply_dependency_patches.py --check
 python3 legacy/apply_rust_std_patches.py --check
 python3 -m unittest discover -s legacy/tests -p 'test_*.py' -v

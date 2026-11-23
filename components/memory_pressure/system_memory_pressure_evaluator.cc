@@ -37,8 +37,9 @@ SystemMemoryPressureEvaluator::CreateDefaultSystemEvaluator(
       memory_pressure::SystemMemoryPressureEvaluatorFuchsia>(
       monitor->CreateVoter(MemoryPressureVoterType::kOS));
 #elif BUILDFLAG(IS_APPLE)
-  // The native OS evaluator is always constructed so that the OS pressure
-  // signal keeps being observed and reported in every experiment arm. The
+  // Where its native API exists, the OS evaluator is always constructed so that
+  // the OS pressure signal keeps being observed and reported in every experiment
+  // arm. The
   // feature flags control whether it votes, not whether it exists. When an
   // evaluator replaces it, it runs as a shadow evaluator with no voter. The
   // compressor evaluator is not listed, as it acts as a complementary voter.
@@ -49,6 +50,16 @@ SystemMemoryPressureEvaluator::CreateDefaultSystemEvaluator(
           memory_pressure::features::kMacAvailableMemoryPressureEvaluator) ||
       base::FeatureList::IsEnabled(
           memory_pressure::features::kMacFreeMemoryPressureEvaluator);
+#endif
+#if BUILDFLAG(IS_MAC)
+  if (!memory_pressure::mac::NativePressureNotificationsAvailable()) {
+    // Before Mavericks, use the existing polling evaluator and its maintained
+    // 150/50 MiB defaults instead of an unavailable GCD notification source.
+    return FreeMemoryPressureEvaluator::CreateWithMacFeatureParams(
+        os_signal_replaced
+            ? nullptr
+            : monitor->CreateVoter(MemoryPressureVoterType::kFreeMemory));
+  }
 #endif
   return std::make_unique<memory_pressure::mac::SystemMemoryPressureEvaluator>(
       os_signal_replaced ? nullptr
