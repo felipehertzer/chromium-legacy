@@ -326,36 +326,45 @@ void RenderWidgetHostNSViewBridge::ShowSharingServicePicker(
     const GURL& url,
     const std::vector<std::string>& file_paths,
     ShowSharingServicePickerCallback callback) {
-  NSMutableArray* items = [[NSMutableArray alloc] init];
-  if (url.is_valid()) {
-    NSString* ns_title =
-        base::SysUTF8ToNSString(title.empty() ? url.spec() : title);
-    NSURL* ns_url = net::NSURLWithGURL(url);
-    [items addObject:[[NSPreviewRepresentingActivityItem alloc]
-                         initWithItem:ns_url
-                                title:ns_title
-                                image:nil
-                                 icon:nil]];
-  } else if (!title.empty()) {
-    [items addObject:base::SysUTF8ToNSString(title)];
-  }
-  if (!text.empty()) {
-    [items addObject:base::SysUTF8ToNSString(text)];
-  }
+  if (@available(macOS 10.8, *)) {
+    NSMutableArray* items = [[NSMutableArray alloc] init];
+    if (url.is_valid()) {
+      NSString* ns_title =
+          base::SysUTF8ToNSString(title.empty() ? url.spec() : title);
+      NSURL* ns_url = net::NSURLWithGURL(url);
+      if (@available(macOS 13.0, *)) {
+        [items addObject:[[NSPreviewRepresentingActivityItem alloc]
+                             initWithItem:ns_url
+                                    title:ns_title
+                                    image:nil
+                                     icon:nil]];
+      } else {
+        [items addObject:ns_url];
+      }
+    } else if (!title.empty()) {
+      [items addObject:base::SysUTF8ToNSString(title)];
+    }
+    if (!text.empty()) {
+      [items addObject:base::SysUTF8ToNSString(text)];
+    }
 
-  for (const auto& file_path : file_paths) {
-    NSString* ns_file_path = base::SysUTF8ToNSString(file_path);
-    NSURL* file_url = [NSURL fileURLWithPath:ns_file_path];
-    [items addObject:file_url];
-  }
+    for (const auto& file_path : file_paths) {
+      NSString* ns_file_path = base::SysUTF8ToNSString(file_path);
+      NSURL* file_url = [NSURL fileURLWithPath:ns_file_path];
+      [items addObject:file_url];
+    }
 
-  sharing_service_picker_ = [[SharingServicePicker alloc]
-      initWithItems:items
-           callback:base::BindOnce(
-                        &RenderWidgetHostNSViewBridge::OnSharingServiceInvoked,
-                        weak_factory_.GetWeakPtr(), std::move(callback))
-               view:cocoa_view_];
-  [sharing_service_picker_ show];
+    sharing_service_picker_ = [[SharingServicePicker alloc]
+        initWithItems:items
+             callback:
+                 base::BindOnce(
+                     &RenderWidgetHostNSViewBridge::OnSharingServiceInvoked,
+                     weak_factory_.GetWeakPtr(), std::move(callback))
+                 view:cocoa_view_];
+    [(SharingServicePicker*)sharing_service_picker_ show];
+  } else {
+    std::move(callback).Run(blink::mojom::ShareError::INTERNAL_ERROR);
+  }
 }
 
 void RenderWidgetHostNSViewBridge::OnSharingServiceInvoked(

@@ -9,6 +9,7 @@
 
 #include "content/common/render_widget_host_ns_view.mojom.h"
 
+API_AVAILABLE(macos(10.8))
 @interface SharingServicePicker
     : NSObject <NSSharingServiceDelegate, NSSharingServicePickerDelegate>
 // Displays the NSSharingServicePicker which is positioned next to the mouse

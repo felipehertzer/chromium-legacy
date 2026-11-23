@@ -18,6 +18,7 @@
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_client.h"
 #include "ui/base/clipboard/clipboard_constants.h"
+#include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/clipboard_util_mac.h"
 #include "ui/base/clipboard/custom_data_helper.h"
 #include "ui/base/cocoa/drag_permission.h"
@@ -187,7 +188,10 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
   info->location_in_view =
       GetSanitizedFlippedPoint(viewPoint, viewFrame.size.height);
 
-  NSPoint screenPoint = [self.window convertPointToScreen:windowPoint];
+  NSPoint screenPoint =
+      [self.window
+          convertRectToScreen:NSMakeRect(windowPoint.x, windowPoint.y, 0, 0)]
+          .origin;
   NSRect screenFrame = self.window.screen.frame;
   info->location_in_screen =
       GetSanitizedFlippedPoint(screenPoint, screenFrame.size.height);
@@ -215,8 +219,9 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
 // Registers for the view for the appropriate drag types.
 - (void)registerDragTypes {
   [self registerForDraggedTypes:@[
-    NSPasteboardTypeFileURL, NSPasteboardTypeHTML, NSPasteboardTypeRTF,
-    NSPasteboardTypeString, NSPasteboardTypeURL,
+    ui::ClipboardFormatType::FilenamesType().ToNSString(), NSPasteboardTypeHTML,
+    NSPasteboardTypeRTF, NSPasteboardTypeString,
+    ui::ClipboardFormatType::UrlType().ToNSString(),
     ui::kUTTypeChromiumInitiatedDrag, ui::kUTTypeChromiumDataTransferCustomData,
     ui::kUTTypeWebKitWebUrlsWithTitles
   ]];
@@ -303,7 +308,7 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
     const auto& url_info = dropData.url_infos[i];
     NSPasteboardItem* pasteboardItem = [[NSPasteboardItem alloc] init];
     [pasteboardItem setString:base::SysUTF8ToNSString(url_info.url.spec())
-                      forType:NSPasteboardTypeURL];
+                      forType:ui::ClipboardFormatType::UrlType().ToNSString()];
     if (!url_info.title.empty()) {
       [pasteboardItem setString:base::SysUTF16ToNSString(url_info.title)
                         forType:ui::kUTTypeUrlName];
@@ -351,7 +356,10 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
 
   NSPoint localPoint = NSZeroPoint;
   if (self.window) {
-    NSPoint basePoint = [self.window convertPointFromScreen:screenPoint];
+    NSPoint basePoint =
+        [self.window convertRectFromScreen:NSMakeRect(screenPoint.x,
+                                                      screenPoint.y, 0, 0)]
+            .origin;
     localPoint = [self convertPoint:basePoint fromView:nil];
   }
 
@@ -441,8 +449,9 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
   if (![[self subviews] containsObject:view])
     return;
 
-  NSSelectionDirection ns_direction = static_cast<NSSelectionDirection>(
-      [[notification userInfo][kSelectionDirection] unsignedIntegerValue]);
+  NSSelectionDirection ns_direction =
+      static_cast<NSSelectionDirection>([[[notification userInfo]
+          objectForKey:kSelectionDirection] unsignedIntegerValue]);
 
   SelectionDirection direction;
   switch (ns_direction) {
@@ -578,7 +587,7 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
   if (_trackedWindow) {
     [notificationCenter
         removeObserver:self
-                  name:NSWindowDidChangeOcclusionStateNotification
+                  name:remote_cocoa::WindowOcclusionNotificationName()
                 object:_trackedWindow];
     [[WindowOcclusionCheckerMac sharedInstanceIfCreated]
         removeTrackedWindow:_trackedWindow];
@@ -589,17 +598,20 @@ gfx::PointF GetSanitizedFlippedPoint(NSPoint point, CGFloat height) {
   if (_trackedWindow) {
     [[WindowOcclusionCheckerMac sharedInstance]
         addTrackedWindow:_trackedWindow];
-    [notificationCenter addObserver:self
-                           selector:@selector(windowChangedOcclusionState:)
-                               name:NSWindowDidChangeOcclusionStateNotification
-                             object:_trackedWindow];
+    [notificationCenter
+        addObserver:self
+           selector:@selector(windowChangedOcclusionState:)
+               name:remote_cocoa::WindowOcclusionNotificationName()
+             object:_trackedWindow];
   }
 }
 
 - (void)windowChangedOcclusionState:(NSNotification*)aNotification {
   // Only respond to occlusion notifications sent by the occlusion checker.
   NSDictionary* userInfo = [aNotification userInfo];
-  if (userInfo[remote_cocoa::kWindowOcclusionCheckerNotificationUserInfoKey] !=
+  if ([userInfo
+          objectForKey:remote_cocoa::
+                           kWindowOcclusionCheckerNotificationUserInfoKey] !=
       nil) {
     [self updateWebContentsVisibility];
   }

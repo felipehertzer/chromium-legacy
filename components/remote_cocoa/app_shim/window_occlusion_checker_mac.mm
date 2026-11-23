@@ -782,15 +782,13 @@ bool WindowHasOpaqueFrameBackgroundView(NSView* view) {
     objc_setAssociatedObject(self, kWindowIsOccludedKey, flag ? @YES : nil,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    if (@available(macOS 10.9, *)) {
-      [[NSNotificationCenter defaultCenter]
-          postNotificationName:NSWindowDidChangeOcclusionStateNotification
-                        object:self
-                      userInfo:@{
-                        remote_cocoa::
-                        kWindowOcclusionCheckerNotificationUserInfoKey : @YES
-                      }];
-    }
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:remote_cocoa::WindowOcclusionNotificationName()
+                      object:self
+                    userInfo:@{
+                      remote_cocoa::
+                      kWindowOcclusionCheckerNotificationUserInfoKey : @YES
+                    }];
   }
 
   // Let the views browser compositor know, after the synthetic notification

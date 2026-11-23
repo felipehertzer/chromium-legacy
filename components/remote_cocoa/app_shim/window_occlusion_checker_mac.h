@@ -11,6 +11,17 @@
 
 namespace remote_cocoa {
 
+// Use AppKit's notification when available. Lion receives the checker's
+// synthetic updates under a private name, without importing a newer symbol.
+inline NSString* WindowOcclusionNotificationName() {
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 10.9, *)) {
+    return NSWindowDidChangeOcclusionStateNotification;
+  }
+#endif
+  return @"ChromiumWindowOcclusionStateDidChange";
+}
+
 // Key present in the `userInfo` dictionary of synthetic
 // `NSWindowDidChangeOcclusionStateNotification`s posted by
 // `WindowOcclusionCheckerMac`.

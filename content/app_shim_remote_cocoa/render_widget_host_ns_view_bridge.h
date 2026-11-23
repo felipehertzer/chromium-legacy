@@ -116,7 +116,8 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
   RenderWidgetHostViewCocoa* __strong cocoa_view_;
 
   // NSSharingServicePicker for the navigator.share API.
-  SharingServicePicker* __strong sharing_service_picker_;
+  // The native picker class does not exist on Lion.
+  NSObject* __strong sharing_service_picker_;
 
   // Once set, all calls to set the background color or CALayer content will
   // be ignored.
