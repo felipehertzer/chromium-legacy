@@ -51,6 +51,8 @@ class CAPTURE_EXPORT PixelBufferPool {
   base::apple::ScopedCFTypeRef<CVPixelBufferRef> CreateBuffer();
 
   // Frees the memory of any released buffers returned to the pool.
+  // On Lion, explicit cache trimming is unavailable. Unused buffers remain
+  // under CoreVideo's normal aging policy until the pool is destroyed.
   void Flush();
 
  private:

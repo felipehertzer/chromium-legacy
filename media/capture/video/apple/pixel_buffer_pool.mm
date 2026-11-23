@@ -11,6 +11,16 @@
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1080
+// The current SDK omits availability metadata for this function, but it is
+// absent in both the recovery and desktop CoreVideo binaries from Lion 10.7.5.
+extern "C" void ChromiumLegacyPixelBufferPoolFlush(
+    CVPixelBufferPoolRef,
+    CVPixelBufferPoolFlushFlags) __asm("_CVPixelBufferPoolFlush")
+    __attribute__((weak_import));
+#endif
+
 using base::apple::CFToNSPtrCast;
 using base::apple::NSToCFPtrCast;
 
@@ -111,8 +121,20 @@ base::apple::ScopedCFTypeRef<CVPixelBufferRef> PixelBufferPool::CreateBuffer() {
 
 void PixelBufferPool::Flush() {
   DCHECK(buffer_pool_);
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1080
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (ChromiumLegacyPixelBufferPoolFlush) {
+    ChromiumLegacyPixelBufferPoolFlush(buffer_pool_.get(),
+                                       kCVPixelBufferPoolFlushExcessBuffers);
+  }
+#endif
+  // Keep the same pool if cache trimming is unavailable. Replacing it while
+  // buffers are outstanding would reset the native allocation limit.
+#else
   CVPixelBufferPoolFlush(buffer_pool_.get(),
                          kCVPixelBufferPoolFlushExcessBuffers);
+#endif
 }
 
 }  // namespace media
