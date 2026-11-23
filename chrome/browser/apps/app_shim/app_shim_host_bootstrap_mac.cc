@@ -16,6 +16,7 @@
 #include "base/logging.h"
 #include "base/strings/sys_string_conversions.h"
 #include "components/variations/net/variations_command_line.h"
+#include "legacy/apple/audit_token.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/message_pipe.h"
@@ -197,5 +198,5 @@ void AppShimHostBootstrap::OnFailedToConnectToHost(
 }
 
 base::ProcessId AppShimHostBootstrap::GetAppShimPid() const {
-  return audit_token_to_pid(audit_token_);
+  return chromium_legacy::AuditTokenPid(audit_token_);
 }

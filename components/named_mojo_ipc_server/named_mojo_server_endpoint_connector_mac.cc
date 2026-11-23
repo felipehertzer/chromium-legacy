@@ -21,6 +21,7 @@
 #include "base/threading/sequence_bound.h"
 #include "components/named_mojo_ipc_server/connection_info.h"
 #include "components/named_mojo_ipc_server/endpoint_options.h"
+#include "legacy/apple/audit_token.h"
 #include "mojo/public/cpp/platform/named_platform_channel.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
 #include "mojo/public/cpp/platform/platform_channel_server_endpoint.h"
@@ -89,7 +90,7 @@ void NamedMojoServerEndpointConnectorMac::HandleRequest() {
   }
 
   auto info = std::make_unique<ConnectionInfo>();
-  info->pid = audit_token_to_pid(request.trailer.msgh_audit);
+  info->pid = chromium_legacy::AuditTokenPid(request.trailer.msgh_audit);
   info->audit_token = request.trailer.msgh_audit;
 
   mojo::PlatformChannelEndpoint remote_endpoint(mojo::PlatformHandle(

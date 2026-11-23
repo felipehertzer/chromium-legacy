@@ -26,6 +26,7 @@
 #include "components/variations/net/variations_command_line.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "crypto/hash.h"
+#include "legacy/apple/audit_token.h"
 
 AppShimListener::AppShimListener() = default;
 
@@ -106,7 +107,7 @@ void AppShimListener::OnClientConnected(mojo::PlatformChannelEndpoint endpoint,
   // TODO(crbug.com/40674145): Remove NSLog logging, and move to an
   // internal debugging URL.
   NSLog(@"AppShim: Connection received from pid %d",
-        audit_token_to_pid(audit_token));
+        chromium_legacy::AuditTokenPid(audit_token));
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&AppShimHostBootstrap::CreateForChannelAndPeerAuditToken,

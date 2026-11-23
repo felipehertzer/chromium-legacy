@@ -79,6 +79,7 @@ source_set("app_shim") {
     "//components/webapps/common",
     "//content/public/browser",
     "//content/public/common",
+    "//legacy:platform_support",
     "//services/preferences/public/cpp",
     "//ui/views",
   ]
