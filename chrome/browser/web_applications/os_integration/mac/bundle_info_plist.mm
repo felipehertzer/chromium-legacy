@@ -9,8 +9,11 @@
 #include <list>
 #include <string>
 
+#import <CoreServices/CoreServices.h>
+
 #include "base/apple/bridging.h"
 #include "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/path_service.h"
@@ -48,9 +51,17 @@ std::list<BundleInfoPlist> BundleInfoPlist::SearchForBundlesById(
   std::list<BundleInfoPlist> infos;
 
   // First search using LaunchServices.
-  NSArray* bundle_urls = [NSWorkspace.sharedWorkspace
-      URLsForApplicationsWithBundleIdentifier:base::SysUTF8ToNSString(
-                                                  bundle_id)];
+  NSArray* bundle_urls = @[];
+  NSString* identifier = base::SysUTF8ToNSString(bundle_id);
+  if (@available(macOS 12.0, *)) {
+    bundle_urls = [NSWorkspace.sharedWorkspace
+        URLsForApplicationsWithBundleIdentifier:identifier];
+  } else if (@available(macOS 10.10, *)) {
+    bundle_urls = CFBridgingRelease(LSCopyApplicationURLsForBundleIdentifier(
+        (__bridge CFStringRef)identifier, nullptr));
+  }
+  // Lion uses the existing directory scan below when registration lookup is
+  // unavailable, including newly-created shortcuts not yet in LaunchServices.
   for (NSURL* url in bundle_urls) {
     base::FilePath bundle_path = base::apple::NSURLToFilePath(url);
     BundleInfoPlist info(bundle_path);
@@ -83,8 +94,7 @@ BundleInfoPlist::BundleInfoPlist(const base::FilePath& bundle_path)
     : bundle_path_(bundle_path),
       objc_storage_(std::make_unique<ObjCStorage>()) {
   objc_storage_->plist =
-      [NSDictionary dictionaryWithContentsOfURL:GetPlistURL(bundle_path)
-                                          error:nil];
+      base::apple::ReadPropertyListDictionary(GetPlistURL(bundle_path));
 }
 
 BundleInfoPlist::BundleInfoPlist(BundleInfoPlist&& other) = default;
@@ -95,16 +105,15 @@ bool BundleInfoPlist::IsForCurrentUserDataDir() const {
   base::FilePath user_data_dir;
   base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir);
   CHECK(!user_data_dir.empty(), base::NotFatalUntil::M162);
-  return base::StartsWith(
-      base::SysNSStringToUTF8(
-          objc_storage_->plist[app_mode::kCrAppModeUserDataDirKey]),
-      user_data_dir.value(), base::CompareCase::SENSITIVE);
+  return base::StartsWith(base::SysNSStringToUTF8([objc_storage_->plist
+                              objectForKey:app_mode::kCrAppModeUserDataDirKey]),
+                          user_data_dir.value(), base::CompareCase::SENSITIVE);
 }
 
 bool BundleInfoPlist::IsForProfile(
     const base::FilePath& test_profile_path) const {
   std::string profile_path = base::SysNSStringToUTF8(
-      objc_storage_->plist[app_mode::kCrAppModeProfileDirKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeProfileDirKey]);
   return profile_path == test_profile_path.BaseName().value();
 }
 
@@ -112,9 +121,9 @@ base::FilePath BundleInfoPlist::GetFullProfilePath() const {
   // Figure out the profile_path. Since the user_data_dir could contain the
   // path to the web app data dir.
   base::FilePath user_data_dir = base::apple::NSStringToFilePath(
-      objc_storage_->plist[app_mode::kCrAppModeUserDataDirKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeUserDataDirKey]);
   base::FilePath profile_base_name = base::apple::NSStringToFilePath(
-      objc_storage_->plist[app_mode::kCrAppModeProfileDirKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeProfileDirKey]);
   if (user_data_dir.DirName().DirName().BaseName() == profile_base_name) {
     return user_data_dir.DirName().DirName();
   }
@@ -123,38 +132,38 @@ base::FilePath BundleInfoPlist::GetFullProfilePath() const {
 
 std::string BundleInfoPlist::GetExtensionId() const {
   return base::SysNSStringToUTF8(
-      objc_storage_->plist[app_mode::kCrAppModeShortcutIDKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeShortcutIDKey]);
 }
 
 std::string BundleInfoPlist::GetProfileName() const {
   return base::SysNSStringToUTF8(
-      objc_storage_->plist[app_mode::kCrAppModeProfileNameKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeProfileNameKey]);
 }
 
 GURL BundleInfoPlist::GetURL() const {
   return GURL(base::SysNSStringToUTF8(
-      objc_storage_->plist[app_mode::kCrAppModeShortcutURLKey]));
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeShortcutURLKey]));
 }
 
 std::u16string BundleInfoPlist::GetTitle() const {
   return base::SysNSStringToUTF16(
-      objc_storage_->plist[app_mode::kCrAppModeShortcutNameKey]);
+      [objc_storage_->plist objectForKey:app_mode::kCrAppModeShortcutNameKey]);
 }
 
 base::Version BundleInfoPlist::GetVersion() const {
   NSString* version_string =
-      objc_storage_->plist[app_mode::kCrBundleVersionKey];
+      [objc_storage_->plist objectForKey:app_mode::kCrBundleVersionKey];
   if (!version_string) {
     // Older bundles have the Chrome version in the following key.
-    version_string =
-        objc_storage_->plist[app_mode::kCFBundleShortVersionStringKey];
+    version_string = [objc_storage_->plist
+        objectForKey:app_mode::kCFBundleShortVersionStringKey];
   }
   return base::Version(base::SysNSStringToUTF8(version_string));
 }
 
 std::string BundleInfoPlist::GetBundleId() const {
-  return base::SysNSStringToUTF8(
-      objc_storage_->plist[base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)]);
+  return base::SysNSStringToUTF8([objc_storage_->plist
+      objectForKey:base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)]);
 }
 
 // static

@@ -9,6 +9,7 @@
 #include <utility>
 
 #import "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/byte_size.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -68,7 +69,7 @@ id ParseArrays(id data_obj, NSString* path) {
       return nil;
     }
 
-    data_obj = data_array[index];
+    data_obj = [data_array objectAtIndex:index];
   }
 
   return data_obj;
@@ -146,7 +147,7 @@ std::vector<SettingsItem> GetSettingItems(
     NSError* error = nil;
     NSURL* url = base::apple::FilePathToNSURL(resolved_path);
     NSDictionary* plist_dict =
-        [[NSDictionary alloc] initWithContentsOfURL:url error:&error];
+        base::apple::ReadPropertyListDictionary(url, &error);
     if (error && error.code == NSFileReadNoPermissionError) {
       item.presence = PresenceValue::kAccessDenied;
       items.push_back(item);

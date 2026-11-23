@@ -87,6 +87,12 @@ if (is_mac) {
     ]
   }
 
+  executable("property_list_probe") {
+    testonly = true
+    sources = [ "tests/property_list_probe.mm" ]
+    deps = [ "//base" ]
+  }
+
   executable("midi_packet_probe") {
     testonly = true
     sources = [ "tests/midi_packet_probe.cc" ]

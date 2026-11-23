@@ -12,6 +12,7 @@
 
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
@@ -57,7 +58,7 @@
 - (instancetype)initWithURL:(NSURL*)url {
   if ((self = [super init])) {
     NSError* error = nil;
-    _metrics = [[NSDictionary alloc] initWithContentsOfURL:url error:&error];
+    _metrics = base::apple::ReadPropertyListDictionary(url, &error);
 
     if (error) {
       LOG(WARNING) << "Failed to read client-regulated-counting data.";
@@ -74,7 +75,7 @@
     return std::nullopt;
   }
 
-  id daynumObject = appObject[key];
+  id daynumObject = [appObject objectForKey:key];
   if (!daynumObject) {
     return std::nullopt;
   }
@@ -232,8 +233,7 @@ bool CreateLegacyPlistFile(UpdaterScope scope,
   @autoreleasepool {
     NSURL* const url = base::apple::FilePathToNSURL(file_path);
     if (base::PathExists(file_path) && [@{
-        } isEqualToDictionary:[NSDictionary dictionaryWithContentsOfURL:url
-                                                                  error:nil]]) {
+        } isEqualToDictionary:base::apple::ReadPropertyListDictionary(url)]) {
       VLOG(2) << "Skipping updating " << file_path;
       return true;
     }

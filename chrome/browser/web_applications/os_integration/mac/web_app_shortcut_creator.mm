@@ -15,6 +15,7 @@
 #include "base/apple/bridging.h"
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/base_switches.h"
 #include "base/check.h"
 #include "base/check_is_test.h"
@@ -301,8 +302,8 @@ bool CopyStagingBundleToDestination(base::FilePath staging_path,
   // Ensure that the helper tool sees the same feature state as the browser.
   base::shared_memory::SharedMemorySwitch shared_memory_switch(
       switches::kFieldTrialHandle, 'fldt', kFieldTrialDescriptor);
-  variations::PopulateLaunchOptionsWithVariationsInfo(
-      &shared_memory_switch, &command_line, &options);
+  variations::PopulateLaunchOptionsWithVariationsInfo(&shared_memory_switch,
+                                                      &command_line, &options);
 
   base::Process copier_process = base::LaunchProcess(command_line, options);
   if (!copier_process.IsValid()) {
@@ -826,7 +827,7 @@ bool WebAppShortcutCreator::UpdateDisplayName(
   // filename). macOS searches for the best language in the order of preferred
   // languages, but one of them must be found otherwise it will default to
   // the filename.
-  NSString* language = NSLocale.preferredLanguages[0];
+  NSString* language = [NSLocale.preferredLanguages objectAtIndex:0];
   base::FilePath localized_dir = GetResourcesPath(app_path).Append(
       base::SysNSStringToUTF8(language) + ".lproj");
   if (!base::CreateDirectory(localized_dir)) {
@@ -858,7 +859,7 @@ bool WebAppShortcutCreator::UpdateDisplayName(
 
   NSURL* localized_url =
       base::apple::FilePathToNSURL(localized_dir.Append("InfoPlist.strings"));
-  return [strings_plist writeToURL:localized_url error:nil];
+  return base::apple::WritePropertyListDictionary(strings_plist, localized_url);
 }
 
 bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
@@ -876,12 +877,12 @@ bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
 
   NSURL* plist_url = GetPlistURL(app_path);
   NSMutableDictionary* plist =
-      [[NSMutableDictionary alloc] initWithContentsOfURL:plist_url error:nil];
+      base::apple::ReadMutablePropertyListDictionary(plist_url);
   NSArray* keys = plist.allKeys;
 
   // 1. Fill in variables.
   for (id key in keys) {
-    NSString* value = plist[key];
+    NSString* value = [plist objectForKey:key];
     if (![value isKindOfClass:[NSString class]] || value.length < 2) {
       continue;
     }
@@ -890,39 +891,41 @@ bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
     NSString* variable =
         [value substringWithRange:NSMakeRange(1, value.length - 2)];
 
-    NSString* substitution = replacement_dict[variable];
+    NSString* substitution = [replacement_dict objectForKey:variable];
     if (substitution) {
-      plist[key] = substitution;
+      [plist setValue:substitution forKey:key];
     }
   }
 
   // 2. Fill in other values.
-  plist[app_mode::kCrBundleVersionKey] =
-      base::SysUTF8ToNSString(version_info::GetVersionNumber());
-  plist[app_mode::kCFBundleShortVersionStringKey] =
-      base::SysUTF8ToNSString(info_->version_for_display);
+  [plist setValue:base::SysUTF8ToNSString(version_info::GetVersionNumber())
+           forKey:app_mode::kCrBundleVersionKey];
+  [plist setValue:base::SysUTF8ToNSString(info_->version_for_display)
+           forKey:app_mode::kCFBundleShortVersionStringKey];
   if (IsMultiProfile()) {
-    plist[base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)] =
-        base::SysUTF8ToNSString(GetBundleIdentifierForShim(info_->app_id));
+    [plist setValue:base::SysUTF8ToNSString(
+                        GetBundleIdentifierForShim(info_->app_id))
+             forKey:base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)];
     base::FilePath data_dir = GetMultiProfileAppDataDir(app_data_dir_);
-    plist[app_mode::kCrAppModeUserDataDirKey] =
-        base::apple::FilePathToNSString(data_dir);
+    [plist setValue:base::apple::FilePathToNSString(data_dir)
+             forKey:app_mode::kCrAppModeUserDataDirKey];
   } else {
-    plist[base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)] =
-        base::SysUTF8ToNSString(
-            GetBundleIdentifierForShim(info_->app_id, info_->profile_path));
-    plist[app_mode::kCrAppModeUserDataDirKey] =
-        base::apple::FilePathToNSString(app_data_dir_);
-    plist[app_mode::kCrAppModeProfileDirKey] =
-        base::apple::FilePathToNSString(info_->profile_path.BaseName());
-    plist[app_mode::kCrAppModeProfileNameKey] =
-        base::SysUTF8ToNSString(info_->profile_name);
+    [plist setValue:base::SysUTF8ToNSString(GetBundleIdentifierForShim(
+                        info_->app_id, info_->profile_path))
+             forKey:base::apple::CFToNSPtrCast(kCFBundleIdentifierKey)];
+    [plist setValue:base::apple::FilePathToNSString(app_data_dir_)
+             forKey:app_mode::kCrAppModeUserDataDirKey];
+    [plist
+        setValue:base::apple::FilePathToNSString(info_->profile_path.BaseName())
+          forKey:app_mode::kCrAppModeProfileDirKey];
+    [plist setValue:base::SysUTF8ToNSString(info_->profile_name)
+             forKey:app_mode::kCrAppModeProfileNameKey];
   }
-  plist[app_mode::kLSHasLocalizedDisplayNameKey] = @YES;
-  plist[app_mode::kNSHighResolutionCapableKey] = @YES;
+  [plist setValue:@YES forKey:app_mode::kLSHasLocalizedDisplayNameKey];
+  [plist setValue:@YES forKey:app_mode::kNSHighResolutionCapableKey];
   // TODO(crbug.com/579546179): Remove kCrAppModeIsAdHocSignedKey and its
   // readers in AppShimController now that all app shims are ad-hoc signed.
-  plist[app_mode::kCrAppModeIsAdHocSignedKey] = @YES;
+  [plist setValue:@YES forKey:app_mode::kCrAppModeIsAdHocSignedKey];
 
   // 3. Fill in file handlers.
   // The plist needs to contain file handlers for all profiles the app is
@@ -951,17 +954,19 @@ bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
       for (const auto& file_extension : file_handler_extensions) {
         [extensions addObject:base::SysUTF8ToNSString(file_extension)];
       }
-      doc_types_dict[app_mode::kCFBundleTypeExtensionsKey] = extensions;
+      [doc_types_dict setValue:extensions
+                        forKey:app_mode::kCFBundleTypeExtensionsKey];
     }
     if (!file_handler_mime_types.empty()) {
       NSMutableArray* mime_types = [NSMutableArray array];
       for (const auto& mime_type : file_handler_mime_types) {
         [mime_types addObject:base::SysUTF8ToNSString(mime_type)];
       }
-      doc_types_dict[app_mode::kCFBundleTypeMIMETypesKey] = mime_types;
+      [doc_types_dict setValue:mime_types
+                        forKey:app_mode::kCFBundleTypeMIMETypesKey];
     }
     [doc_types_value addObject:doc_types_dict];
-    plist[app_mode::kCFBundleDocumentTypesKey] = doc_types_value;
+    [plist setValue:doc_types_value forKey:app_mode::kCFBundleDocumentTypesKey];
   }
 
   // 4. Fill in protocol handlers
@@ -995,11 +1000,12 @@ bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
       [handlers addObject:base::SysUTF8ToNSString(protocol_handler)];
     }
 
-    plist[app_mode::kCFBundleURLTypesKey] = @[ @{
-      app_mode::kCFBundleURLNameKey :
-          base::SysUTF8ToNSString(GetBundleIdentifierForShim(info_->app_id)),
-      app_mode::kCFBundleURLSchemesKey : handlers
-    } ];
+    [plist setValue:@[ @{
+             app_mode::kCFBundleURLNameKey : base::SysUTF8ToNSString(
+                 GetBundleIdentifierForShim(info_->app_id)),
+             app_mode::kCFBundleURLSchemesKey : handlers
+           } ]
+             forKey:app_mode::kCFBundleURLTypesKey];
   }
 
   // TODO(crbug.com/40807015): If we decide to rename app bundles on app title
@@ -1008,10 +1014,10 @@ bool WebAppShortcutCreator::UpdatePlist(const base::FilePath& app_path) const {
   // (in other words, revert to what the code looked like before on these
   // lines). See also crbug.com/40657267.
   base::FilePath app_name = app_path.BaseName().RemoveFinalExtension();
-  plist[base::apple::CFToNSPtrCast(kCFBundleNameKey)] =
-      base::apple::FilePathToNSString(app_name);
+  [plist setValue:base::apple::FilePathToNSString(app_name)
+           forKey:base::apple::CFToNSPtrCast(kCFBundleNameKey)];
 
-  return [plist writeToURL:plist_url error:nil];
+  return base::apple::WritePropertyListDictionary(plist, plist_url);
 }
 
 bool WebAppShortcutCreator::UpdateIcon(const base::FilePath& app_path) const {

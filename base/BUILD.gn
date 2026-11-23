@@ -2148,6 +2148,7 @@ component("base") {
       "apple/osstatus_logging.mm",
       "apple/owned_objc.h",
       "apple/owned_objc.mm",
+      "apple/property_list_util.h",
       "apple/scoped_cffiledescriptorref.h",
       "apple/scoped_cftyperef.h",
       "apple/scoped_dispatch_object.h",

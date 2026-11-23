@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -38,13 +39,13 @@ void RecursiveReadBookmarksFolder(
     std::vector<user_data_importer::ImportedBookmarkEntry>* out_bookmarks) {
   DCHECK(bookmark_folder);
 
-  NSString* type = bookmark_folder[@"WebBookmarkType"];
-  NSString* title = bookmark_folder[@"Title"];
+  NSString* type = [bookmark_folder objectForKey:@"WebBookmarkType"];
+  NSString* title = [bookmark_folder objectForKey:@"Title"];
 
   // Are we the dictionary that contains all other bookmarks?
   // We need to know this so we don't add it to the path.
   bool is_top_level_bookmarks_container =
-      bookmark_folder[@"WebBookmarkFileVersion"] != nil;
+      [bookmark_folder objectForKey:@"WebBookmarkFileVersion"] != nil;
 
   // We're expecting a list of bookmarks here, if that isn't what we got, fail.
   if (!is_top_level_bookmarks_container) {
@@ -58,7 +59,7 @@ void RecursiveReadBookmarksFolder(
     }
   }
 
-  NSArray* elements = bookmark_folder[@"Children"];
+  NSArray* elements = [bookmark_folder objectForKey:@"Children"];
   if (!elements && (!parent_path_elements.empty() || !is_in_toolbar) &&
       ![title isEqualToString:@"BookmarksMenu"]) {
     // This is an empty folder, so add it explicitly.  Note that the condition
@@ -92,7 +93,7 @@ void RecursiveReadBookmarksFolder(
 
   // Iterate over individual bookmarks.
   for (NSDictionary* bookmark in elements) {
-    NSString* element_type = bookmark[@"WebBookmarkType"];
+    NSString* element_type = [bookmark objectForKey:@"WebBookmarkType"];
     if (!element_type) {
       continue;
     }
@@ -109,8 +110,9 @@ void RecursiveReadBookmarksFolder(
       continue;
     }
 
-    NSString* element_url = bookmark[@"URLString"];
-    NSString* element_title = bookmark[@"URIDictionary"][@"title"];
+    NSString* element_url = [bookmark objectForKey:@"URLString"];
+    NSString* element_title =
+        [[bookmark objectForKey:@"URIDictionary"] objectForKey:@"title"];
 
     if (!element_url || !element_title) {
       continue;
@@ -132,8 +134,7 @@ void RecursiveReadBookmarksFolder(
 }  // namespace
 
 SafariImporter::SafariImporter(const base::FilePath& library_dir)
-    : library_dir_(library_dir) {
-}
+    : library_dir_(library_dir) {}
 
 SafariImporter::~SafariImporter() = default;
 
@@ -184,7 +185,7 @@ void SafariImporter::ParseBookmarks(
 
   // Load the plist file.
   NSDictionary* bookmarks_dict =
-      [NSDictionary dictionaryWithContentsOfURL:bookmarks_plist error:nil];
+      base::apple::ReadPropertyListDictionary(bookmarks_plist);
   if (!bookmarks_dict) {
     return;
   }

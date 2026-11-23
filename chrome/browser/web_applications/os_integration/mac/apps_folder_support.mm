@@ -9,6 +9,7 @@
 #include <atomic>
 
 #import "base/apple/foundation_util.h"
+#include "base/apple/property_list_util.h"
 #include "base/check_is_test.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -128,7 +129,7 @@ bool UpdateAppShortcutsSubdirLocalizedName(
           .value_or(base::i18n::GetKnownLanguageTag("und"));
   NSURL* strings_url = base::apple::FilePathToNSURL(
       localized.Append(locale_tag.ToLegacyICUFormat() + ".strings"));
-  [strings_dict writeToURL:strings_url error:nil];
+  base::apple::WritePropertyListDictionary(strings_dict, strings_url);
 
   content::GetUIThreadTaskRunner({})->PostTaskAndReplyWithResult(
       FROM_HERE, base::BindOnce(&GetImageResourcesOnUIThread),
