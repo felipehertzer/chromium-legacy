@@ -31,14 +31,19 @@ void BarcodeDetectionProviderMac::Create(
 void BarcodeDetectionProviderMac::CreateBarcodeDetection(
     mojo::PendingReceiver<mojom::BarcodeDetection> receiver,
     mojom::BarcodeDetectorOptionsPtr options) {
-  if (!vision_api_)
-    vision_api_ = VisionAPIInterface::Create();
+  if (!VisionAvailable())
+    return;
+  // The unbound receiver reports the unavailable native backend to its caller.
+  if (@available(macOS 10.13, *)) {
+    if (!vision_api_)
+      vision_api_ = VisionAPIInterface::Create();
 
-  auto impl =
-      std::make_unique<BarcodeDetectionImplMacVision>(std::move(options));
-  auto* impl_ptr = impl.get();
-  impl_ptr->SetReceiver(
-      mojo::MakeSelfOwnedReceiver(std::move(impl), std::move(receiver)));
+    auto impl =
+        std::make_unique<BarcodeDetectionImplMacVision>(std::move(options));
+    auto* impl_ptr = impl.get();
+    impl_ptr->SetReceiver(
+        mojo::MakeSelfOwnedReceiver(std::move(impl), std::move(receiver)));
+  }
 }
 
 void BarcodeDetectionProviderMac::EnumerateSupportedFormats(
@@ -57,8 +62,13 @@ void BarcodeDetectionProviderMac::EnumerateSupportedFormats(
     vision_api_ = VisionAPIInterface::Create();
   }
 
-  supported_formats_ =
-      BarcodeDetectionImplMacVision::GetSupportedSymbologies(vision_api_.get());
+  supported_formats_.emplace();
+  if (@available(macOS 10.13, *)) {
+    if (VisionAvailable())
+      supported_formats_ =
+          BarcodeDetectionImplMacVision::GetSupportedSymbologies(
+              vision_api_.get());
+  }
   std::move(callback).Run(supported_formats_.value());
 }
 

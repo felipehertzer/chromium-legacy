@@ -20,6 +20,7 @@ namespace shape_detection {
 
 namespace {
 
+API_AVAILABLE(macos(10.13))
 mojom::BarcodeFormat ToBarcodeFormat(NSString* symbology) {
   if ([symbology isEqual:VNBarcodeSymbologyAztec])
     return mojom::BarcodeFormat::AZTEC;
@@ -55,6 +56,7 @@ mojom::BarcodeFormat ToBarcodeFormat(NSString* symbology) {
   return mojom::BarcodeFormat::UNKNOWN;
 }
 
+API_AVAILABLE(macos(10.13))
 void UpdateSymbologyHint(mojom::BarcodeFormat format,
                          NSMutableArray<VNBarcodeSymbology>* hint) {
   switch (format) {

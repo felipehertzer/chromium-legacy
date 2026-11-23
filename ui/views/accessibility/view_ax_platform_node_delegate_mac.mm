@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "legacy/apple/window.h"
 #include "ui/accessibility/platform/ax_platform_node_mac.h"
 #include "ui/views/cocoa/native_widget_mac_ns_window_host.h"
 #include "ui/views/view.h"
@@ -64,7 +65,8 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegateMac::GetParent() const {
 void ViewAXPlatformNodeDelegateMac::OverrideNativeWindowTitle(
     const std::string& title) {
   if (gfx::NativeViewAccessible ax_window = GetNSWindow()) {
-    [ax_window.Get() setAccessibilityLabel:base::SysUTF8ToNSString(title)];
+    chromium_legacy::OverrideWindowAccessibilityLabel(
+        ax_window.Get(), base::SysUTF8ToNSString(title));
   }
 }
 

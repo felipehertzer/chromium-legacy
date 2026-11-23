@@ -8,7 +8,7 @@
 #ifdef __OBJC__
 
 #import <Foundation/Foundation.h>
-#import <Vision/Vision.h>
+#include "services/shape_detection/native_detection_mac.h"
 
 #include <memory>
 

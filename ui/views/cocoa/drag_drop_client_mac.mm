@@ -96,9 +96,11 @@ void DragDropClientMac::StartDragAndDrop(
                  image.size.width, image.size.height);
   for (NSUInteger i = 0; i < drag_items.count; ++i) {
     if (i == 0) {
-      [drag_items[i] setDraggingFrame:dragging_frame contents:image];
+      [[drag_items objectAtIndex:i] setDraggingFrame:dragging_frame
+                                            contents:image];
     } else {
-      [drag_items[i] setDraggingFrame:NSMakeRect(0, 0, 1, 1) contents:nil];
+      [[drag_items objectAtIndex:i] setDraggingFrame:NSMakeRect(0, 0, 1, 1)
+                                            contents:nil];
     }
   }
 

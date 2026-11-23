@@ -178,7 +178,13 @@ WiFiServiceMac::~WiFiServiceMac() {
 void WiFiServiceMac::Initialize(
   scoped_refptr<base::SequencedTaskRunner> task_runner) {
   task_runner_.swap(task_runner);
-  interface_ = [[CWWiFiClient sharedWiFiClient] interface];
+  if (@available(macOS 10.10, *)) {
+    interface_ = [[CWWiFiClient sharedWiFiClient] interface];
+  } else {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    interface_ = [CWInterface interface];
+#endif
+  }
   if (!interface_) {
     DVLOG(1) << "Failed to initialize default interface.";
     return;

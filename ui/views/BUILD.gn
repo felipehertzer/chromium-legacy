@@ -738,6 +738,7 @@ component("views") {
   }
 
   if (is_mac) {
+    deps += [ "//legacy:platform_support" ]
     public += [
       "cocoa/immersive_mode_reveal_client.h",
       "cocoa/native_widget_mac_ns_window_host.h",

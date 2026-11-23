@@ -34,6 +34,7 @@ source_set("lib") {
     sources += [
       "detection_utils_mac.h",
       "detection_utils_mac.mm",
+      "native_detection_mac.h",
       "face_detection_impl_mac.h",
       "face_detection_impl_mac.mm",
       "face_detection_impl_mac_vision.h",
@@ -45,8 +46,9 @@ source_set("lib") {
     ]
     frameworks = [
       "QuartzCore.framework",
-      "Vision.framework",
     ]
+    weak_frameworks = [ "Vision.framework" ]
+    deps += [ "//legacy:platform_support" ]
   } else if (is_win) {
     sources += [
       "detection_utils_win.cc",

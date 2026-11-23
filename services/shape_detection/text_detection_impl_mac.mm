@@ -21,42 +21,48 @@ void TextDetectionImpl::Create(
 }
 
 TextDetectionImplMac::TextDetectionImplMac() {
-  NSDictionary* const opts = @{CIDetectorAccuracy : CIDetectorAccuracyHigh};
-  detector_ = [CIDetector detectorOfType:CIDetectorTypeText
-                                 context:nil
-                                 options:opts];
+  detector_ = CreateNativeTextDetector();
 }
 
 TextDetectionImplMac::~TextDetectionImplMac() = default;
 
 void TextDetectionImplMac::Detect(const SkBitmap& bitmap,
                                   DetectCallback callback) {
-  CIImage* ci_image = CIImageFromSkBitmap(bitmap);
-  if (!ci_image) {
+  if (!detector_) {
     std::move(callback).Run({});
     return;
   }
+  if (@available(macOS 10.11, *)) {
+    CIImage* ci_image = CIImageFromSkBitmap(bitmap);
+    if (!ci_image) {
+      std::move(callback).Run({});
+      return;
+    }
 
-  NSArray* const features = [detector_ featuresInImage:ci_image];
+    NSArray* const features = [detector_ featuresInImage:ci_image];
 
-  const int height = bitmap.height();
-  std::vector<mojom::TextDetectionResultPtr> results;
-  for (CIRectangleFeature* const f in features) {
-    // CIRectangleFeature only has bounding box information.
-    auto result = mojom::TextDetectionResult::New();
-    result->bounding_box = ConvertCGToGfxCoordinates(f.bounds, height);
+    const int height = bitmap.height();
+    std::vector<mojom::TextDetectionResultPtr> results;
+    for (CIRectangleFeature* const f in features) {
+      // CIRectangleFeature only has bounding box information.
+      auto result = mojom::TextDetectionResult::New();
+      result->bounding_box = ConvertCGToGfxCoordinates(f.bounds, height);
 
-    // Enumerate corner points starting from top-left in clockwise fashion:
-    // https://wicg.github.io/shape-detection-api/text.html#dom-detectedtext-cornerpoints
-    result->corner_points.emplace_back(f.topLeft.x, height - f.topLeft.y);
-    result->corner_points.emplace_back(f.topRight.x, height - f.topRight.y);
-    result->corner_points.emplace_back(f.bottomRight.x,
-                                       height - f.bottomRight.y);
-    result->corner_points.emplace_back(f.bottomLeft.x, height - f.bottomLeft.y);
+      // Enumerate corner points starting from top-left in clockwise fashion:
+      // https://wicg.github.io/shape-detection-api/text.html#dom-detectedtext-cornerpoints
+      result->corner_points.emplace_back(f.topLeft.x, height - f.topLeft.y);
+      result->corner_points.emplace_back(f.topRight.x, height - f.topRight.y);
+      result->corner_points.emplace_back(f.bottomRight.x,
+                                         height - f.bottomRight.y);
+      result->corner_points.emplace_back(f.bottomLeft.x,
+                                         height - f.bottomLeft.y);
 
-    results.push_back(std::move(result));
+      results.push_back(std::move(result));
+    }
+    std::move(callback).Run(std::move(results));
+    return;
   }
-  std::move(callback).Run(std::move(results));
+  std::move(callback).Run({});
 }
 
 void TextDetectionImplMac::EnsureReady(

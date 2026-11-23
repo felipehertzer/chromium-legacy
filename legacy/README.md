@@ -164,6 +164,16 @@ or replaces a Chromium 159 dependency.
   uses CWInterface before CWWiFiClient/10.10; the scan/permission path is unchanged.
   Attributed-text conversion keeps its borrowed autorelease-pool lifetime through
   ARC instead of requiring CFAutorelease/10.9, and retains old font selectors.
+- Vision detection has a 10.13 runtime floor and a weak framework dependency.
+  Older systems retain the existing Core Image face detector, report no native
+  barcode formats and reject native text detection before 10.11. Catalina uses
+  the original Vision symbology property instead of its macOS 12 replacement.
+  SDK SIMD scalar math inlines retain guarded native calls on 10.9+ and exact
+  integer/half-integer range reduction on older systems.
+- Modal window masks and child-sheet enumeration use the original AppKit APIs
+  when newer ones are absent. Window accessibility labels use the old override
+  mechanism before 10.10. Drag-item and print-settings selectors retain their
+  original array/dictionary behavior on Lion.
 - Native ARM build tools use a modern host deployment target while the Intel
   browser retains 10.7. Availability diagnostics and linker warnings stay fatal.
 
@@ -209,13 +219,15 @@ compile with deployment target 10.7. Crypto and the separately rebuilt Rust std 
 | Actual VideoToolbox capability/session/color-format helpers | 14 checks passed | 14 checks passed |
 | Real Chromium accessibility nodes/actions/traversal/lifetime | 33 checks passed | 33 checks passed |
 | Secure archives, normal and forced old initializers | 11 checks each | 11 checks each |
-| Native sheets, normal and forced old APIs | 10 checks each | 10 checks each |
+| Native sheets/modal masks/child enumeration/label acceptance | 18 normal and 17 forced checks | 18 normal and 17 forced checks |
 | ARC-zeroing weak-key ownership | 10 checks passed | 10 checks passed |
 | HTTP response header lookup, including malformed legacy dictionaries | 12 normal and 15 forced checks, Intel and ARM | 12 normal and 15 forced checks |
 | Quarantine attributes/flags/metadata, normal and forced old APIs | 11 checks each | 13 checks each |
 | Menu drawing/flipped context/file-extension types, normal and forced old APIs | 21 checks each | 21 checks each |
 | Native authentication context factory/eligibility/callbacks | 6 normal and 5 forced unavailable checks | 6 normal and 5 forced unavailable checks |
 | Attributed-text lifetime/Unicode/font/range conversion | 9 checks passed | 9 checks passed |
+| Native shape helpers/format enumeration/synthetic image/old face fallback | 11 normal and 9 forced checks | 11 normal and 9 forced checks |
+| SIMD scalar math/edge cases/native comparison, normal and forced old APIs | 1,743 checks each | 1,743 checks each |
 
 The runtime probe checks allocation, clocks, atomic waiting, condition variables,
 filesystem operations, entropy, TLS context creation, audit-token decoding, and
@@ -229,7 +241,8 @@ Base/Crypto, SDK, Services/fonts, clipboard, displays, media ownership, Rust/C++
 compositor clipping, Bluetooth, sandbox logging, accessibility/Unicode,
 VideoToolbox helpers, real accessibility nodes, secure archives, sheets,
 weak-key ownership, HTTP headers, quarantine metadata, menu drawing/file types,
-authentication contexts, attributed-text conversion, timers, atomics, and
+authentication contexts, attributed-text conversion, shape helpers, SIMD scalar
+math, modal window helpers, timers, atomics, and
 forced C++ runtime probes have no missing required symbols
 or incomplete required libraries. Absent optional symbols remain weak and their
 call sites have guards or fallbacks. This checks link compatibility; actual
@@ -258,7 +271,12 @@ headless-window behavior still need browser runtime tests. Authentication checks
 create/destroy an LAContext and reject a fictitious, unentitled group; they do not
 request biometrics, sign data or query credential stores. The credential-store
 and signing changes have compiler checks only. Wi-Fi scans and HID/serial device
-operations have not been executed by these checks.
+operations have not been executed by these checks. Shape checks use owned
+synthetic images and native helper functions; complete IPC/detection callbacks
+still need browser runtime tests. Window label checks verify AppKit accepts the
+legacy override and retain the formal accessor on newer systems; they do not
+query the result through an external accessibility client. The SDK's newer
+out-of-line vector trigonometric APIs are outside the scalar compatibility shim.
 The installer recovery system omits AVFoundation and Bluetooth libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
@@ -283,6 +301,8 @@ legacy/test_http_header.sh
 legacy/test_quarantine.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_menu_platform.sh
+legacy/test_shape_platform.sh
+legacy/test_simd_math.sh
 # Requires the current Intel C++/ABI static libraries in out/Lion:
 legacy/test_sheet.sh
 legacy/test_weak_key_map.sh

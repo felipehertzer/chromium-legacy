@@ -18,11 +18,8 @@ class VisionAPI : public VisionAPIInterface {
   ~VisionAPI() override = default;
 
   NSArray<VNBarcodeSymbology>* GetSupportedSymbologies() const override {
-    VNDetectBarcodesRequest* barcodes_request =
-        [[VNDetectBarcodesRequest alloc] init];
     NSError* error = nil;
-    NSArray<VNBarcodeSymbology>* symbologies =
-        [barcodes_request supportedSymbologiesAndReturnError:&error];
+    NSArray<VNBarcodeSymbology>* symbologies = NativeBarcodeSymbologies(&error);
     if (error) {
       DLOG(ERROR) << base::SysNSStringToUTF8(error.localizedDescription);
     }

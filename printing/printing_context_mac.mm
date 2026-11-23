@@ -827,10 +827,10 @@ bool PrintingContextMac::SetPrintRangeInPrintSettings(
 PageRanges PrintingContextMac::GetPageRangesFromPrintInfo() {
   PageRanges page_ranges;
   NSDictionary* print_info_dict = [print_info_ dictionary];
-  if (![print_info_dict[NSPrintAllPages] boolValue]) {
+  if (![[print_info_dict objectForKey:NSPrintAllPages] boolValue]) {
     PageRange range;
-    range.from = [print_info_dict[NSPrintFirstPage] intValue] - 1;
-    range.to = [print_info_dict[NSPrintLastPage] intValue] - 1;
+    range.from = [[print_info_dict objectForKey:NSPrintFirstPage] intValue] - 1;
+    range.to = [[print_info_dict objectForKey:NSPrintLastPage] intValue] - 1;
     page_ranges.push_back(range);
   }
   return page_ranges;

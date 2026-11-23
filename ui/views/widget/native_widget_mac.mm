@@ -26,6 +26,7 @@
 #import "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
 #import "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
 #import "components/remote_cocoa/app_shim/views_nswindow_delegate.h"
+#include "legacy/apple/window.h"
 #import "ui/base/cocoa/window_size_constants.h"
 #include "ui/base/ime/init/input_method_factory.h"
 #include "ui/base/ime/input_method.h"
@@ -82,7 +83,7 @@ uint64_t StyleMaskForParams(const Widget::InitParams& params) {
   // titlebar, which will cover the content.
   if (params.delegate &&
       params.delegate->GetModalType() == ui::mojom::ModalType::kWindow) {
-    return NSWindowStyleMaskTitled | NSWindowStyleMaskFullSizeContentView;
+    return chromium_legacy::ModalWindowStyleMask();
   }
 
   // TODO(tapted): Determine better masks when there are use cases for it.
@@ -1418,7 +1419,7 @@ Widget::Widgets NativeWidgetPrivate::GetAllChildWidgets(
 
     // Collect -sheets and -childWindows. A window should never appear in both,
     // since that causes AppKit to glitch.
-    NSArray* sheet_children = ns_view.window.sheets;
+    NSArray* sheet_children = chromium_legacy::ChildSheets(ns_view.window);
     for (NSWindow* native_child in sheet_children) {
       children.merge(
           GetAllChildWidgets(gfx::NativeView(native_child.contentView)));
