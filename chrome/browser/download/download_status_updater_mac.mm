@@ -52,7 +52,8 @@ namespace {
 
 const char kCrNSProgressUserDataKey[] = "CrNSProgressUserData";
 
-class CrNSProgressUserData : public base::SupportsUserData::Data {
+class API_AVAILABLE(macos(10.9)) CrNSProgressUserData
+    : public base::SupportsUserData::Data {
  public:
   CrNSProgressUserData(NSProgress* progress,
                        CrDownloadCanceller* canceller,
@@ -89,6 +90,7 @@ void UpdateAppDockIcon(int download_count,
   [dock_icon updateIcon];
 }
 
+API_AVAILABLE(macos(10.9))
 CrNSProgressUserData* CreateOrGetNSProgress(download::DownloadItem* download) {
   CrNSProgressUserData* progress_data = static_cast<CrNSProgressUserData*>(
       download->GetUserData(&kCrNSProgressUserDataKey));
@@ -100,8 +102,9 @@ CrNSProgressUserData* CreateOrGetNSProgress(download::DownloadItem* download) {
 
   NSProgress* progress = [NSProgress progressWithTotalUnitCount:-1];
   progress.kind = NSProgressKindFile;
-  progress.fileOperationKind = NSProgressFileOperationKindDownloading;
-  progress.fileURL = destination_url;
+  [progress setUserInfoObject:NSProgressFileOperationKindDownloading
+                       forKey:NSProgressFileOperationKindKey];
+  [progress setUserInfoObject:destination_url forKey:NSProgressFileURLKey];
 
   // Don't publish a pause/resume handler. The only users of `NSProgress` are
   // outside of Chromium, and none currently implement pausing published
@@ -134,25 +137,28 @@ CrNSProgressUserData* CreateOrGetNSProgress(download::DownloadItem* download) {
       download->GetUserData(&kCrNSProgressUserDataKey));
 }
 
+API_AVAILABLE(macos(10.9))
 void UpdateNSProgress(download::DownloadItem* download) {
   CrNSProgressUserData* progress_data = CreateOrGetNSProgress(download);
 
   NSProgress* progress = progress_data->progress();
   progress.totalUnitCount = download->GetTotalBytes();
   progress.completedUnitCount = download->GetReceivedBytes();
-  progress.throughput = @(download->CurrentSpeed());
+  [progress setUserInfoObject:@(download->CurrentSpeed())
+                       forKey:NSProgressThroughputKey];
 
   base::TimeDelta time_remaining;
   NSNumber* ns_time_remaining = nil;
   if (download->TimeRemaining(&time_remaining))
     ns_time_remaining = @(time_remaining.InSeconds());
-  progress.estimatedTimeRemaining = ns_time_remaining;
+  [progress setUserInfoObject:ns_time_remaining
+                       forKey:NSProgressEstimatedTimeRemainingKey];
 
   base::FilePath download_path = download->GetFullPath();
   if (progress_data->target() != download_path) {
     progress_data->setTarget(download_path);
     NSURL* download_url = base::apple::FilePathToNSURL(download_path);
-    progress.fileURL = download_url;
+    [progress setUserInfoObject:download_url forKey:NSProgressFileURLKey];
   }
 }
 
@@ -183,12 +189,14 @@ void DownloadStatusUpdater::UpdateAppIconDownloadProgress(
   // As an additional bug to avoid (http://crbug.com/40297082), never update the
   // data of an `NSProgress` after the file name has changed, as that can result
   // in the file being stuck in an in-progress state in the Dock.
-  if (download->GetState() == download::DownloadItem::IN_PROGRESS &&
-      !download->AllDataSaved() && !download->GetFullPath().empty() &&
-      download->GetFullPath() != download->GetTargetFilePath()) {
-    UpdateNSProgress(download);
-  } else {
-    DestroyNSProgress(download);
+  if (@available(macOS 10.9, *)) {
+    if (download->GetState() == download::DownloadItem::IN_PROGRESS &&
+        !download->AllDataSaved() && !download->GetFullPath().empty() &&
+        download->GetFullPath() != download->GetTargetFilePath()) {
+      UpdateNSProgress(download);
+    } else {
+      DestroyNSProgress(download);
+    }
   }
 
   // Handle downloads that ended.

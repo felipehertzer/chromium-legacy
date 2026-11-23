@@ -59,10 +59,14 @@ void OpenFileOnMainThread(const base::FilePath& full_path) {
   if (!url)
     return;
 
-  [[NSWorkspace sharedWorkspace]
-                openURL:url
-          configuration:[NSWorkspaceOpenConfiguration configuration]
-      completionHandler:nil];
+  if (@available(macOS 10.15, *)) {
+    [[NSWorkspace sharedWorkspace]
+                  openURL:url
+            configuration:[NSWorkspaceOpenConfiguration configuration]
+        completionHandler:nil];
+  } else {
+    [[NSWorkspace sharedWorkspace] openURL:url];
+  }
 }
 
 namespace internal {
@@ -81,10 +85,14 @@ void PlatformOpenVerifiedItem(const base::FilePath& path, OpenItemType type) {
       // Note that there exists a TOCTOU race between the time that |path| was
       // verified as being a directory and when NSWorkspace invokes Finder (or
       // alternative) to open |path_string|.
-      [[NSWorkspace sharedWorkspace]
-                    openURL:url
-              configuration:[NSWorkspaceOpenConfiguration configuration]
-          completionHandler:nil];
+      if (@available(macOS 10.15, *)) {
+        [[NSWorkspace sharedWorkspace]
+                      openURL:url
+                configuration:[NSWorkspaceOpenConfiguration configuration]
+            completionHandler:nil];
+      } else {
+        [[NSWorkspace sharedWorkspace] openURL:url];
+      }
       return;
   }
 }
@@ -103,15 +111,19 @@ void OpenExternal(const GURL& url) {
     return;
   }
 
-  std::string url_string = url.possibly_invalid_spec();
-  [[NSWorkspace sharedWorkspace]
-                openURL:ns_url
-          configuration:[NSWorkspaceOpenConfiguration configuration]
-      completionHandler:^(NSRunningApplication* app, NSError* error) {
-        if (error) {
-          LOG(WARNING) << "NSWorkspace failed to open URL " << url_string;
-        }
-      }];
+  if (@available(macOS 10.15, *)) {
+    std::string url_string = url.possibly_invalid_spec();
+    [[NSWorkspace sharedWorkspace]
+                  openURL:ns_url
+            configuration:[NSWorkspaceOpenConfiguration configuration]
+        completionHandler:^(NSRunningApplication* app, NSError* error) {
+          if (error) {
+            LOG(WARNING) << "NSWorkspace failed to open URL " << url_string;
+          }
+        }];
+  } else if (![[NSWorkspace sharedWorkspace] openURL:ns_url]) {
+    LOG(WARNING) << "NSWorkspace failed to open URL " << url;
+  }
 }
 
 gfx::NativeWindow GetTopLevel(gfx::NativeView view) {
@@ -159,9 +171,7 @@ bool IsVisible(gfx::NativeView native_view) {
 
   // A reasonable approximation of how you'd expect this to behave.
   NSView* view = native_view.GetNativeNSView();
-  return (view &&
-          ![view isHiddenOrHasHiddenAncestor] &&
-          [view window] &&
+  return (view && ![view isHiddenOrHasHiddenAncestor] && [view window] &&
           [[view window] isVisible]);
 }
 

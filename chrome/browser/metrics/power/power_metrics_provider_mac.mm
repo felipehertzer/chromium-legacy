@@ -39,6 +39,7 @@ enum class ThermalStateUMA {
   kMaxValue = kCritical,
 };
 
+API_AVAILABLE(macos(10.10.3))
 ThermalStateUMA ThermalStateToUmaEnumValue(NSProcessInfoThermalState state) {
   switch (state) {
     case NSProcessInfoThermalStateNominal:
@@ -120,9 +121,12 @@ class PowerMetricsProvider::Impl {
   }
 
   void RecordThermal() {
-    UMA_HISTOGRAM_ENUMERATION(
-        "Power.Mac.ThermalState",
-        ThermalStateToUmaEnumValue([[NSProcessInfo processInfo] thermalState]));
+    if (@available(macOS 10.10.3, *)) {
+      UMA_HISTOGRAM_ENUMERATION(
+          "Power.Mac.ThermalState",
+          ThermalStateToUmaEnumValue(
+              [[NSProcessInfo processInfo] thermalState]));
+    }
   }
 
   base::OneShotTimer timer_;

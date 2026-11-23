@@ -305,10 +305,14 @@ bool CloneApp(const base::FilePath& source_path,
   // We are ignoring the warning because of the speed gains with `clonefile`.
   // A feedback has been opened with Apple asking about this warning.
   // FB13814551: clonefile directories
-  if (clonefile(source_path.value().c_str(), destination_path.value().c_str(),
-                0) != 0) {
-    DPLOG(ERROR) << "clonefile " << std::quoted(source_path.value()) << ", "
-                 << std::quoted(destination_path.value());
+  if (@available(macOS 10.12, *)) {
+    if (clonefile(source_path.value().c_str(), destination_path.value().c_str(),
+                  0) != 0) {
+      DPLOG(ERROR) << "clonefile " << std::quoted(source_path.value()) << ", "
+                   << std::quoted(destination_path.value());
+      return false;
+    }
+  } else {
     return false;
   }
 
