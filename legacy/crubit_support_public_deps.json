@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "revision": "6cdbd6b427cbaf539e32c84d8df42a4830981304",
+  "files": {
+    "support/BUILD.gn": {
+      "sha256": "66790970f316311356c9d5158e356ec1e18978831538215cdc5301194debd908",
+      "public_dependencies": {
+        "annotations": [
+          "$crubit_src_dir/support:annotations_internal"
+        ],
+        "movable": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ]
+      }
+    },
+    "support/internal/BUILD.gn": {
+      "sha256": "f6596480b9bcdb6b6ce79c607d9e7909b1fcf134d65bdb6c0666d069b42e7ea0",
+      "public_dependencies": {
+        "bindings_support": [
+          "$crubit_src_dir/support:annotations_internal",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ]
+      }
+    },
+    "support/rs/BUILD.gn": {
+      "sha256": "da305e1b3f56806fbc4293b697625f0070ce0ca82f6d91127bfae636f253aa8b",
+      "public_dependencies": {
+        "box": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support:annotations",
+          "$crubit_src_dir/support:annotations_internal",
+          "$crubit_src_dir/support:movable",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ],
+        "pin_box": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support:annotations",
+          "$crubit_src_dir/support:annotations_internal",
+          "$crubit_src_dir/support:movable",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ],
+        "slice_box": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/rs_std:slice_ref",
+          "$crubit_src_dir/support:annotations",
+          "$crubit_src_dir/support:annotations_internal",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ],
+        "str_box": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/rs_std/internal:is_utf8",
+          "$crubit_src_dir/support/rs_std:str_ref",
+          "$crubit_src_dir/support:annotations",
+          "$crubit_src_dir/support:annotations_internal",
+          "$crubit_src_dir/support:movable",
+          "$crubit_src_dir/support:unsafe_relocate_tag"
+        ]
+      }
+    },
+    "support/rs_std/BUILD.gn": {
+      "sha256": "fcd61c050bb94817acc6a8d2d338a195c67c9401b312a5b7a424d748f334e067",
+      "public_dependencies": {
+        "char": [
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support/rs_std:str_ref",
+          "$crubit_src_dir/support:annotations"
+        ],
+        "dyn_callable": [
+          "$crubit_absl_dep_target",
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support:bridge_cpp"
+        ],
+        "dyn_erased_future_cc": [
+          "$crubit_src_dir/support/rs_std:waker"
+        ],
+        "enum": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/rs_std/internal:enum",
+          "$crubit_src_dir/support:annotations"
+        ],
+        "int": [
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support:annotations"
+        ],
+        "iterator_adapter": [
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support/rs_std:traits"
+        ],
+        "option": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support/rs_std:unit"
+        ],
+        "result": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support/rs_std:unit"
+        ],
+        "slice_ref": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support:annotations"
+        ],
+        "str_ref": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/internal:cpp_config",
+          "$crubit_src_dir/support/rs_std/internal:is_utf8",
+          "$crubit_src_dir/support/rs_std:slice_ref",
+          "$crubit_src_dir/support:annotations_internal"
+        ],
+        "traits": [
+          "$crubit_src_dir/support/internal:cpp_config"
+        ],
+        "tuple": [
+          "$crubit_src_dir/support/internal:cpp_config"
+        ],
+        "unit": [
+          "$crubit_src_dir/support/internal:cpp_config"
+        ],
+        "vec": [
+          "$crubit_src_dir/support/internal:bindings_support",
+          "$crubit_src_dir/support/internal:cpp_config"
+        ],
+        "waker": [
+          "$crubit_src_dir/support/internal:cpp_config"
+        ]
+      }
+    }
+  }
+}
