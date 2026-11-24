@@ -332,7 +332,7 @@ alongside the remaining browser port.
 ## Verified so far
 
 The two PartitionAlloc libraries, current libc++, and Base's static library
-compile with deployment target 10.7. Crypto and the separately rebuilt Rust std also compile. The full browser is still being compiled and ported.
+compile with deployment target 10.7. Crypto and the separately rebuilt Rust std also compile. The normal full-browser build now completes; browser runtime validation remains pending.
 
 | Check | Build Mac | Intel Catalina 10.15.7 |
 | --- | --- | --- |
@@ -676,49 +676,80 @@ an isolated artifact snapshot. Each bundled Mach-O still needs its own audit.
 ## Remaining work
 
 The full source and 231 processed dependencies are checked out using shallow
-history and the small Mac configuration. Setup hooks and GN generation pass
-with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27.
-The Rust minimum-version blocker is fixed and the linked integration probes run
-on Catalina. A private link of the full framework and Crashpad handler uses all 21 changed
-production implementations, each freshly compiled with Intel/10.7 flags. The
-framework's 2,768 imports and the handler's 381 imports have no missing required
-Lion symbols, unknown ordinals or incomplete libraries. A complete experimental
-app was assembled from the GN resource recipe and its generation-time framework
-symlinks. All 16 bundled Mach-O files have an Intel/10.7 minimum and pass the
-Lion import audit, including internal library bindings. SHA-1/SHA-256 ad hoc
-signatures pass strict verification. The normal Ninja rebuild is still running;
-this private assembly does not replace its final integration checks. The custom compiler and Crubit now pass the original interoperability tests
-on Catalina. An earlier Intel build of the pinned V8/Blink context generator
-executed on the host and Catalina with byte-identical output. The native ARM
-cross generator is still rebuilding; its execution and the normal browser
-assembly remain pending.
+history and the small Mac configuration. The normal Ninja `chrome` target now
+completes with pinned Clang 24, the source-patched Rust 1.101 compiler and local
+Xcode 27. An immediate incremental verification reports no work to do. The
+native ARM cross generator executes and reproducibly creates the Intel V8/Blink
+context snapshot: 3,338,184 bytes, SHA-256
+`10cdc5aa31288bc88d1d716dd18ef2fa18ce04b88ee922630df68025acd9ec0c`.
+Generated runtime-feature definitions are identical in the browser and generator
+toolchains. The custom Rust compiler and Crubit retain their earlier original
+interoperability-test passes on Catalina.
+
+A complete experimental app is copied from the normal Ninja output. All 16
+bundled Mach-O files target Intel/10.7 and pass the Lion import audit, including
+internal library bindings. The framework's 2,768 imports and Crashpad's 381
+imports have no missing required symbols, unknown ordinals or incomplete
+libraries. Ad hoc SHA-1/SHA-256 signatures use the unchanged upstream role
+entitlement templates and pass strict verification. ZIP CRC, every executable
+hash, the snapshot hash and all five framework symlinks survive extraction;
+the extracted app also passes strict signature verification.
 
 Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
-graphics, media, UI, and the remaining browser API usage still need build and
-runtime validation. The eight older compatibility forks remain references;
-they have not been substituted for current dependency revisions.
+graphics, media, UI and other browser behavior still need full-app runtime
+validation. The eight older compatibility forks remain references; they have
+not replaced any current dependency revision.
 
-An earlier assembled host prototype printed `Chromium 159.0.8154.13`; its
-graphical startup failed with a Rosetta `CodeFragmentMetadata` assertion. This
-does not establish whether the cause is translation or browser code. The Intel
-Catalina test machine was unreachable over SSH during this check. The latest
-assembled app still needs runtime validation.
+The normal assembled app prints `Chromium 159.0.8154.13` and exits successfully
+for `--version` on the build host. GUI startup did not produce a window or
+DevTools endpoint within 120 seconds. Sampling that process subsequently
+reported a Rosetta `CodeFragmentMetadata` assertion; this does not establish the
+cause of the earlier startup stall. Catalina remained unreachable over SSH.
 
-The current sandbox profiles also pass 135 compile-and-enforce runs on the
-native build host. Each run applies the actual policy only to its own process,
-checks that sandboxing is active, permits its executable and configured log,
-and rejects private file reads, private file creation, and log reads. Run
-`python3 legacy/test_sandbox_profiles.py --output /tmp/sandbox-results.json`
-to repeat this check. `--architecture x64 --build-only --output /tmp/sandbox-probe`
-builds the Intel/10.7 probe without executing it. A target Mac can use
-`--probe /path/to/sandbox-probe.x64` with the same script and policy sources,
-without an SDK. The default version branches never exceed the actual host OS.
+All 15 sandbox profiles compile with an unmodified original Lion `libsandbox`
+loaded by a separate test utility. Both the 10.7 and 10.8 parameter branches
+pass. The utility verifies that every compiler function comes from the requested
+library, treats compiled profiles as opaque and never applies old bytecode to
+the current kernel. The library is an external test input and is not bundled:
 
-These tests use the host's sandbox compiler and kernel. The `OS_VERSION`
-parameter only selects policy branches; it does not emulate Lion or Catalina.
-The inherited 127 port contains sandbox-language aliases and version guards
-that still need to be adapted and tested against the old compiler. The current
-10.7 library-import audit does not establish sandbox-profile compatibility.
+```sh
+python3 legacy/test_sandbox_profiles.py \
+  --compiler-library /path/to/original/Lion/usr/lib/libsandbox.1.dylib \
+  --output /tmp/lion-policy-compilation.json
+```
+
+Legacy policy aliases preserve path and shared-memory object allowlists.
+Lion lacks named sysctl filters and separate shared-memory read/write hooks;
+its fallback permits coarser read-only sysctl metadata and access to the same
+explicit shared-memory names. No general sysctl-write grant is added. Older
+kernels also lack the vnode-type predicate used to prohibit symlink creation.
+Path confinement remains required when following a link. Optional IODisplay
+property writes stay denied before 10.9 because those kernels cannot restrict
+that grant by connection; old hardware display behavior still needs testing.
+
+Run the current host compiler/kernel containment checks with:
+
+```sh
+python3 legacy/test_sandbox_profiles.py --output /tmp/sandbox-results.json
+python3 legacy/test_sandbox_profiles.py --legacy-capabilities \
+  --output /tmp/sandbox-fallback-results.json
+```
+
+The second command masks newer language hooks only inside the test input,
+exercising fallback rules on the current kernel. Each run applies the actual
+policy only to its own process, checks that sandboxing is active, permits its
+executable and configured log, and rejects private reads, file creation, log
+reads and writes outside the allowlist through a log symlink. Masking is never
+part of a production policy or browser parameter. `--denial-logging` and
+`--allow-renderer-pidinfo` exercise those alternate policy settings.
+`--architecture x64 --build-only --output /tmp/sandbox-probe` prepares an
+Intel/10.7 probe; `--probe /path/to/sandbox-probe.x64` runs a prepared probe on
+a target Mac without an SDK.
+
+These checks establish old userland language compilation and containment on
+the actual build-host kernel. `OS_VERSION` only selects policy branches. Neither
+that parameter, masking, nor a successful library-import audit proves policy
+enforcement or browser execution on the Lion or Catalina kernel.
 
 A GUI smoke test is available in `legacy/test_browser.py` (Python 3.8+ and
 `websockets` 13.1). Build its process inspector with

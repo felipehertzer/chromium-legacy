@@ -44,7 +44,10 @@
 (allow-network-subpaths user-cache-dir #"Cache")
 
 ; Disallow creating symbolic links.
-(unless (param-true? allow-network-symlink-creation)
+; Earlier kernels do not expose a vnode-type predicate. The storage path
+; allowlist still applies; keep the explicit symlink denial where supported.
+(when (and (defined? 'vnode-type)
+           (not (param-true? allow-network-symlink-creation)))
   (deny file-write-create (vnode-type SYMLINK)))
 
 ; DNS configuration watcher entries. This is a nesty mess of symlinks.
@@ -137,9 +140,11 @@
   (global-name "com.apple.AppSSO.service-xpc")
 )
 
-(allow sysctl-read
-  (sysctl-name-regex #"^net.routetable")
-)
+(if (defined? 'sysctl-name-regex)
+  (allow sysctl-read (sysctl-name-regex #"^net.routetable"))
+  (if (defined? 'sysctl-name-prefix)
+    (allow sysctl-read (sysctl-name-prefix "net.routetable"))
+    (allow sysctl-read)))
 
 ; Kerberos support. This should be removed after GSS is moved out of the
 ; network service. https://crbug.com/1017830

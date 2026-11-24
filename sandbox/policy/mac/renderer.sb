@@ -4,29 +4,29 @@
 
 ; --- The contents of common.sb implicitly included here. ---
 
-; Put the denials first.
-; crbug.com/40556801: These operations are allowed by default.
-(if (param-true? disable-sandbox-denial-logging)
-  (deny iokit-get-properties process-info* nvram* (with no-log))
-  (deny iokit-get-properties process-info* nvram*)
-)
+; Put the denials first: https://crbug.com/40556801.
+; Operations absent from the old kernel have no separate policy hook.
+; Preserve each current denial, including logging behavior, when it exists.
+(define (deny-renderer-operation operation)
+  (if (param-true? disable-sandbox-denial-logging)
+    (deny operation (with no-log))
+    (deny operation)))
+(if (defined? 'iokit-get-properties)
+  (deny-renderer-operation iokit-get-properties))
+(if (defined? 'process-info*) (deny-renderer-operation process-info*))
+(if (defined? 'nvram*) (deny-renderer-operation nvram*))
+(if (defined? 'distributed-notification-post)
+  (deny-renderer-operation distributed-notification-post))
+(if (defined? 'user-preference-read) (allow user-preference-read))
 
-(if (param-true? disable-sandbox-denial-logging)
-  (deny distributed-notification-post (with no-log))
-  (deny distributed-notification-post)
-)
-
-; Allow cf prefs to work.
-(allow user-preference-read)
-
-; process-info
-; Only allow arbitrary process-info-pidinfo access if the
-; MacSandboxAllowRendererPidinfo feature is enabled. This feature functions as a
-; killswitch and will be removed (along with the grant below) once we have
-; determined that it is safe to do so (https://crbug.com/574858526).
-(if (param-true? allow-renderer-pidinfo)
+; Only allow arbitrary process-info-pidinfo access when the
+; MacSandboxAllowRendererPidinfo killswitch is enabled.
+; https://crbug.com/574858526
+(when (and (defined? 'process-info-pidinfo)
+           (param-true? allow-renderer-pidinfo))
   (allow process-info-pidinfo))
-(allow process-info-setcontrol (target self))
+(if (defined? 'process-info-setcontrol)
+  (allow process-info-setcontrol (target self)))
 
 ; File reads.
 ; Reads from the home directory.
@@ -43,10 +43,10 @@
 
 (allow-cvms-blobs)
 
-(allow file-write-data
-  (require-all
-    (path "/dev/null")
-    (vnode-type CHARACTER-DEVICE)))
+(if (defined? 'vnode-type)
+  (allow file-write-data
+    (require-all (path "/dev/null") (vnode-type CHARACTER-DEVICE)))
+  (allow file-write-data (path "/dev/null")))
 
 ; Needed for Fonts.
 (allow-font-access)
@@ -90,20 +90,22 @@
 )
 
 ; IOKit properties.
-(allow iokit-get-properties
-  (iokit-property "CaseSensitive")
-  (iokit-property "CoreStorage Encrypted")
-  (iokit-property "Ejectable")
-  (iokit-property "Encrypted")
-  (iokit-property "IOClassNameOverride")
-  (iokit-property "IOMediaIcon")
-  (iokit-property "Product Identification")
-  (iokit-property "Protocol Characteristics")
-  (iokit-property "Removable")
-  (iokit-property "image-encrypted")
-)
+(when (defined? 'iokit-get-properties)
+  (allow iokit-get-properties
+    (iokit-property "CaseSensitive")
+    (iokit-property "CoreStorage Encrypted")
+    (iokit-property "Ejectable")
+    (iokit-property "Encrypted")
+    (iokit-property "IOClassNameOverride")
+    (iokit-property "IOMediaIcon")
+    (iokit-property "Product Identification")
+    (iokit-property "Protocol Characteristics")
+    (iokit-property "Removable")
+    (iokit-property "image-encrypted")
+  ))
 
 ; For V8 to use in thread calculations.
-(allow sysctl-read (sysctl-name "kern.tcsm_enable"))
-(allow sysctl-write (sysctl-name "kern.tcsm_enable"))
-(allow sysctl-read (sysctl-name "kern.tcsm_available"))
+(when (defined? 'sysctl-name)
+  (allow sysctl-read (sysctl-name "kern.tcsm_enable"))
+  (allow sysctl-write (sysctl-name "kern.tcsm_enable"))
+  (allow sysctl-read (sysctl-name "kern.tcsm_available")))

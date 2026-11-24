@@ -108,8 +108,24 @@ int main(int argc, char** argv) {
   CheckDenied(forbidden_read, O_RDONLY);
   CheckDenied(forbidden_write, O_WRONLY | O_CREAT | O_EXCL);
   CheckDenied(log, O_RDONLY);
+
+  // Older sandbox languages cannot constrain vnode types. Even if a policy
+  // permits creating a symlink at its exact log path, following that link must
+  // not permit writing a private file outside the policy's path allowlist.
+  Check(unlink(log) == 0, "remove own log");
+  errno = 0;
+  int linked = symlink(forbidden_read, log);
+  int link_errno = errno;
+  if (linked == 0) {
+    CheckDenied(log, O_WRONLY | O_TRUNC);
+    Check(unlink(log) == 0, "remove own log symlink");
+  } else {
+    Check(linked == -1 && (link_errno == EPERM || link_errno == EACCES),
+          "log symlink creation denied");
+  }
   printf(
-      "%u checks passed; current profile applied; private read/create denied\n",
+      "%u checks passed; current profile applied; private read/create and "
+      "symlink escape denied\n",
       checks);
   return 0;
 }
