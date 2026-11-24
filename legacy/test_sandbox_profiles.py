@@ -119,6 +119,11 @@ def main():
         action='store_true',
         help='Mask Lion-missing language hooks in the current compiler (not kernel emulation)',
     )
+    parser.add_argument(
+        '--source-mode',
+        action='store_true',
+        help='Apply policy source/parameters with sandbox_init_with_parameters',
+    )
     parser.add_argument('--denial-logging', action='store_true')
     parser.add_argument('--allow-renderer-pidinfo', action='store_true')
     parser.add_argument(
@@ -128,9 +133,11 @@ def main():
     args = parser.parse_args()
     if args.build_only and (not args.output or args.probe):
         parser.error('--build-only requires --output and cannot use --probe')
-    if args.compiler_library and (args.build_only or args.legacy_capabilities):
+    if args.compiler_library and (
+        args.build_only or args.legacy_capabilities or args.source_mode
+    ):
         parser.error(
-            '--compiler-library cannot use --build-only or --legacy-capabilities'
+            '--compiler-library cannot use --build-only, --legacy-capabilities or --source-mode'
         )
     if args.compiler_library:
         args.compiler_library = args.compiler_library.resolve(strict=True)
@@ -278,7 +285,12 @@ def main():
                     inputs = (
                         [str(args.compiler_library), str(profile)]
                         if args.compiler_library
-                        else [str(profile), str(directory), str(executable)]
+                        else [
+                            *(['--source'] if args.source_mode else []),
+                            str(profile),
+                            str(directory),
+                            str(executable),
+                        ]
                     )
                     result = subprocess.run(
                         [
@@ -316,6 +328,8 @@ def main():
                     if args.build_only
                     else 'compile-only'
                     if args.compiler_library
+                    else 'source-and-enforce'
+                    if args.source_mode
                     else 'compile-and-enforce',
                     'scope': (
                         'Original userland compiler on the current host kernel; compile only.'
@@ -335,6 +349,7 @@ def main():
                     'masked_capabilities': LION_MISSING_CAPABILITIES
                     if args.legacy_capabilities
                     else [],
+                    'source_mode': args.source_mode,
                     'denial_logging': args.denial_logging,
                     'allow_renderer_pidinfo': args.allow_renderer_pidinfo,
                     'results': rows,
@@ -350,6 +365,8 @@ def main():
         action = (
             'compilation'
             if args.compiler_library
+            else 'source initialization and enforcement'
+            if args.source_mode
             else 'compilation and enforcement'
         )
         print(f'{len(rows) - failed}/{len(rows)} policy {action} runs passed')

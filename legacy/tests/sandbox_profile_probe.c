@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,10 @@ extern int sandbox_apply(sandbox_profile_t*);
 extern void sandbox_free_profile(sandbox_profile_t*);
 extern void sandbox_free_error(char*);
 extern int sandbox_check(pid_t, const char*, int, ...);
+extern int sandbox_init_with_parameters(const char*,
+                                        uint64_t,
+                                        const char* const*,
+                                        char**);
 
 static unsigned checks;
 
@@ -47,9 +52,15 @@ static void CheckDenied(const char* path, int flags) {
 }
 
 int main(int argc, char** argv) {
+  bool source_mode = argc > 1 && strcmp(argv[1], "--source") == 0;
+  if (source_mode) {
+    --argc;
+    ++argv;
+  }
   if (argc < 4 || (argc - 4) % 2) {
     fprintf(stderr,
-            "usage: probe PROFILE FIXTURES EXECUTABLE [KEY VALUE ...]\n");
+            "usage: probe [--source] PROFILE FIXTURES EXECUTABLE [KEY VALUE "
+            "...]\n");
     return 2;
   }
   FILE* source = fopen(argv[1], "rb");
@@ -77,24 +88,32 @@ int main(int argc, char** argv) {
   close(fd);
   Check(sandbox_check(getpid(), NULL, 0) == 0, "initially unsandboxed");
 
-  sandbox_params_t* parameters = sandbox_create_params();
-  Check(parameters != NULL, "create parameters");
-  for (int i = 4; i < argc; i += 2) {
-    Check(sandbox_set_param(parameters, argv[i], argv[i + 1]) == 0, argv[i]);
-  }
   char* error = NULL;
-  sandbox_profile_t* profile = sandbox_compile_string(text, parameters, &error);
-  if (!profile && error) {
-    fprintf(stderr, "%s\n", error);
+  int applied;
+  if (source_mode) {
+    applied = sandbox_init_with_parameters(
+        text, 0, (const char* const*)(argv + 4), &error);
+  } else {
+    sandbox_params_t* parameters = sandbox_create_params();
+    Check(parameters != NULL, "create parameters");
+    for (int i = 4; i < argc; i += 2) {
+      Check(sandbox_set_param(parameters, argv[i], argv[i + 1]) == 0, argv[i]);
+    }
+    sandbox_profile_t* profile =
+        sandbox_compile_string(text, parameters, &error);
+    if (!profile && error) {
+      fprintf(stderr, "%s\n", error);
+    }
+    sandbox_free_params(parameters);
+    Check(profile != NULL, "compile current profile");
+    applied = sandbox_apply(profile);
+    sandbox_free_profile(profile);
   }
   if (error) {
+    fprintf(stderr, "%s\n", error);
     sandbox_free_error(error);
   }
-  sandbox_free_params(parameters);
   free(text);
-  Check(profile != NULL, "compile current profile");
-  int applied = sandbox_apply(profile);
-  sandbox_free_profile(profile);
   Check(applied == 0, "apply current profile");
   Check(sandbox_check(getpid(), NULL, 0) == 1, "sandbox active");
 

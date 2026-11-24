@@ -719,6 +719,9 @@ python3 legacy/test_sandbox_profiles.py \
 ```
 
 Legacy policy aliases preserve path and shared-memory object allowlists.
+Before 10.13, the launcher serializes source and parameters instead of reusing
+compiled sandbox bytecode; the child still initializes its sandbox before
+Chromium code runs. Current systems retain the compiled-policy cache.
 Lion lacks named sysctl filters and separate shared-memory read/write hooks;
 its fallback permits coarser read-only sysctl metadata and access to the same
 explicit shared-memory names. No general sysctl-write grant is added. Older
@@ -733,6 +736,8 @@ Run the current host compiler/kernel containment checks with:
 python3 legacy/test_sandbox_profiles.py --output /tmp/sandbox-results.json
 python3 legacy/test_sandbox_profiles.py --legacy-capabilities \
   --output /tmp/sandbox-fallback-results.json
+python3 legacy/test_sandbox_profiles.py --source-mode \
+  --output /tmp/sandbox-source-results.json
 ```
 
 The second command masks newer language hooks only inside the test input,
@@ -740,7 +745,9 @@ exercising fallback rules on the current kernel. Each run applies the actual
 policy only to its own process, checks that sandboxing is active, permits its
 executable and configured log, and rejects private reads, file creation, log
 reads and writes outside the allowlist through a log symlink. Masking is never
-part of a production policy or browser parameter. `--denial-logging` and
+part of a production policy or browser parameter. The third command exercises
+source initialization through the same API used by the old-system child path.
+`--denial-logging` and
 `--allow-renderer-pidinfo` exercise those alternate policy settings.
 `--architecture x64 --build-only --output /tmp/sandbox-probe` prepares an
 Intel/10.7 probe; `--probe /path/to/sandbox-probe.x64` runs a prepared probe on

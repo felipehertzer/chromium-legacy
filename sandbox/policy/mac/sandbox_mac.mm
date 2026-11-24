@@ -96,15 +96,21 @@ std::string GetSandboxProfile(sandbox::mojom::Sandbox sandbox_type) {
 }
 
 bool CanCacheSandboxPolicy(sandbox::mojom::Sandbox sandbox_type) {
-  switch (sandbox_type) {
-    case sandbox::mojom::Sandbox::kRenderer:
-    case sandbox::mojom::Sandbox::kService:
-    case sandbox::mojom::Sandbox::kServiceWithJit:
-    case sandbox::mojom::Sandbox::kUtility:
-      return true;
-    default:
-      return false;
+  // Keep pre-10.13 systems on the original Legacy source-initialization path,
+  // avoiding reliance on private compiled-policy serialization there. The child
+  // still initializes its sandbox before Chromium code runs.
+  if (@available(macOS 10.13, *)) {
+    switch (sandbox_type) {
+      case sandbox::mojom::Sandbox::kRenderer:
+      case sandbox::mojom::Sandbox::kService:
+      case sandbox::mojom::Sandbox::kServiceWithJit:
+      case sandbox::mojom::Sandbox::kUtility:
+        return true;
+      default:
+        return false;
+    }
   }
+  return false;
 }
 
 }  // namespace sandbox::policy
