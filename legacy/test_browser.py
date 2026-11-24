@@ -229,6 +229,7 @@ def main():
                 '/usr/bin/openssl',
                 'req',
                 '-x509',
+                '-sha256',
                 '-newkey',
                 'rsa:2048',
                 '-nodes',
