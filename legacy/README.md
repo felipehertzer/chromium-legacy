@@ -1,9 +1,14 @@
 # Chromium Legacy: current-release port
 
-Experimental work to bring Chromium **159.0.8154.13** to Intel Macs running
+Experimental work to bring Chromium **159.0.8154.13 (Mac Beta)** to Intel Macs running
 **OS X Lion 10.7 and later**. The source revision is pinned in
-`legacy/revisions.json`; Mac Stable was checked on 2026-11-21. This is not yet
+`legacy/revisions.json`; Mac Beta was verified on 2026-11-23. This is not yet
 a validated browser release or a maintained legacy security release.
+
+The channel check reports Stable 158.0.8127.89, Beta 159.0.8154.13,
+Dev 160.0.8171.0 and Canary 160.0.8180.0. This checkout retains the pinned
+Beta baseline while its runtime validation is pending. Advancing to the 160
+development line remains separate work.
 
 The inherited `master.lion` branch and release `1303823` remain references.
 That old release contains Chromium 127.0.6494.0; the inherited branch contains

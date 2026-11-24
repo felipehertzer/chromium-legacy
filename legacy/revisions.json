@@ -5,9 +5,9 @@
   "target": {
     "version": "159.0.8154.13",
     "revision": "4d790f9eb4c8abe65b8aaa3feba664e7c734ba56",
-    "channel": "Mac Stable",
-    "checked_on": "2026-11-21",
-    "source": "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Mac&num=1"
+    "channel": "Mac Beta",
+    "checked_on": "2026-11-23",
+    "source": "https://chromiumdash.appspot.com/fetch_releases?channel=Beta&platform=Mac&num=1"
   },
   "legacy_base": {
     "version": "127.0.6494.0",
