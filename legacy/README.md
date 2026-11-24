@@ -700,11 +700,17 @@ graphics, media, UI and other browser behavior still need full-app runtime
 validation. The eight older compatibility forks remain references; they have
 not replaced any current dependency revision.
 
-The normal assembled app prints `Chromium 159.0.8154.13` and exits successfully
-for `--version` on the build host. GUI startup did not produce a window or
-DevTools endpoint within 120 seconds. Sampling that process subsequently
-reported a Rosetta `CodeFragmentMetadata` assertion; this does not establish the
-cause of the earlier startup stall. Catalina remained unreachable over SSH.
+The final normal build is assembled, audited and signed, but host startup is
+not stable. A plain `--version` invocation timed out after 20 seconds. With only
+`DYLD_PRINT_LIBRARIES=1` and `DYLD_PRINT_INITIALIZERS=1` added for diagnostics,
+the extracted app printed `Chromium 159.0.8154.13` and exited successfully.
+A GUI run under that diagnostic environment started GPU and network processes;
+the kernel inspector confirmed that both were sandboxed. It produced no window
+or DevTools endpoint within 45 seconds, and logged a Rosetta
+`CodeFragmentMetadata` assertion without any debugger or sampler attached.
+This does not establish whether the cause is translation or browser code.
+All owned test processes exited after bounded cleanup. Catalina remained
+unreachable over SSH, and full graphical validation is still pending.
 
 All 15 sandbox profiles compile with an unmodified original Lion `libsandbox`
 loaded by a separate test utility. Both the 10.7 and 10.8 parameter branches
