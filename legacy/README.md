@@ -703,6 +703,22 @@ does not establish whether the cause is translation or browser code. The Intel
 Catalina test machine was unreachable over SSH during this check. The latest
 assembled app still needs runtime validation.
 
+The current sandbox profiles also pass 135 compile-and-enforce runs on the
+native build host. Each run applies the actual policy only to its own process,
+checks that sandboxing is active, permits its executable and configured log,
+and rejects private file reads, private file creation, and log reads. Run
+`python3 legacy/test_sandbox_profiles.py --output /tmp/sandbox-results.json`
+to repeat this check. `--architecture x64 --build-only --output /tmp/sandbox-probe`
+builds the Intel/10.7 probe without executing it. A target Mac can use
+`--probe /path/to/sandbox-probe.x64` with the same script and policy sources,
+without an SDK. The default version branches never exceed the actual host OS.
+
+These tests use the host's sandbox compiler and kernel. The `OS_VERSION`
+parameter only selects policy branches; it does not emulate Lion or Catalina.
+The inherited 127 port contains sandbox-language aliases and version guards
+that still need to be adapted and tested against the old compiler. The current
+10.7 library-import audit does not establish sandbox-profile compatibility.
+
 Full-browser tests are required on Lion 10.7.5 and Catalina 10.15.7: startup, renderers, sandboxing, browsing, TLS, graphics, media,
 downloads, and extensions. No browser executable or release artifact has been
 published from this experimental branch.
