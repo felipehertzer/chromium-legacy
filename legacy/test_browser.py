@@ -148,7 +148,10 @@ def main():
     parser.add_argument('--expected-version', required=True)
     parser.add_argument('--process-probe', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--startup-timeout', type=int, default=45)
     args = parser.parse_args()
+    if args.startup_timeout <= 0:
+        parser.error('--startup-timeout must be positive')
     application = args.application.resolve(strict=True)
     process_probe = args.process_probe.resolve(strict=True)
     info = plistlib.loads((application / 'Contents/Info.plist').read_bytes())
@@ -270,7 +273,7 @@ def main():
         report['command'] = command
         browser = subprocess.Popen(command, stdout=log, stderr=log)
         report['browser_pid'] = browser.pid
-        deadline = time.monotonic() + 45
+        deadline = time.monotonic() + args.startup_timeout
         active_port = profile / 'DevToolsActivePort'
         while not active_port.exists() and time.monotonic() < deadline:
             if browser.poll() is not None:
@@ -278,7 +281,14 @@ def main():
                     'Browser exited before DevTools: ' + str(browser.returncode)
                 )
             time.sleep(0.1)
-        check('startup', active_port.is_file())
+        check(
+            'startup',
+            active_port.is_file(),
+            {
+                'timeout_seconds': args.startup_timeout,
+                'browser_alive': browser.poll() is None,
+            },
+        )
         endpoint = active_port.read_text().splitlines()
         port = int(endpoint[0])
         check(
