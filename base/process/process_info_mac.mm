@@ -12,7 +12,8 @@
 #include "base/check.h"
 
 extern "C" {
-pid_t responsibility_get_pid_responsible_for_pid(pid_t);
+pid_t responsibility_get_pid_responsible_for_pid(pid_t)
+    __attribute__((weak_import));
 }
 
 namespace {
@@ -41,10 +42,16 @@ std::optional<pid_t> ResponsiblePidIfNotSelf() {
 namespace base {
 
 bool IsCurrentProcessSelfResponsible() {
+  if (!responsibility_get_pid_responsible_for_pid) {
+    return false;
+  }
   return ResponsiblePidIfNotSelf() == std::nullopt;
 }
 
 bool DoesResponsibleProcessHaveBluetoothMetadata() {
+  if (!responsibility_get_pid_responsible_for_pid) {
+    return false;
+  }
   const std::optional<pid_t> responsible_pid = ResponsiblePidIfNotSelf();
 
   // Returns true directly if this is a self-responsible app (e.g., Chrome opens

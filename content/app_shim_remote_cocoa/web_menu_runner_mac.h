@@ -27,7 +27,8 @@ CONTENT_EXPORT
 // If the menu has been run, and an item was selected, has the index of the
 // selected menu item. If the menu has not yet been run, or if the menu was run
 // but the user did not select an item from the menu, this is nullopt.
-@property(readonly) std::optional<int> selectedMenuItemIndex;
+// AppKit menu access is confined to the UI thread.
+@property(nonatomic, readonly) std::optional<int> selectedMenuItemIndex;
 
 // Displays and runs a native popup menu.
 - (void)runMenuInView:(NSView*)view

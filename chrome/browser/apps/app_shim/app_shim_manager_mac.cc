@@ -87,6 +87,9 @@
 #include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
 
+extern "C" const CFStringRef kSecGuestAttributeAudit
+    __attribute__((weak_import));
+
 namespace {
 
 void RecordOSNotificationPermissionStatus(
@@ -207,6 +210,11 @@ void VerifyCodeDirectoryHash(
 void IsAcceptablyAdHocCodeSigned(
     audit_token_t app_shim_audit_token,
     base::OnceCallback<void(SignatureValidationResult)> callback) {
+  // Never substitute a PID for the kernel-issued audit-token identity.
+  if (&kSecGuestAttributeAudit == nullptr) {
+    std::move(callback).Run(SignatureValidationResult::kInvalidSignature);
+    return;
+  }
   base::apple::ScopedCFTypeRef<CFDataRef> audit_token_cf(CFDataCreate(
       nullptr, reinterpret_cast<const UInt8*>(&app_shim_audit_token),
       sizeof(audit_token_t)));

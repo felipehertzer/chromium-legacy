@@ -12,6 +12,8 @@
 #include "base/strings/stringprintf.h"
 #include "components/crash/core/common/crash_key.h"
 
+extern "C" const CFStringRef kSecCodeInfoFlags __attribute__((weak_import));
+
 namespace {
 // A crash key that is used when dumping because of errors when validating code
 // signatures.
@@ -45,6 +47,9 @@ namespace apps {
 base::expected<base::apple::ScopedCFTypeRef<CFStringRef>,
                MissingRequirementReason>
 FrameworkBundleDesignatedRequirementString() {
+  if (&kSecCodeInfoFlags == nullptr) {
+    return base::unexpected(MissingRequirementReason::Error);
+  }
   // Note: Don't validate |framework_code|: We don't need to waste time
   // validating. We are only interested in discovering if the framework bundle
   // is code-signed, and if so what the designated requirement is.

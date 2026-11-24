@@ -13,11 +13,12 @@ extern "C" {
 OSStatus SetApplicationIsDaemon(Boolean isDaemon);
 void _LSSetApplicationLaunchServicesServerConnectionStatus(
     uint64_t flags,
-    bool (^connection_allowed)(CFDictionaryRef options));
+    bool (^connection_allowed)(CFDictionaryRef options))
+    __attribute__((weak_import));
 
 // See
 // https://github.com/WebKit/WebKit/blob/24aaedc770d192d03a07ba4a71727274aaa8fc07/Source/WebKit/WebProcess/cocoa/WebProcessCocoa.mm#L840
-void _CSCheckFixDisable();
+void _CSCheckFixDisable() __attribute__((weak_import));
 }  // extern "C"
 
 namespace sandbox {
@@ -32,14 +33,18 @@ void DisableLaunchServices() {
 
   // Close any connections to launchservicesd and use an always-false predicate
   // to discourage future attempts to connect.
-  _LSSetApplicationLaunchServicesServerConnectionStatus(
-      0, ^bool(CFDictionaryRef options) {
-        return false;
-      });
+  if (_LSSetApplicationLaunchServicesServerConnectionStatus) {
+    _LSSetApplicationLaunchServicesServerConnectionStatus(
+        0, ^bool(CFDictionaryRef options) {
+          return false;
+        });
+  }
 }
 
 void DisableCoreServicesCheckFix() {
-  _CSCheckFixDisable();
+  if (_CSCheckFixDisable) {
+    _CSCheckFixDisable();
+  }
 }
 
 }  // namespace sandbox

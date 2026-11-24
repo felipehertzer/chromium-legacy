@@ -21,15 +21,29 @@ using guardid_t = uint64_t;
 const unsigned int GUARD_CLOSE = 1u << 0;
 const unsigned int GUARD_DUP = 1u << 1;
 
-int guarded_close_np(int fd,                     // in: file descriptor
-                     const guardid_t* guard);    // in: current guard value
+int guarded_close_np(int fd,  // in: file descriptor
+                     const guardid_t* guard)
+    __attribute__((weak_import));                // in: current guard value
 int change_fdguard_np(int fd,                    // in: file descriptor
                       const guardid_t* guard,    // in: current guard value
                       unsigned int guardflags,   // in: current guard flags
                       const guardid_t* nguard,   // in: new guard value
                       unsigned int nguardflags,  // in: new guard flags
-                      int* fdflagsp);  // in/out: fd flags (fcntl:F_SETFD)
+                      int* fdflagsp)
+    __attribute__((weak_import));  // in/out: fd flags (fcntl:F_SETFD)
 
 }  // extern "C"
+
+namespace net::internal {
+
+inline bool FileDescriptorGuardsAvailable() {
+#if defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  return false;
+#else
+  return change_fdguard_np && guarded_close_np;
+#endif
+}
+
+}  // namespace net::internal
 
 #endif  // NET_BASE_APPLE_GUARDED_FD_H_

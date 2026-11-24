@@ -70,6 +70,11 @@
       "path": "v8",
       "revision": "4593f4dc1e9b7c400645778417f394ba6d52f64b",
       "patch": "patches/v8-lion-thread-qos.patch"
+    },
+    {
+      "path": "third_party/perfetto",
+      "revision": "b6533c5df1422eae58d2d3212510d47483d2631c",
+      "patch": "patches/perfetto-lion-environment.patch"
     }
   ]
 }

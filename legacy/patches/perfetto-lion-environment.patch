@@ -1,0 +1,31 @@
+diff --git a/src/base/subprocess_posix.cc b/src/base/subprocess_posix.cc
+index 99b0baba..24aefe77 100644
+--- a/src/base/subprocess_posix.cc
++++ b/src/base/subprocess_posix.cc
+@@ -45,8 +45,11 @@
+ #include "perfetto/base/time.h"
+ #include "perfetto/ext/base/utils.h"
+ 
+-// In MacOS this is not defined in any header.
++#if PERFETTO_BUILDFLAG(PERFETTO_OS_APPLE)
++#include <crt_externs.h>
++#else
+ extern "C" char** environ;
++#endif
+ 
+ namespace perfetto {
+ namespace base {
+@@ -186,7 +189,12 @@ void __attribute__((noreturn)) ChildProcess(ChildProcessArgs* args) {
+   // If |args[0]| is a path use execv() (which takes a path), otherwise use
+   // exevp(), which uses the shell and follows PATH.
+   if (strchr(args->exec_cmd, '/')) {
+-    char** env = args->env.empty() ? environ : args->env.data();
++#if PERFETTO_BUILDFLAG(PERFETTO_OS_APPLE)
++    char** inherited_environment = *_NSGetEnviron();
++#else
++    char** inherited_environment = environ;
++#endif
++    char** env = args->env.empty() ? inherited_environment : args->env.data();
+     execve(args->exec_cmd, args->argv.data(), env);
+   } else {
+     // There is no execvpe() on Mac.

@@ -22,6 +22,10 @@
 #include "util/mach/exc.h"
 #include "util/mach/mach_exc.h"
 
+extern "C" kern_return_t task_create_identity_token(task_t task,
+                                                    task_id_token_t* token)
+    __attribute__((weak_import));
+
 namespace crashpad {
 
 kern_return_t UniversalExceptionRaise(exception_behavior_t behavior,
@@ -134,12 +138,20 @@ kern_return_t UniversalExceptionRaise(exception_behavior_t behavior,
       }
 
       mach_port_t task_id_token = MACH_PORT_NULL;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-      if (__builtin_available(macOS 11.3, iOS 14.5, *)) {
-        task_create_identity_token(task, &task_id_token);
+      // Protected protocols require a real kernel identity token. Keep older
+      // exception protocols unchanged, and reject unsupported protected ones.
+      if (!task_create_identity_token) {
+        return KERN_NOT_SUPPORTED;
       }
-#pragma clang diagnostic pop
+      if (__builtin_available(macOS 11.3, iOS 14.5, *)) {
+        kern_return_t token_result =
+            task_create_identity_token(task, &task_id_token);
+        if (token_result != KERN_SUCCESS) {
+          return token_result;
+        }
+      } else {
+        return KERN_NOT_SUPPORTED;
+      }
 
       kern_return_t kr = mach_exception_raise_identity_protected(
           exception_port,
@@ -167,12 +179,20 @@ kern_return_t UniversalExceptionRaise(exception_behavior_t behavior,
       }
 
       mach_port_t task_id_token = MACH_PORT_NULL;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-      if (__builtin_available(macOS 11.3, iOS 14.5, *)) {
-        task_create_identity_token(task, &task_id_token);
+      // Protected protocols require a real kernel identity token. Keep older
+      // exception protocols unchanged, and reject unsupported protected ones.
+      if (!task_create_identity_token) {
+        return KERN_NOT_SUPPORTED;
       }
-#pragma clang diagnostic pop
+      if (__builtin_available(macOS 11.3, iOS 14.5, *)) {
+        kern_return_t token_result =
+            task_create_identity_token(task, &task_id_token);
+        if (token_result != KERN_SUCCESS) {
+          return token_result;
+        }
+      } else {
+        return KERN_NOT_SUPPORTED;
+      }
 
       kern_return_t kr = mach_exception_raise_state_identity_protected(
           exception_port,

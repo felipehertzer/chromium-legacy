@@ -113,16 +113,19 @@ NSView* CreateAccessoryView() {
   // │             ↕︎     │
   // └───────────────────┘
 
+  // Lion exports this class from AppKit, rather than the SDK's Foundation.
+  Class constraint_class = NSClassFromString(@"NSLayoutConstraint");
+  CHECK(constraint_class);
   auto equal = ^NSLayoutConstraint*(NSView* first, NSLayoutAttribute attribute,
                                     NSView* second, NSLayoutAttribute other,
                                     CGFloat constant) {
-    return [NSLayoutConstraint constraintWithItem:first
-                                        attribute:attribute
-                                        relatedBy:NSLayoutRelationEqual
-                                           toItem:second
-                                        attribute:other
-                                       multiplier:1
-                                         constant:constant];
+    return [constraint_class constraintWithItem:first
+                                      attribute:attribute
+                                      relatedBy:NSLayoutRelationEqual
+                                         toItem:second
+                                      attribute:other
+                                     multiplier:1
+                                       constant:constant];
   };
   [constraints addObject:equal(popup, NSLayoutAttributeTop, group,
                                NSLayoutAttributeTop, 10)];
@@ -152,7 +155,7 @@ NSView* CreateAccessoryView() {
   [constraints addObject:equal(view, NSLayoutAttributeBottom, group,
                                NSLayoutAttributeBottom, 0)];
   if (@available(macOS 10.10, *)) {
-    [NSLayoutConstraint activateConstraints:constraints];
+    [constraint_class activateConstraints:constraints];
   } else {
     [view addConstraints:constraints];
   }

@@ -29,7 +29,8 @@ namespace gfx {
 using Weight = Font::Weight;
 
 extern "C" {
-bool CTFontDescriptorIsSystemUIFont(CTFontDescriptorRef);
+bool CTFontDescriptorIsSystemUIFont(CTFontDescriptorRef)
+    API_AVAILABLE(macos(10.10));
 }
 
 namespace {
@@ -264,13 +265,17 @@ SystemFontTypeFromUndocumentedCTFontRefInternals(CTFontRef font) {
   // TODO(avi, etienneb): Figure out this font stuff.
   base::apple::ScopedCFTypeRef<CTFontDescriptorRef> descriptor(
       CTFontCopyFontDescriptor(font));
-  if (CTFontDescriptorIsSystemUIFont(descriptor.get())) {
-    // Assume it's the standard system font. The fact that this much is known is
-    // enough.
-    return PlatformFontMac::SystemFontType::kGeneral;
-  } else {
-    return std::nullopt;
+#if !defined(CHROMIUM_LEGACY_FORCE_FALLBACKS_FOR_TESTS)
+  if (@available(macOS 10.10, *)) {
+    if (CTFontDescriptorIsSystemUIFont(descriptor.get())) {
+      // This identifies the standard system font for native variant derivation.
+      return PlatformFontMac::SystemFontType::kGeneral;
+    }
   }
+#endif
+  // Earlier system fonts have ordinary family names. Keep the existing
+  // family-based derivation path rather than calling an absent private API.
+  return std::nullopt;
 }
 
 const std::set<std::string>& SystemFontNames() {

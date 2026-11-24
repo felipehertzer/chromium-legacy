@@ -4,12 +4,14 @@
 
 #include "content/common/mac/system_policy.h"
 
+#include <errno.h>
+
 #include "base/debug/crash_logging.h"
 #include "base/strings/stringprintf.h"
 
 extern "C" {
 int __mac_syscall(const char* policy, int op, void* arg);
-int csr_get_active_config(uint32_t* config);
+int csr_get_active_config(uint32_t* config) __attribute__((weak_import));
 }
 
 namespace content {
@@ -45,6 +47,9 @@ enum SystemSecurityPolicy : uint32_t {
 };
 
 base::expected<SystemSecurityPolicy, int> GetSystemSecurityPolicy() {
+  if (!csr_get_active_config) {
+    return base::unexpected(ENOTSUP);
+  }
   uint32_t policy = 0;
   if (int error = csr_get_active_config(&policy)) {
     return base::unexpected(error);
@@ -106,7 +111,7 @@ void SetSystemPolicyCrashKeys() {
   } else {
     base::debug::SetCrashKeyString(
         system_security_policy_crash_key,
-        base::StringPrintf("rv=%d", task_port_policy.error()));
+        base::StringPrintf("rv=%d", system_security_policy.error()));
   }
 }
 

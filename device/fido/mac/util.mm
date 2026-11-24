@@ -24,6 +24,12 @@
 #include "device/fido/public/fido_constants.h"
 #include "device/fido/public_key.h"
 
+extern "C" SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator)
+    __attribute__((weak_import));
+extern "C" CFStringRef SecTaskCopySigningIdentifier(SecTaskRef task,
+                                                    CFErrorRef* error)
+    __attribute__((weak_import));
+
 namespace device::fido::mac {
 
 using base::apple::ScopedCFTypeRef;
@@ -187,6 +193,9 @@ CodeSigningState ProcessIsSigned() {
   std::optional<CodeSigningState>& flag = GetProcessIsSignedOverride();
   if (flag.has_value()) {
     return *flag;
+  }
+  if (!SecTaskCreateFromSelf || !SecTaskCopySigningIdentifier) {
+    return CodeSigningState::kNotSigned;
   }
   base::apple::ScopedCFTypeRef<SecTaskRef> task(SecTaskCreateFromSelf(nullptr));
   if (!task) {

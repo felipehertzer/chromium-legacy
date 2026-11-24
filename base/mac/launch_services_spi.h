@@ -18,7 +18,8 @@
 
 extern "C" {
 
-extern const CFStringRef _kLSOpenOptionBackgroundLaunchKey;
+extern const CFStringRef _kLSOpenOptionBackgroundLaunchKey
+    API_AVAILABLE(macos(10.15));
 
 }  // extern "C"
 

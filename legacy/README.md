@@ -35,6 +35,14 @@ or replaces a Chromium 159 dependency.
   priorities, process clocks, audit-token decoding, IOKit default ports,
   application opening, and process spawning. Missing thermal-state reporting
   returns unknown; unsupported QoS overrides remain best effort.
+- Framework import auditing also covers optional process-responsibility, SIP,
+  LaunchServices and descriptor-guard SPIs. Missing signature attributes fail
+  validation; unsupported protected exception protocols return an error instead
+  of sending a fabricated identity token. Crashpad and Perfetto access inherited
+  environments through the original macOS CRT accessor.
+- Capture exclusion uses a retained CoreGraphics region on current systems and
+  the original CGS region constructor/release pair on Lion. Region creation or
+  exclusion failure rejects the operation instead of silently clearing protection.
 - Basic password operations retain the encrypted system Keychain. Frameworks
   absent on Lion are weak-linked. Secure Enclave and biometric key providers
   report unavailable when their required APIs or entitlements are absent.
@@ -455,7 +463,15 @@ pool object, initializes the current engine on both machines and writes the same
 Its 1,246 imports have no missing required Lion symbols or incomplete libraries;
 141 absent optional imports remain weak. This is a build-tool execution check,
 not a browser rendering, sandbox or browsing test.
-The installer recovery system omits AVFoundation, Bluetooth and CoreMIDI libraries. Their
+The native SPI tests pass on the build host for Intel/10.7 and ARM builds,
+including forced old-system paths. Each capture mode checks retained and empty
+regions and applies/removes exclusion on an owned hidden window (140 checks).
+Descriptor tests exercise guarded and ordinary close paths, payload transfer and
+leak detection (272 normal/225 forced checks). The four Intel executables have
+no missing required Lion imports or incomplete libraries. These new tests have
+not yet run on Catalina or Lion.
+The installer recovery system omits AVFoundation, Bluetooth, CoreMIDI and
+ForceFeedback libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
 BaseSystemBinaries.pkg for these audits.
 `audit_macho.py --supplemental-root PATH` fills absent libraries from that
@@ -484,6 +500,8 @@ bash legacy/test_speech.sh
 # Optional Foundation activity-type binding (no activities are published):
 bash legacy/test_user_activity.sh
 bash legacy/test_network_object.sh
+# Real region lifetimes, own hidden window exclusion, and own socket pairs:
+bash legacy/test_native_spis.sh
 # Requires base_probe and crubit_probe with retained response files:
 python3 legacy/test_secure_enclave.py
 python3 legacy/test_secure_enclave.py --force-unsupported
@@ -629,8 +647,8 @@ The full source and 231 processed dependencies are checked out using shallow
 history and the small Mac configuration. Setup hooks and GN generation pass
 with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27.
 The Rust minimum-version blocker is fixed and the linked integration probes run
-on Catalina. The complete browser build continues to expose other compatibility
-work. The custom compiler and Crubit now pass the original interoperability tests
+on Catalina. The full framework has linked; application assembly and the final framework
+import audit are still being completed. The custom compiler and Crubit now pass the original interoperability tests
 on Catalina. The current V8/Blink context generator also executes on the host
 and Catalina with byte-identical output; other auxiliary tools and the complete
 browser still need full-build validation.

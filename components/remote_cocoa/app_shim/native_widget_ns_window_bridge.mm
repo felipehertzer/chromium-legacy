@@ -44,6 +44,7 @@
 #import "components/remote_cocoa/app_shim/window_move_loop.h"
 #import "components/remote_cocoa/app_shim/window_occlusion_checker_mac.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
+#include "legacy/apple/capture_region.h"
 #include "legacy/apple/secure_archive.h"
 #include "legacy/apple/sheet.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -85,7 +86,6 @@ CG_EXTERN CGSConnectionID CGSMainConnectionID(void);
 CG_EXTERN CGError CGSSetWindowCaptureExcludeShape(CGSConnectionID cid,
                                                   CGSWindowID wid,
                                                   CGRegionRef region);
-CG_EXTERN CGRegionRef CGRegionCreateWithRect(CGRect rect);
 
 namespace remote_cocoa {
 
@@ -102,11 +102,17 @@ void ApplyCaptureExclusion(NSWindow* window, bool allow) {
   CGSWindowID window_id = window.windowNumber;
   CGRect frame = window.frame;
   frame.origin = CGPointZero;
-  base::apple::ScopedCFTypeRef<CGRegionRef> region;
+  chromium_legacy::ScopedCaptureRegion region;
   if (!allow) {
-    region.reset(CGRegionCreateWithRect(frame));
+    // A missing region would clear exclusion. Reject allocation failure
+    // instead.
+    CHECK(region.Create(frame));
   }
-  CGSSetWindowCaptureExcludeShape(connection_id, window_id, region.get());
+  CGError status =
+      CGSSetWindowCaptureExcludeShape(connection_id, window_id, region.get());
+  if (!allow) {
+    CHECK_EQ(status, kCGErrorSuccess);
+  }
 }
 
 // Returns the display that the specified window is on.

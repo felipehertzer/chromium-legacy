@@ -337,9 +337,11 @@ int UDPSocketPosix::ConfigureOpenedSocket() {
   // out from underneath the socket. The change_fdguard_np() and related APIs
   // are undocumented, except for comments in the Darwin kernel source code:
   // http://fxr.watson.org/fxr/source/bsd/kern/kern_guarded.c?v=xnu-8792;im=10#L451
-  guardid_t guardid = reinterpret_cast<guardid_t>(this);
-  PCHECK(change_fdguard_np(socket_, nullptr, 0, &guardid,
-                           GUARD_CLOSE | GUARD_DUP, nullptr) == 0);
+  if (internal::FileDescriptorGuardsAvailable()) {
+    guardid_t guardid = reinterpret_cast<guardid_t>(this);
+    PCHECK(change_fdguard_np(socket_, nullptr, 0, &guardid,
+                             GUARD_CLOSE | GUARD_DUP, nullptr) == 0);
+  }
 #endif  // BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
   socket_hash_ = GetSocketFDHash(socket_);
   if (!base::SetNonBlocking(socket_)) {
@@ -396,7 +398,9 @@ void UDPSocketPosix::Close() {
   guardid_t guardid = reinterpret_cast<guardid_t>(this);
   // See the comment in ConfigureOpenedSocket(), above, for information about
   // guarded_close_np().
-  if (IGNORE_EINTR(guarded_close_np(socket_, &guardid)) != 0) {
+  if (!internal::FileDescriptorGuardsAvailable()) {
+    PCHECK(IGNORE_EINTR(close(socket_)) == 0);
+  } else if (IGNORE_EINTR(guarded_close_np(socket_, &guardid)) != 0) {
     // There is a bug in the macOS kernel that it can return an ENOTCONN,
     // EPROTOTYPE, or EINVAL error from soclose_locked() after
     // fp_close_and_unlock() has already closed and freed the file descriptor.

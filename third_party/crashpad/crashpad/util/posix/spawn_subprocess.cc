@@ -38,7 +38,11 @@
 #include <android/api-level.h>
 #endif
 
+#if BUILDFLAG(IS_APPLE)
+#include <crt_externs.h>
+#else
 extern char** environ;
+#endif
 
 namespace crashpad {
 
@@ -173,8 +177,14 @@ bool SpawnSubprocess(const std::vector<std::string>& argv,
     char* const* argv_for_spawn = const_cast<char* const*>(argv_c.data());
 
     // This cast is safe for the same reason that the argv_for_spawn cast is.
+    // The macOS environment is accessed through the CRT on older systems.
+#if BUILDFLAG(IS_APPLE)
+    char** inherited_environment = *_NSGetEnviron();
+#else
+    char** inherited_environment = environ;
+#endif
     char* const* envp_for_spawn =
-        envp ? const_cast<char* const*>(envp_c.data()) : environ;
+        envp ? const_cast<char* const*>(envp_c.data()) : inherited_environment;
 
 #if BUILDFLAG(IS_ANDROID) && __ANDROID_API__ < 28
     pid = fork();

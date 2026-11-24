@@ -76,7 +76,7 @@ typedef enum {
 //
 extern "C" char* _dirhelper(dirhelper_which_t which,
                             char* buffer,
-                            size_t buffer_length);
+                            size_t buffer_length) __attribute__((weak_import));
 
 namespace {
 
@@ -164,7 +164,8 @@ bool GetCleanupOnBootTempDir(base::FilePath* path) {
 
   char buffer[PATH_MAX];
   if (!g_dirhelper_path_for_testing &&
-      !_dirhelper(DIRHELPER_USER_LOCAL_TRANSLOCATION, buffer, PATH_MAX)) {
+      (!_dirhelper ||
+       !_dirhelper(DIRHELPER_USER_LOCAL_TRANSLOCATION, buffer, PATH_MAX))) {
     DLOG(ERROR) << "_dirhelper error";
     return false;
   }

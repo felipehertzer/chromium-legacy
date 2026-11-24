@@ -36,7 +36,7 @@ FileStream::Context::Context(base::File file,
 #if BUILDFLAG(IS_MAC)
   // https://crbug.com/330771755: Guard against a file descriptor being closed
   // out from underneath the file.
-  if (file_.IsValid()) {
+  if (file_.IsValid() && internal::FileDescriptorGuardsAvailable()) {
     guardid_t guardid = reinterpret_cast<guardid_t>(this);
     PCHECK(change_fdguard_np(file_.GetPlatformFile(), /*guard=*/nullptr,
                              /*guardflags=*/0, &guardid,

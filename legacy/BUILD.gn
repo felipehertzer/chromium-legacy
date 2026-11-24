@@ -10,6 +10,7 @@ source_set("platform_support") {
     "apple/appearance.h",
     "apple/atomic_wait.h",
     "apple/audit_token.h",
+    "apple/capture_region.h",
     "apple/clock.h",
     "apple/core_bluetooth.h",
     "apple/cv_buffer.h",
@@ -29,8 +30,8 @@ source_set("platform_support") {
     "apple/scoped_network.h",
     "apple/secure_archive.h",
     "apple/simd_math.h",
-    "apple/window.h",
     "apple/user_activity.h",
+    "apple/window.h",
   ]
 }
 
@@ -93,12 +94,14 @@ if (is_mac) {
     ]
   }
 
-  foreach(mode, [ "normal", "fallback" ]) {
+  foreach(mode,
+          [
+            "normal",
+            "fallback",
+          ]) {
     executable("fsevents_probe_${mode}") {
       testonly = true
       sources = [
-        "tests/fsevents_probe.cc",
-        "//content/common/content_export.h",
         "//content/browser/file_system_access/features.cc",
         "//content/browser/file_system_access/features.h",
         "//content/browser/file_system_access/file_path_watcher/file_path_watcher.cc",
@@ -112,6 +115,8 @@ if (is_mac) {
         "//content/browser/file_system_access/file_path_watcher/file_path_watcher_kqueue.cc",
         "//content/browser/file_system_access/file_path_watcher/file_path_watcher_kqueue.h",
         "//content/browser/file_system_access/file_path_watcher/file_path_watcher_mac.cc",
+        "//content/common/content_export.h",
+        "tests/fsevents_probe.cc",
       ]
       deps = [
         ":platform_support",

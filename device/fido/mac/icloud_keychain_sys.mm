@@ -16,6 +16,9 @@
 #include "device/fido/mac/icloud_keychain_internals.h"
 #include "device/fido/public/features.h"
 
+extern "C" SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator)
+    __attribute__((weak_import));
+
 namespace {
 
 // This function is needed by the interfaces below, but interfaces must be
@@ -226,6 +229,9 @@ ASAuthorizationWebBrowserPublicKeyCredentialManager* GetManager() {
 }
 
 bool ProcessHasEntitlement() {
+  if (!SecTaskCreateFromSelf) {
+    return false;
+  }
   base::apple::ScopedCFTypeRef<SecTaskRef> task(SecTaskCreateFromSelf(nullptr));
   if (!task) {
     return false;
