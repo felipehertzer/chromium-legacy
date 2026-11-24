@@ -855,6 +855,13 @@ if (is_win) {
       }
 
       ldflags = []
+      if (current_cpu == "x64" && mac_deployment_target == "10.7" &&
+          _is_aperitif_helper) {
+        # Keep libsandbox at its declared position after Aperitif/Framework.
+        # The legacy minimal-binary config strips unused dylibs; -needed-l
+        # here would move libsandbox ahead of the sandbox initializer library.
+        ldflags += [ "-Wl,-u,_sandbox_apply" ]
+      }
 
       if (_is_aperitif_helper || is_component_build) {
         deps += [ ":chrome_framework+link_nested" ]
