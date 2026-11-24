@@ -573,9 +573,11 @@ Its 491-path report is a review queue, not a completion count.
 
 Use a modern build Mac with Xcode, the upstream `depot_tools` setup, and at least
 150 GiB of working space. `src` must be a real directory inside the workspace.
-On Apple Silicon, Rosetta must be installed: the Intel snapshot tools run on the
-build host. This keeps the normal context snapshots while sharing the target's
-compiled Blink/V8 libraries instead of compiling Blink for a second architecture.
+On Apple Silicon, keep GN's default native ARM cross-snapshot toolchain. The
+generator runs natively on the build host and emits the Intel target snapshot.
+This requires separate ARM build-tool libraries; the browser remains Intel/10.7.
+The earlier explicit Intel generator override depended on Rosetta and entered
+an OS wait on the build host, including with the previously passing generator.
 
 
 ```sh

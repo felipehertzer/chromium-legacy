@@ -3,8 +3,7 @@
 target_os = "mac"
 target_cpu = "x64"
 
-# ARM build hosts execute the Intel snapshot tools through Rosetta.
-v8_snapshot_toolchain = "//build/toolchain/mac:clang_x64"
+# Infer the snapshot toolchain from the host, including native ARM cross tools.
 is_debug = false
 is_component_build = false
 is_official_build = false
