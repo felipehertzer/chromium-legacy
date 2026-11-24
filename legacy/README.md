@@ -470,6 +470,11 @@ Descriptor tests exercise guarded and ordinary close paths, payload transfer and
 leak detection (272 normal/225 forced checks). The four Intel executables have
 no missing required Lion imports or incomplete libraries. These new tests have
 not yet run on Catalina or Lion.
+The original seven PlatformFontMac tests pass on the build host, both normally
+and with the old family-based derivation path forced. These cover weight/style,
+underline, native-font construction, fine-grained weights, height and render
+parameters. The fixture/runner deployment is 10.15 while the production font
+object retains its 10.7 flags; this does not establish Lion runtime support.
 The installer recovery system omits AVFoundation, Bluetooth, CoreMIDI and
 ForceFeedback libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
@@ -502,6 +507,9 @@ bash legacy/test_user_activity.sh
 bash legacy/test_network_object.sh
 # Real region lifetimes, own hidden window exclusion, and own socket pairs:
 bash legacy/test_native_spis.sh
+# Original font fixtures target 10.15; the production object retains 10.7:
+python3 legacy/test_platform_font.py
+python3 legacy/test_platform_font.py --force-legacy
 # Requires base_probe and crubit_probe with retained response files:
 python3 legacy/test_secure_enclave.py
 python3 legacy/test_secure_enclave.py --force-unsupported
@@ -640,6 +648,15 @@ The audit follows dylib reexports and resolves OS symlinks inside the supplied
 root. Missing required symbols, unknown ordinals, or incomplete required
 libraries fail the check. Missing weak imports are reported separately and
 still require reviewing guards at their call sites.
+
+For an assembled application, supply `--application-root /path/Chromium.app`
+and `--executable-path /path/Chromium.app/Contents/MacOS/Chromium`. When auditing
+a helper executable, use that helper as the executable path. Direct
+`@executable_path` and `@loader_path` imports/reexports are checked against real
+files inside the app; escaping symlinks and unknown runpath expressions fail.
+Private external symbols cannot satisfy a dynamic import. The expanded audit
+passes its regression cases and the actual shortcut-copier/framework binding in
+an isolated artifact snapshot. Each bundled Mach-O still needs its own audit.
 
 ## Remaining work
 

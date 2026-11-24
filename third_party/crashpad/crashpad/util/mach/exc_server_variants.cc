@@ -38,6 +38,10 @@
 #include "base/apple/mach_logging.h"
 #endif
 
+extern "C" kern_return_t task_identity_token_get_task_port(
+    task_id_token_t token, task_flavor_t flavor, mach_port_t* task_port)
+    __attribute__((weak_import));
+
 namespace crashpad {
 
 namespace {
@@ -499,6 +503,13 @@ bool ExcServer<Traits>::MachMessageServerFunction(
           return true;
         }
 
+        // An unsupported identity protocol cannot be resolved by PID or by
+        // passing a null identity to the exception handler. The MIG error also
+        // lets MachMessageServer destroy the received descriptor rights.
+        if (!task_identity_token_get_task_port) {
+          SetMIGReplyError(out_header, KERN_NOT_SUPPORTED);
+          return true;
+        }
         task_t task_port = TASK_NULL;
         if (in_request->task_id_token_t.name != MACH_PORT_NULL) {
           kr = task_identity_token_get_task_port(
@@ -597,6 +608,13 @@ bool ExcServer<Traits>::MachMessageServerFunction(
           return true;
         }
 
+        // An unsupported identity protocol cannot be resolved by PID or by
+        // passing a null identity to the exception handler. The MIG error also
+        // lets MachMessageServer destroy the received descriptor rights.
+        if (!task_identity_token_get_task_port) {
+          SetMIGReplyError(out_header, KERN_NOT_SUPPORTED);
+          return true;
+        }
         task_t task_port = TASK_NULL;
         if (in_request->task_id_token_t.name != MACH_PORT_NULL) {
           kr = task_identity_token_get_task_port(
