@@ -688,9 +688,10 @@ symlinks. All 16 bundled Mach-O files have an Intel/10.7 minimum and pass the
 Lion import audit, including internal library bindings. SHA-1/SHA-256 ad hoc
 signatures pass strict verification. The normal Ninja rebuild is still running;
 this private assembly does not replace its final integration checks. The custom compiler and Crubit now pass the original interoperability tests
-on Catalina. The current V8/Blink context generator also executes on the host
-and Catalina with byte-identical output; other auxiliary tools and the complete
-browser still need full-build validation.
+on Catalina. An earlier Intel build of the pinned V8/Blink context generator
+executed on the host and Catalina with byte-identical output. The native ARM
+cross generator is still rebuilding; its execution and the normal browser
+assembly remain pending.
 
 Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
 graphics, media, UI, and the remaining browser API usage still need build and
@@ -718,6 +719,33 @@ parameter only selects policy branches; it does not emulate Lion or Catalina.
 The inherited 127 port contains sandbox-language aliases and version guards
 that still need to be adapted and tested against the old compiler. The current
 10.7 library-import audit does not establish sandbox-profile compatibility.
+
+A GUI smoke test is available in `legacy/test_browser.py` (Python 3.8+ and
+`websockets` 13.1). Build its process inspector with
+`bash legacy/build_browser_process_probe.sh /tmp/process-probe x64`, then run:
+
+```sh
+python3 legacy/test_browser.py --application /path/Chromium.app \
+  --expected-version 159.0.8154.13 --process-probe /tmp/process-probe \
+  --output /tmp/chromium-browser-check
+```
+
+The output directory must be new. The test verifies strict bundle signatures,
+uses a private profile and loopback DevTools endpoint, and checks a visible
+window, renderer/GPU/network sandbox status, BigInt, WebAssembly, WebCrypto,
+workers, Canvas/WebGL pixel readback, CSS layout, the renderer accessibility
+tree, trusted HTTPS navigation, rejection of an untrusted local TLS certificate,
+and exact download bytes. It records the actual host OS and binary hashes;
+the reduced browser user-agent is not OS compatibility evidence. It does not
+use sandbox, certificate, GPU or DevTools origin-check bypass flags. The browser
+and fixtures are closed afterwards; logs, the private profile, and the report
+remain in the selected output directory. A moved OS copy must retain matching
+executable bytes, bundle identity, resource seal, and valid signatures.
+
+The harness passed against the installed Chromium-based native Chrome 158
+baseline on the build host. This validates the test, not the experimental
+Chromium 159 browser or Catalina/Lion support. The Intel process inspector has
+22 imports, with no missing required Lion symbols or incomplete libraries.
 
 Full-browser tests are required on Lion 10.7.5 and Catalina 10.15.7: startup, renderers, sandboxing, browsing, TLS, graphics, media,
 downloads, and extensions. No browser executable or release artifact has been
