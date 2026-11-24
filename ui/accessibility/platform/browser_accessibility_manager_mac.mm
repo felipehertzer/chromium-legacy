@@ -751,8 +751,13 @@ bool BrowserAccessibilityManagerMac::ShouldFireLoadCompleteNotification() {
   }
 
   if ([NSApp isActive]) {
+    if (@available(macOS 10.10, *)) {
+      return window == NSApp.accessibilityFocusedWindow;
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
     return window == [NSApp accessibilityAttributeValue:
                                 NSAccessibilityFocusedWindowAttribute];
+#endif
   }
 
   // TODO(accessibility): We need a solution to the problem described below.

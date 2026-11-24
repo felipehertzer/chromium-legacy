@@ -175,16 +175,27 @@ AXEventRecorderMac::~AXEventRecorderMac() {
   // Remove the markers applied by UpdateWindowScopeMarkers().
   if (scope_window_) {
     for (NSWindow* window in NSApp.windows) {
-      if ([[window
-              accessibilityAttributeValue:NSAccessibilityIdentifierAttribute]
-              isEqualToString:kOutOfScopeWindowIdentifier]) {
+      NSString* identifier = nil;
+      if (@available(macOS 10.10, *)) {
+        identifier = window.accessibilityIdentifier;
+      }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+      else {
+        identifier = [window
+            accessibilityAttributeValue:NSAccessibilityIdentifierAttribute];
+      }
+#endif
+      if ([identifier isEqualToString:kOutOfScopeWindowIdentifier]) {
         if (@available(macOS 10.10, *)) {
           window.accessibilityIdentifier = nil;
-        } else {
+        }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+        else {
           [window
               accessibilitySetOverrideValue:nil
                                forAttribute:NSAccessibilityIdentifierAttribute];
         }
+#endif
       }
     }
   }
@@ -204,10 +215,13 @@ void AXEventRecorderMac::UpdateWindowScopeMarkers() {
                                : kOutOfScopeWindowIdentifier;
     if (@available(macOS 10.10, *)) {
       window.accessibilityIdentifier = identifier;
-    } else {
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    else {
       [window accessibilitySetOverrideValue:identifier
                                forAttribute:NSAccessibilityIdentifierAttribute];
     }
+#endif
   }
 }
 
