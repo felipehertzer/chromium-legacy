@@ -74,7 +74,9 @@ void WithAppearanceForKey(const ColorProviderKey& key, void (^load_colors)()) {
     NSAppearance* appearance = AppearanceForKey(key);
     if (@available(macOS 11.0, *)) {
       [appearance performAsCurrentDrawingAppearance:load_colors];
-    } else {
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 110000
+    else {
       NSAppearance* previous = NSAppearance.currentAppearance;
       @try {
         NSAppearance.currentAppearance = appearance;
@@ -83,6 +85,7 @@ void WithAppearanceForKey(const ColorProviderKey& key, void (^load_colors)()) {
         NSAppearance.currentAppearance = previous;
       }
     }
+#endif
   } else {
     load_colors();
   }
@@ -166,9 +169,12 @@ void AddNativeUiColorMixer(ColorProvider* provider,
     NSArray<NSColor*>* alternating_colors = nil;
     if (@available(macOS 10.14, *)) {
       alternating_colors = NSColor.alternatingContentBackgroundColors;
-    } else {
+    }
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 101400
+    else {
       alternating_colors = NSColor.controlAlternatingRowBackgroundColors;
     }
+#endif
     mixer[kColorTableBackgroundAlternate] = {
         NSSystemColorToSkColor([alternating_colors objectAtIndex:1])};
     if (!key.user_color.has_value()) {
