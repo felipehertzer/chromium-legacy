@@ -3,7 +3,7 @@
 Experimental work to bring Chromium **159.0.8154.13** to Intel Macs running
 **OS X Lion 10.7 and later**. The source revision is pinned in
 `legacy/revisions.json`; Mac Stable was checked on 2026-11-21. This is not yet
-an installable browser or a maintained legacy security release.
+a validated browser release or a maintained legacy security release.
 
 The inherited `master.lion` branch and release `1303823` remain references.
 That old release contains Chromium 127.0.6494.0; the inherited branch contains
@@ -475,6 +475,12 @@ and with the old family-based derivation path forced. These cover weight/style,
 underline, native-font construction, fine-grained weights, height and render
 parameters. The fixture/runner deployment is 10.15 while the production font
 object retains its 10.7 flags; this does not establish Lion runtime support.
+The native menu callback check compiles the actual production implementation
+with Intel/10.7 flags. It verifies that registration owns a callback after the
+caller's references are released, replacement releases the previous callback,
+invocation preserves arguments, and releasing the view releases the final
+callback. This UI-thread-only property does not use the absent
+`objc_copyCppObjectAtomic` helper.
 The installer recovery system omits AVFoundation, Bluetooth, CoreMIDI and
 ForceFeedback libraries. Their
 original frameworks were extracted from the same installer's Essentials.pkg and
@@ -510,6 +516,8 @@ bash legacy/test_native_spis.sh
 # Original font fixtures target 10.15; the production object retains 10.7:
 python3 legacy/test_platform_font.py
 python3 legacy/test_platform_font.py --force-legacy
+# Actual NSView-associated callback copies and cleanup; no visible menu:
+python3 legacy/test_menu_callback.py
 # Requires base_probe and crubit_probe with retained response files:
 python3 legacy/test_secure_enclave.py
 python3 legacy/test_secure_enclave.py --force-unsupported
@@ -664,8 +672,15 @@ The full source and 231 processed dependencies are checked out using shallow
 history and the small Mac configuration. Setup hooks and GN generation pass
 with pinned Clang 24, the source-patched Rust 1.101 compiler, and local Xcode 27.
 The Rust minimum-version blocker is fixed and the linked integration probes run
-on Catalina. The full framework has linked; application assembly and the final framework
-import audit are still being completed. The custom compiler and Crubit now pass the original interoperability tests
+on Catalina. A private link of the full framework and Crashpad handler uses all 21 changed
+production implementations, each freshly compiled with Intel/10.7 flags. The
+framework's 2,768 imports and the handler's 381 imports have no missing required
+Lion symbols, unknown ordinals or incomplete libraries. A complete experimental
+app was assembled from the GN resource recipe and its generation-time framework
+symlinks. All 16 bundled Mach-O files have an Intel/10.7 minimum and pass the
+Lion import audit, including internal library bindings. SHA-1/SHA-256 ad hoc
+signatures pass strict verification. The normal Ninja rebuild is still running;
+this private assembly does not replace its final integration checks. The custom compiler and Crubit now pass the original interoperability tests
 on Catalina. The current V8/Blink context generator also executes on the host
 and Catalina with byte-identical output; other auxiliary tools and the complete
 browser still need full-build validation.
@@ -675,8 +690,13 @@ graphics, media, UI, and the remaining browser API usage still need build and
 runtime validation. The eight older compatibility forks remain references;
 they have not been substituted for current dependency revisions.
 
-After compilation, full-browser tests are required on Lion 10.7.5 and Catalina
-10.15.7: startup, renderers, sandboxing, browsing, TLS, graphics, media,
+An earlier assembled host prototype printed `Chromium 159.0.8154.13`; its
+graphical startup failed with a Rosetta `CodeFragmentMetadata` assertion. This
+does not establish whether the cause is translation or browser code. The Intel
+Catalina test machine was unreachable over SSH during this check. The latest
+assembled app still needs runtime validation.
+
+Full-browser tests are required on Lion 10.7.5 and Catalina 10.15.7: startup, renderers, sandboxing, browsing, TLS, graphics, media,
 downloads, and extensions. No browser executable or release artifact has been
 published from this experimental branch.
 

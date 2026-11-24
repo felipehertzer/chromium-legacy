@@ -24,7 +24,8 @@ static const char kMenuWasRunCallbackKey = 0;
 }  // namespace
 
 @interface MenuWasRunCallbackHolder : NSObject
-@property MenuWasRunCallback callback;
+// These NSView-attached test callbacks are accessed on the AppKit UI thread.
+@property(nonatomic) MenuWasRunCallback callback;
 @end
 
 @implementation MenuWasRunCallbackHolder
