@@ -218,14 +218,6 @@ bool UseMapJit() {
 }
 #elif PA_BUILDFLAG(IS_IOS)
 bool UseMapJit() {
-  // MAP_JIT and the hardened runtime were introduced together in Mojave.
-  // Passing the flag to older kernels causes executable allocations to fail.
-  if (!__builtin_available(macOS 10.14, *)) {
-    return false;
-  }
-  if (!SecTaskCreateFromSelf || !SecTaskGetCodeSignStatus) {
-    return false;
-  }
   return true;
 }
 #endif  // PA_BUILDFLAG(IS_IOS)
