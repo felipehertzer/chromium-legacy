@@ -332,10 +332,14 @@ alongside the remaining browser port.
 ## Verified so far
 
 The two PartitionAlloc libraries, current libc++, and Base's static library
-compile with deployment target 10.7. Crypto and the separately rebuilt Rust std also compile. The normal full-browser build now completes; browser runtime validation remains pending.
+compile with deployment target 10.7. Crypto and the separately rebuilt Rust std also compile. The normal full-browser build completes, and its Chromium 159 GUI smoke test passes on Intel Catalina 10.15.7. Lion runtime validation remains pending.
 
 | Check | Build Mac | Intel Catalina 10.15.7 |
 | --- | --- | --- |
+| Current Chromium 159 GUI/browser smoke | Intel-under-Rosetta startup remains unreliable | 28 checks passed, GeForce 320M |
+| Real sandbox profile compilation and enforcement | 390 cases passed | 180 cases passed |
+| Actual screen-capture preflight/window metadata | 12 checks passed | 12 checks passed |
+| Shared-image IPC roundtrip/invalid data rejection | 16 checks passed | 16 checks passed |
 | Foundation/version probe | 24 checks passed | 24 checks passed |
 | Mach-port probe | 129 checks passed | 129 checks passed |
 | Filesystem/clock helpers | 64 checks passed | 64 checks passed |
@@ -688,29 +692,58 @@ interoperability-test passes on Catalina.
 
 A complete experimental app is copied from the normal Ninja output. All 16
 bundled Mach-O files target Intel/10.7 and pass the Lion import audit, including
-internal library bindings. The framework's 2,768 imports and Crashpad's 381
+internal library bindings. The framework's 2,769 imports and Crashpad's 381
 imports have no missing required symbols, unknown ordinals or incomplete
 libraries. Ad hoc SHA-1/SHA-256 signatures use the unchanged upstream role
 entitlement templates and pass strict verification. ZIP CRC, every executable
 hash, the snapshot hash and all five framework symlinks survive extraction;
 the extracted app also passes strict signature verification.
 
-Skia, ANGLE, SwiftShader, Vulkan Memory Allocator, WebRTC, V8, sandboxing,
-graphics, media, UI and other browser behavior still need full-app runtime
-validation. The eight older compatibility forks remain references; they have
-not replaced any current dependency revision.
+On 2026-11-26, the signed normal build passed the complete GUI smoke test on
+physical Intel Catalina 10.15.7: startup, visible window, actual browser version,
+BigInt, WebAssembly, WebCrypto, Worker, exact Canvas 2D and WebGL pixels, CSS,
+renderer accessibility, trusted HTTPS, rejection of an untrusted local TLS
+certificate, and exact downloaded bytes. The kernel process inspector confirmed
+sandboxing on every sampled renderer, GPU and network process. All 28 checks
+passed, and the test browser closed normally with exit status 0. These tests use
+a new private profile and do not modify existing browser profiles or defaults.
 
-The final normal build is assembled, audited and signed, but host startup is
-not stable. A plain `--version` invocation timed out after 20 seconds. With only
-`DYLD_PRINT_LIBRARIES=1` and `DYLD_PRINT_INITIALIZERS=1` added for diagnostics,
-the extracted app printed `Chromium 159.0.8154.13` and exited successfully.
-A GUI run under that diagnostic environment started GPU and network processes;
-the kernel inspector confirmed that both were sandboxed. It produced no window
-or DevTools endpoint within 45 seconds, and logged a Rosetta
-`CodeFragmentMetadata` assertion without any debugger or sampler attached.
-This does not establish whether the cause is translation or browser code.
-All owned test processes exited after bounded cleanup. Catalina remained
-unreachable over SSH, and full graphical validation is still pending.
+The test Mac has a GeForce 320M with no Metal device. The current ANGLE CGL
+backend uses its real OpenGL 3.3 driver and exposes OpenGL ES 2.0; this is not a
+claim of WebGL 2/WebGPU support on that hardware. Older systems retain the
+Ganesh hardware path before macOS 13 and default to ANGLE/OpenGL before 11.
+Current systems retain their Metal/Graphite defaults. Driver blocklists and
+workarounds remain active; legacy IOAccelerator enumeration supplies the real
+PCI vendor/device IDs (10de:08a4) instead of an unknown GPU. Native IOSurface
+texture targets are propagated across GPU IPC so that CGL rectangle textures
+and Metal 2D textures are bound consistently. The protocol checks cover both
+valid targets, existing fields, truncation and invalid target rejection:
+
+```sh
+python3 legacy/test_shared_image_capabilities.py --output /tmp/new-ipc-check
+python3 legacy/test_screen_capture_permissions.py --output /tmp/preflight-probe
+```
+
+Catalina's missing `CGPreflightScreenCaptureAccess` and
+`CGRequestScreenCaptureAccess` symbols are a documented SDK availability bug
+([Apple r.72786842](https://developer.apple.com/forums/thread/683860?answerId=684400022)).
+They are used only on 11+. Catalina uses its native window-metadata preflight
+and display-stream permission-request path. The preflight regression test
+neither requests access nor captures pixels; the explicit request UI still needs
+separate validation.
+
+The Intel browser remains unreliable under Rosetta on the ARM build host: a
+plain version invocation timed out, and a diagnostic GUI run logged a Rosetta
+`CodeFragmentMetadata` assertion. This does not establish the cause and does
+not invalidate the separate native Intel Catalina evidence above. The eight
+older compatibility forks remain references, with no dependency revision
+substituted for the current pinned dependency.
+
+SwiftShader, Vulkan, WebRTC/media capture, codec/device behavior, password
+storage, extensions and full UI coverage still need targeted validation.
+SSH-launched tests could not interact with the login keychain and reported
+unavailable encryption; no plaintext or custom-secret workaround is used.
+No Lion kernel/browser runtime has been validated.
 
 All 15 sandbox profiles compile with an unmodified original Lion `libsandbox`
 loaded by a separate test utility. Both the 10.7 and 10.8 parameter branches
@@ -759,10 +792,10 @@ source initialization through the same API used by the old-system child path.
 Intel/10.7 probe; `--probe /path/to/sandbox-probe.x64` runs a prepared probe on
 a target Mac without an SDK.
 
-These checks establish old userland language compilation and containment on
-the actual build-host kernel. `OS_VERSION` only selects policy branches. Neither
-that parameter, masking, nor a successful library-import audit proves policy
-enforcement or browser execution on the Lion or Catalina kernel.
+In addition to the build-host cases, both compiled and source modes passed
+90 cases each on the real Catalina kernel. `OS_VERSION` only selects policy
+branches. Neither that parameter, masking, nor a successful library-import audit
+proves policy enforcement or browser execution on the Lion kernel.
 
 A GUI smoke test is available in `legacy/test_browser.py` (Python 3.8+ and
 `websockets` 13.1). Build its process inspector with
@@ -786,14 +819,18 @@ and fixtures are closed afterwards; logs, the private profile, and the report
 remain in the selected output directory. A moved OS copy must retain matching
 executable bytes, bundle identity, resource seal, and valid signatures.
 
-The harness passed against the installed Chromium-based native Chrome 158
-baseline on the build host. This validates the test, not the experimental
-Chromium 159 browser or Catalina/Lion support. The Intel process inspector has
-22 imports, with no missing required Lion symbols or incomplete libraries.
+The harness first passed against the native Chrome 158 control on the build
+host, then passed against this Chromium 159 build on physical Intel Catalina.
+The Intel process inspector has 22 imports, with no missing required Lion symbols
+or incomplete libraries. Its browser report records the actual OS and binary
+hashes, GPU details and process sandbox states. Independent browsing/security
+checks are collected even if a Web API fails, and any failed check still fails
+the complete run.
 
-Full-browser tests are required on Lion 10.7.5 and Catalina 10.15.7: startup, renderers, sandboxing, browsing, TLS, graphics, media,
-downloads, and extensions. No browser executable or release artifact has been
-published from this experimental branch.
+Full-browser runtime testing is still required on Lion 10.7.5, and the remaining
+media, password-storage and extension checks are required on Catalina. The
+experimental signed app was delivered privately to the Catalina test Mac; no
+public release or automatic update channel has been published.
 
 References: [original Lion build instructions](https://github.com/blueboxd/chromium-legacy/wiki/Building),
 [Chromium Mac build instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md),
