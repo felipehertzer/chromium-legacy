@@ -1,0 +1,40 @@
+--- a/src/gpu_info_util/SystemInfo_macos.mm
++++ b/src/gpu_info_util/SystemInfo_macos.mm
+@@ -55,9 +55,10 @@
+ // Gathers the vendor and device IDs for GPUs listed in the IORegistry.
+ void GetIORegistryDevices(std::vector<GPUDeviceInfo> *devices)
+ {
+-    constexpr uint32_t kNumServices         = 2;
+-    const char *kServiceNames[kNumServices] = {"IOGraphicsAccelerator2", "AGXAccelerator"};
+-    const bool kServiceIsGraphicsAccelerator2[kNumServices] = {true, false};
++    constexpr uint32_t kNumServices = 3;
++    const char *kServiceNames[kNumServices] = {
++        "IOGraphicsAccelerator2", "AGXAccelerator", "IOAccelerator"};
++    const bool kServiceIsGraphicsAccelerator2[kNumServices] = {true, false, true};
+     for (uint32_t i = 0; i < kNumServices; ++i)
+     {
+         // matchDictionary will be consumed by IOServiceGetMatchingServices, no need to release it.
+@@ -80,6 +81,23 @@
+             // The registry ID of an IOGraphicsAccelerator2 or AGXAccelerator matches the ID used
+             // for GPU selection by ANGLE_platform_angle_device_id
+             if (IORegistryEntryGetRegistryEntryID(entry, &info.systemDeviceId) != kIOReturnSuccess)
++            {
++                IOObjectRelease(entry);
++                continue;
++            }
++
++            // IOAccelerator also matches newer subclasses. Keep real legacy
++            // devices while avoiding duplicate entries for modern devices.
++            bool alreadyListed = false;
++            for (const GPUDeviceInfo &device : *devices)
++            {
++                if (device.systemDeviceId == info.systemDeviceId)
++                {
++                    alreadyListed = true;
++                    break;
++                }
++            }
++            if (alreadyListed)
+             {
+                 IOObjectRelease(entry);
+                 continue;

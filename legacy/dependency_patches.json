@@ -37,6 +37,11 @@
       "patch": "patches/angle-lion-platform.patch"
     },
     {
+      "path": "third_party/angle",
+      "revision": "0f0b90f0b5bf61cc630870d5d4bf0c07d906e975",
+      "patch": "patches/angle-legacy-gpu-registry.patch"
+    },
+    {
       "path": "third_party/libvpx/source/libvpx",
       "revision": "fb0a26ad923b58c3663aaa9523992cf779b1563b",
       "patch": "patches/libvpx-lion-timer.patch"
