@@ -91,6 +91,8 @@
 #endif
 #if BUILDFLAG(IS_MAC)
 #include <ApplicationServices/ApplicationServices.h>
+
+#include "base/mac/mac_util.h"
 #endif  // BUILDFLAG(IS_MAC)
 #if BUILDFLAG(IS_WIN)
 #include "base/base_paths_win.h"
@@ -436,7 +438,9 @@ class HDRProxy {
 GpuDataManagerImplPrivate::GpuDataManagerImplPrivate(GpuDataManagerImpl* owner)
     : owner_(owner),
 #if BUILDFLAG(IS_MAC)
-      supports_gpu_mode_hardware_gl_(false),
+      // Dawn/Graphite requires macOS 13. Earlier systems still need the
+      // existing Ganesh/ANGLE hardware path, subject to normal GPU blocklists.
+      supports_gpu_mode_hardware_gl_(base::mac::MacOSMajorVersion() < 13),
 #elif BUILDFLAG(IS_ANDROID)
       supports_gpu_mode_hardware_gl_(
           !base::FeatureList::IsEnabled(features::kSkipVulkanBlocklist)),

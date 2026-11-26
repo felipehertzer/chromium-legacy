@@ -25,6 +25,11 @@ namespace init {
 
 std::vector<GLImplementationParts> GetAllowedGLImplementations() {
   std::vector<GLImplementationParts> impls;
+  // Macs running these older systems can have GPUs without a Metal device.
+  // ANGLE's current CGL backend retains hardware GL for them.
+  if (base::mac::MacOSMajorVersion() < 11) {
+    impls.emplace_back(gl::ANGLEImplementation::kOpenGL);
+  }
   impls.emplace_back(gl::ANGLEImplementation::kMetal);
   impls.emplace_back(gl::ANGLEImplementation::kSwiftShader);
   return impls;

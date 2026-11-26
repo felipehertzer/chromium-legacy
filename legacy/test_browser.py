@@ -314,11 +314,22 @@ def main():
         client.navigate(fixture_url, session)
         web_results = client.wait_value('window.smokeResults', session)
         report['web_checks'] = web_results
-        for result in web_results:
-            check(result['name'], result['passed'], result.get('error'))
+        report['gpu'] = client.command('SystemInfo.getInfo')
         processes = client.command('SystemInfo.getProcessInfo')['processInfo']
         report['devtools_processes'] = processes
-        process_ids = sorted({int(p['id']) for p in processes} | {browser.pid})
+        # Short-lived notification/audio helpers may exit between the CDP
+        # snapshot and inspection. Inspect the actual security-critical browser,
+        # renderer, GPU and network processes; retain the full snapshot above.
+        required_types = {
+            'browser',
+            'renderer',
+            'GPU',
+            'network.mojom.NetworkService',
+        }
+        process_ids = sorted(
+            {int(p['id']) for p in processes if p['type'] in required_types}
+            | {browser.pid}
+        )
         probe = subprocess.run(
             [str(process_probe), *map(str, process_ids)],
             capture_output=True,
@@ -480,6 +491,10 @@ def main():
         report['download_sha256'] = hashlib.sha256(
             downloaded.read_bytes()
         ).hexdigest()
+        # Report all independent browsing/security checks even if one Web API
+        # failed. A failed feature still fails the complete run.
+        for result in web_results:
+            check(result['name'], result['passed'], result.get('error'))
         report['passed'] = True
     except Exception as error:
         report['passed'] = False
