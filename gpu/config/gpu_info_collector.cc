@@ -47,6 +47,7 @@
 #if BUILDFLAG(IS_MAC)
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
+#include "base/mac/mac_util.h"
 #endif
 
 #if BUILDFLAG(IS_OZONE)
@@ -93,7 +94,15 @@ scoped_refptr<gl::GLSurface> InitializeGLSurface(gl::GLDisplay* display) {
 scoped_refptr<gl::GLContext> InitializeGLContext(gl::GLSurface* surface) {
   TRACE_EVENT("gpu,startup", "gpu_info_collector::InitializeGLContext");
   gl::GLContextAttribs attribs;
+#if BUILDFLAG(IS_MAC)
+  // Legacy CGL devices may expose ES2 through ANGLE. Query their actual GL
+  // capabilities rather than failing info collection before reading them.
+  attribs.allow_es_version_fallback =
+      base::mac::MacOSMajorVersion() < 11 &&
+      gl::GetANGLEImplementation() == gl::ANGLEImplementation::kOpenGL;
+#else
   attribs.allow_es_version_fallback = false;
+#endif
   scoped_refptr<gl::GLContext> context(
       gl::init::CreateGLContext(nullptr, surface, attribs));
   if (!context.get()) {
