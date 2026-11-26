@@ -46,6 +46,10 @@ struct GPU_COMMAND_BUFFER_COMMON_EXPORT SharedImageCapabilities {
 #if BUILDFLAG(IS_WIN)
   bool shared_image_swap_chain = false;
 #endif
+
+  // IOSurface-backed images use rectangle textures on ANGLE/CGL and 2D on
+  // Metal/SwiftShader. Keep this backend choice consistent across processes.
+  uint32_t texture_target_for_io_surfaces = 0x0DE1;  // GL_TEXTURE_2D
 };
 
 }  // namespace gpu

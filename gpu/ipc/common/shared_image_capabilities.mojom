@@ -24,4 +24,5 @@ struct SharedImageCapabilities {
   bool shared_image_d3d;
   [EnableIf=is_win]
   bool shared_image_swap_chain;
+  uint32 texture_target_for_io_surfaces = 0x0DE1;
 };

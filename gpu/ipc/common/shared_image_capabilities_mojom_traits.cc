@@ -11,6 +11,12 @@ bool StructTraits<gpu::mojom::SharedImageCapabilitiesDataView,
                   gpu::SharedImageCapabilities>::
     Read(gpu::mojom::SharedImageCapabilitiesDataView data,
          gpu::SharedImageCapabilities* out) {
+  // Accept only the two GL targets supported by the IOSurface binding path.
+  const uint32_t target = data.texture_target_for_io_surfaces();
+  if (target != 0x0DE1 && target != 0x84F5) {  // 2D / RECTANGLE
+    return false;
+  }
+  out->texture_target_for_io_surfaces = target;
   out->supports_scanout_shared_images = data.supports_scanout_shared_images();
 
 #if BUILDFLAG(IS_WIN)

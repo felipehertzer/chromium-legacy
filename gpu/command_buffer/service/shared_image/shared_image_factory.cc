@@ -396,8 +396,9 @@ SharedImageFactory::SharedImageFactory(
         std::make_unique<IOSurfaceImageBackingFactory>(
             gr_context_type_, context_state_->GetMaxTextureSize(),
             feature_info.get(), context_state_->progress_reporter(),
-            GL_TEXTURE_2D
-        );
+            gl::GetANGLEImplementation() == gl::ANGLEImplementation::kOpenGL
+                ? GL_TEXTURE_RECTANGLE_ANGLE
+                : GL_TEXTURE_2D);
     factories_.push_back(std::move(iosurface_backing_factory));
   }
 #endif
@@ -695,6 +696,12 @@ void SharedImageFactory::RegisterSharedImageBackingFactoryForTesting(
 
 gpu::SharedImageCapabilities SharedImageFactory::MakeCapabilities() {
   gpu::SharedImageCapabilities shared_image_caps;
+#if BUILDFLAG(IS_APPLE)
+  shared_image_caps.texture_target_for_io_surfaces =
+      gl::GetANGLEImplementation() == gl::ANGLEImplementation::kOpenGL
+          ? GL_TEXTURE_RECTANGLE_ANGLE
+          : GL_TEXTURE_2D;
+#endif
   shared_image_caps.supports_scanout_shared_images =
       shared_image_manager_->SupportsScanoutImages();
 

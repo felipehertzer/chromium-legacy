@@ -111,6 +111,9 @@ wgpu::Texture CreateWGPUTexture(wgpu::SharedTextureMemory shared_texture_memory,
 }
 
 id QueryMetalDeviceFromANGLE(EGLDisplay display) {
+  if (gl::GetANGLEImplementation() != gl::ANGLEImplementation::kMetal) {
+    return nil;
+  }
   if (@available(macOS 10.11, iOS 8.0, *)) {
     auto* display_egl =
         gl::GLDisplayManagerEGL::GetInstance()->GetDisplay(display);

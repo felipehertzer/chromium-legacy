@@ -5,6 +5,7 @@
 #include "gpu/command_buffer/client/client_shared_image.h"
 
 #include <GLES2/gl2.h>
+#include <GLES2/gl2ext_angle.h>
 #include <GLES2/gl2extchromium.h>
 
 #include "base/run_loop.h"
@@ -441,6 +442,39 @@ TEST(ClientSharedImageTest,
               static_cast<uint32_t>(GL_TEXTURE_2D));
   }
 }
+
+#if BUILDFLAG(IS_MAC)
+TEST(ClientSharedImageTest, NativeIOSurfaceTargetComesFromGpuCapabilities) {
+  auto sii = base::MakeRefCounted<TestSharedImageInterface>();
+  SharedImageCapabilities caps;
+  caps.texture_target_for_io_surfaces = GL_TEXTURE_RECTANGLE_ANGLE;
+  sii->SetCapabilities(caps);
+  const SharedImageUsageSet raster_usage =
+      SHARED_IMAGE_USAGE_RASTER_WRITE | SHARED_IMAGE_USAGE_DISPLAY_READ;
+  auto ordinary = sii->CreateSharedImage(
+      CreateSharedImageInfo(viz::SinglePlaneFormat::kRGBA_8888, raster_usage),
+      kNullSurfaceHandle);
+  EXPECT_EQ(ordinary->GetTextureTarget(), static_cast<uint32_t>(GL_TEXTURE_2D));
+  auto scanout = sii->CreateSharedImage(
+      CreateSharedImageInfo(viz::SinglePlaneFormat::kRGBA_8888,
+                            raster_usage | SHARED_IMAGE_USAGE_SCANOUT),
+      kNullSurfaceHandle);
+  EXPECT_EQ(scanout->GetTextureTarget(),
+            static_cast<uint32_t>(GL_TEXTURE_RECTANGLE_ANGLE));
+  sii->emulate_client_provided_native_buffer();
+  auto native = sii->CreateSharedImage(
+      CreateSharedImageInfo(viz::SinglePlaneFormat::kRGBA_8888, raster_usage),
+      kNullSurfaceHandle);
+  EXPECT_EQ(native->GetTextureTarget(),
+            static_cast<uint32_t>(GL_TEXTURE_RECTANGLE_ANGLE));
+  caps.texture_target_for_io_surfaces = GL_TEXTURE_2D;
+  sii->SetCapabilities(caps);
+  auto metal = sii->CreateSharedImage(
+      CreateSharedImageInfo(viz::SinglePlaneFormat::kRGBA_8888, raster_usage),
+      kNullSurfaceHandle);
+  EXPECT_EQ(metal->GetTextureTarget(), static_cast<uint32_t>(GL_TEXTURE_2D));
+}
+#endif
 
 // On all platforms, the default target should be used for multi-planar
 // formats if external sampling is not set and scanout/WebGPU usage are not

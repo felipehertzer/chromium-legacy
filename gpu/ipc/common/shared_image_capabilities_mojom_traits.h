@@ -23,6 +23,11 @@ struct GPU_IPC_COMMON_EXPORT StructTraits<
   static bool Read(gpu::mojom::SharedImageCapabilitiesDataView data,
                    gpu::SharedImageCapabilities* out);
 
+  static uint32_t texture_target_for_io_surfaces(
+      const gpu::SharedImageCapabilities& input) {
+    return input.texture_target_for_io_surfaces;
+  }
+
   static bool supports_scanout_shared_images(
       const gpu::SharedImageCapabilities& input) {
     return input.supports_scanout_shared_images;
