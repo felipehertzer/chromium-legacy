@@ -19,6 +19,31 @@
 namespace ui {
 namespace {
 
+// Catalina exposes foreign window names only when screen-recording access is
+// granted. This checks metadata without requesting access or capturing pixels.
+bool IsScreenCaptureAllowedForWindowList(NSArray* windows, pid_t current_pid) {
+  for (NSDictionary* window in windows) {
+    NSNumber* owner =
+        [window objectForKey:base::apple::CFToNSPtrCast(kCGWindowOwnerPID)];
+    if (!owner || owner.intValue == current_pid) {
+      continue;
+    }
+    NSString* name =
+        [window objectForKey:base::apple::CFToNSPtrCast(kCGWindowName)];
+    NSNumber* layer =
+        [window objectForKey:base::apple::CFToNSPtrCast(kCGWindowLayer)];
+    if (!name || !layer) {
+      continue;
+    }
+    const NSInteger level = layer.integerValue;
+    if (level == CGWindowLevelForKey(kCGNormalWindowLevelKey) ||
+        level == CGWindowLevelForKey(kCGDockWindowLevelKey)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 BASE_FEATURE(kWarmScreenCaptureSonoma, base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kWarmScreenCaptureSequoia, base::FEATURE_DISABLED_BY_DEFAULT);
@@ -103,8 +128,15 @@ void CaptureScreenshot() {
 }  // namespace
 
 bool IsScreenCaptureAllowed() {
-  if (@available(macOS 10.15, *)) {
+  // The SDK incorrectly marks these APIs as 10.15: they are missing there.
+  // Apple r.72786842: https://developer.apple.com/forums/thread/683860
+  if (@available(macOS 11.0, *)) {
     return CGPreflightScreenCaptureAccess();
+  } else if (@available(macOS 10.15, *)) {
+    NSArray* windows = base::apple::CFToNSOwnershipCast(
+        CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID));
+    return IsScreenCaptureAllowedForWindowList(
+        windows, NSProcessInfo.processInfo.processIdentifier);
   }
   // The screen-recording TCC permission was introduced in Catalina.
   // Earlier systems still enforce their normal WindowServer access rules.
@@ -112,8 +144,17 @@ bool IsScreenCaptureAllowed() {
 }
 
 bool TryPromptUserForScreenCapture() {
-  if (@available(macOS 10.15, *)) {
+  if (@available(macOS 11.0, *)) {
     return CGRequestScreenCaptureAccess();
+  } else if (@available(macOS 10.15, *)) {
+    // Creating, but not starting, a one-pixel stream requests Catalina's native
+    // permission. A refusal still fails; never substitute a positive result.
+    base::apple::ScopedCFTypeRef<CGDisplayStreamRef> stream(
+        CGDisplayStreamCreate(CGMainDisplayID(), 1, 1, 'BGRA', nullptr,
+                              ^(CGDisplayStreamFrameStatus, uint64_t,
+                                IOSurfaceRef, CGDisplayStreamUpdateRef){
+                              }));
+    return stream.get() != nullptr;
   }
   return true;
 }
