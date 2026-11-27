@@ -24,7 +24,11 @@ config("public_config") {
   # `#include` paths as other Crubit clients like google3 - e.g.
   # `#include "third_party/crubit/support/rs_std/slice_ref.h"`.
   include_dirs = [ "${rust_crubit_root}/lib" ]
+  configs = [ ":deterministic_header_paths" ]
+}
 
+# Used by both generated binding clients and the compiled support libraries.
+config("deterministic_header_paths") {
   if (is_mac && is_clang) {
     # Local Crubit toolchains can live outside the source tree. Their CHECK
     # macros otherwise embed the builder's home directory through __FILE__.

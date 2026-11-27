@@ -14,5 +14,6 @@ crubit_gn_configs_to_remove = [
 ]
 crubit_gn_support_configs_to_add = [
   "//build/config/compiler:no_chromium_code",
+  "//build/rust/crubit:deterministic_header_paths",
   "//build/rust/crubit:allow_unstable_features_required_by_crubit",
 ]
