@@ -51,12 +51,31 @@ python3 legacy/package_dmg.py \
   --output /path/to/new-release-assets
 ```
 
-The metadata directory must contain `build-info.json` and `README.txt`. Existing
-Catalina reports, signatures and ABI reports are included when present. The
-packager preserves signed app bytes, creates an Applications shortcut, mounts
-the DMG read-only, verifies strict signatures, all executable hashes, the V8
-snapshot and application symlinks, then detaches it. Existing output images are
-preserved. HFS+/UDZO is used for old-OS readability rather than APFS.
+The private metadata directory must contain `build-info.json`. An optional
+`catalina-browser-report.json` must match the executable hashes, actual version,
+Intel host and successful checks before its runtime results are exported.
+Only selected public facts are included. Raw installation reports, process IDs,
+commands, full signing/ABI dumps and local paths stay outside the distribution.
+
+The packager preserves signed app bytes and creates an Applications shortcut.
+It authors an HFS+ filesystem with `hdiutil makehybrid`, verifies that the raw
+HFS+ attribute fork is absent, normalizes FinderInfo in its own writable
+image while preserving file modes and symlinks, then compresses it as UDZO. This avoids exporting
+protected local attributes that normal file copies can retain. The mounted
+image is checked for strict signatures, executable hashes, the V8 snapshot,
+symlinks, local home/test paths, profile files and selected credential patterns.
+Checks report file names and issue categories, never matched secret values.
+
+Use `--zip` to also create a ZIP from explicitly written data-only entries:
+no AppleDouble, extended attributes, UID/GID or creator timestamps. The ZIP is
+CRC checked, extracted and checked again. macOS may attach new provenance to a
+local working/extracted copy; that is separate from attributes serialized in
+the distribution. Existing output images are preserved.
+
+These checks are a guard against accidental disclosure, not an exhaustive
+secret detector or a guarantee that arbitrary custom build inputs are safe.
+Self-hosted GitHub Actions logs can show the runner's machine name and paths;
+use a dedicated builder with generic names for future public build logs.
 
 ## Official upstream
 

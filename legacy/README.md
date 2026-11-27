@@ -842,3 +842,10 @@ References: [original Lion build instructions](https://github.com/blueboxd/chrom
 See [the CI guide](ci/README.md) for the manual Mac build workflow,
 development signing, Lion ABI checks, HFS+/UDZO DMG verification and
 tracking the official `chromium/chromium:main` upstream.
+
+Release privacy checks export selected public build facts, exclude internal
+installation/signing/ABI reports and reject local paths or credential-shaped
+data. Local Crubit header paths are remapped at compile time so their CHECK
+diagnostics use a stable toolchain name. HFS+ images are authored without an
+extended-attribute fork; ZIP entries omit creator filesystem metadata.
+These controls do not replace review of custom build inputs.
