@@ -587,7 +587,7 @@ an OS wait on the build host, including with the previously passing generator.
 
 ```sh
 mkdir chromium-build && cd chromium-build
-git clone --depth 1 --branch codex/current-chromium-lion \
+git clone --depth 1 --branch master.lion \
   https://github.com/felipehertzer/chromium-legacy.git src
 cp src/legacy/gclient.template .gclient
 gclient sync --no-history --shallow
@@ -836,3 +836,9 @@ public release or automatic update channel has been published.
 References: [original Lion build instructions](https://github.com/blueboxd/chromium-legacy/wiki/Building),
 [Chromium Mac build instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md),
 [Apple's Lion installer](https://support.apple.com/en-ca/106383).
+
+## Release packaging and automation
+
+See [the CI guide](ci/README.md) for the manual Mac build workflow,
+development signing, Lion ABI checks, HFS+/UDZO DMG verification and
+tracking the official `chromium/chromium:main` upstream.

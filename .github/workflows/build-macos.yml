@@ -1,0 +1,35 @@
+name: Build Chromium Legacy DMG
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromium-legacy-prepared-mac
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.actor == github.repository_owner
+    runs-on: [self-hosted, macOS, chromium-legacy]
+    timeout-minutes: 4320
+    steps:
+      - name: Build the selected revision and verify the DMG
+        shell: bash
+        env:
+          CHROMIUM_LEGACY_OUTPUT: ${{ runner.temp }}/chromium-legacy-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          : "${CHROMIUM_LEGACY_WORKSPACE:?Configure the prepared Mac runner}"
+          cd "$CHROMIUM_LEGACY_WORKSPACE/src"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash legacy/ci/build-macos.sh
+      - name: Upload DMG and validation results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chromium-legacy-intel-dmg
+          path: ${{ runner.temp }}/chromium-legacy-${{ github.run_id }}-${{ github.run_attempt }}/assets/
+          if-no-files-found: error
+          retention-days: 7

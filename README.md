@@ -1,8 +1,14 @@
 # Experimental Chromium Legacy port
 
 This fork targets current Chromium on **OS X Lion 10.7 and later (Intel)**.
-The `codex/current-chromium-lion` branch starts from Chromium **159.0.8154.13**.
-The complete browser has **not been built or validated on Lion**.
+The principal `master.lion` branch contains Chromium **159.0.8154.13 Mac Beta**.
+The complete browser builds and passed 28 GUI/browser checks on Intel
+**macOS Catalina 10.15.7**, including WebGL and process sandboxing.
+Lion remains the compilation target; actual Lion runtime testing is pending.
+
+Download experimental builds from [Releases](https://github.com/felipehertzer/chromium-legacy/releases).
+For build automation and the official `chromium/chromium:main` upstream, see
+[the CI guide](legacy/ci/README.md).
 
 See [legacy/README.md](legacy/README.md) for the implemented compatibility fixes,
 focused tests, pinned revisions, patch inventory, and remaining work.
