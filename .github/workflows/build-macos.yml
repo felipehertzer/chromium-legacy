@@ -15,6 +15,12 @@ jobs:
     if: github.actor == github.repository_owner
     runs-on: [self-hosted, macOS, chromium-legacy]
     timeout-minutes: 4320
+    # Referenced secrets enter the runner's masker before setup diagnostics.
+    # These are optional noncredential redaction strings for a personal builder.
+    env:
+      LEGACY_MASK_MACHINE: ${{ secrets.LEGACY_PRIVATE_MACHINE_NAME }}
+      LEGACY_MASK_HOME: ${{ secrets.LEGACY_PRIVATE_MACHINE_HOME }}
+      LEGACY_MASK_WORKSPACE: ${{ secrets.LEGACY_PRIVATE_BUILD_ROOT }}
     steps:
       - name: Build the selected revision and verify the DMG
         shell: bash

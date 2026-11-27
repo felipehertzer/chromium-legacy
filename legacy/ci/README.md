@@ -100,3 +100,11 @@ Integrate new Chromium revisions on a separate compatibility branch, review the
 new API/dependency requirements, rebuild, audit and run the old-OS browser tests
 before advancing the release pin. Do not use GitHub's parent-fork sync operation
 to overwrite the port with the inherited old Chromium branch.
+
+For a temporary personal runner, the optional Actions secrets
+`LEGACY_PRIVATE_MACHINE_NAME`, `LEGACY_PRIVATE_MACHINE_HOME` and
+`LEGACY_PRIVATE_BUILD_ROOT` register exact noncredential strings for redaction
+before the runner prints setup diagnostics. Configure these privately, verify
+actual logs, and remove temporary entries afterwards. Never put authentication
+passwords or keys in these masking-only settings. Redaction does not sanitize
+compiled binaries; the separate compiler mapping and export checks do that.
